@@ -1,0 +1,21 @@
+# Backend
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Frontend
+node_modules/
+dist/
+.quasar/
+
+# Entorno
+.env
+*.log
+
+# Sistema
+.DS_Store
+
+# Datos locales del contenedor de almacenamiento (S3Proxy)
+_data/

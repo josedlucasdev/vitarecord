@@ -1,0 +1,146 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: appcitas_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass_dev_only}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-appcitas}
+      MYSQL_USER: ${MYSQL_USER:-appcitas}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-appcitas_dev_only}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-rootpass_dev_only}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    container_name: appcitas_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # Almacenamiento S3-compatible para desarrollo local. Se usa S3Proxy en vez
+  # de MinIO porque MinIO dejo de distribuir imagenes Docker gratuitas en
+  # Docker Hub (anuncio de octubre de 2025: "docker pull minio/minio" ahora
+  # responde "pull access denied"). S3Proxy es Apache-2.0, expone la misma
+  # API S3 (incluyendo presigned URLs firmadas SigV4) y respalda los objetos
+  # directamente en un bind mount visible desde el host - no tiene consola
+  # web, pero los archivos se pueden explorar en appcitas/_data/storage/.
+  # Ver plan/plan.md seccion 0 (registro de cambios) y seccion 2.A.
+  storage:
+    image: andrewgaul/s3proxy:latest
+    container_name: appcitas_storage
+    restart: unless-stopped
+    environment:
+      S3PROXY_IDENTITY: ${S3_ACCESS_KEY:-devaccesskey}
+      S3PROXY_CREDENTIAL: ${S3_SECRET_KEY:-devsecretkey_dev_only}
+      JCLOUDS_PROVIDER: filesystem
+      JCLOUDS_FILESYSTEM_BASEDIR: /data
+    ports:
+      - "9002:80"
+    volumes:
+      - ./_data/storage:/data
+    # La imagen ya trae su propio HEALTHCHECK (endpoint /healthz); no se
+    # sobreescribe aqui para evitar depender de herramientas (p. ej. curl)
+    # que esta imagen JRE minimalista podria no incluir.
+
+  mailtrap:
+    image: axllent/mailpit:latest
+    container_name: appcitas_mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  vault:
+    image: hashicorp/vault:1.15
+    container_name: appcitas_vault
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_DEV_ROOT_TOKEN_ID:-devroot_dev_only}
+      VAULT_DEV_LISTEN_ADDRESS: "0.0.0.0:8200"
+    ports:
+      - "8200:8200"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: appcitas_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql+asyncmy://${MYSQL_USER:-appcitas}:${MYSQL_PASSWORD:-appcitas_dev_only}@mysql:3306/${MYSQL_DATABASE:-appcitas}
+      DATABASE_SYNC_URL: mysql+pymysql://${MYSQL_USER:-appcitas}:${MYSQL_PASSWORD:-appcitas_dev_only}@mysql:3306/${MYSQL_DATABASE:-appcitas}
+      REDIS_URL: redis://redis:6379/0
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_DEV_ROOT_TOKEN_ID:-devroot_dev_only}
+      # Endpoint INTERNO (trafico backend -> storage dentro de la red de Docker).
+      S3_ENDPOINT_URL: http://storage:80
+      # Endpoint PUBLICO usado solo para firmar presigned URLs que el
+      # navegador debe poder resolver (no es lo mismo que el interno: ver
+      # nota en backend/app/core/config.py y plan/plan.md storage_service.py).
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:9002
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-devaccesskey}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-devsecretkey_dev_only}
+      SMTP_HOST: mailtrap
+      SMTP_PORT: 1025
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me}
+      CORS_ORIGINS: '["http://localhost:9000"]'
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      vault:
+        condition: service_started
+      storage:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: appcitas_frontend
+    restart: unless-stopped
+    environment:
+      API_URL: http://backend:8000
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "9000:9000"
+    depends_on:
+      - backend
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: appcitas_prometheus
+    profiles: ["observability"]
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: appcitas_grafana
+    profiles: ["observability"]
+    ports:
+      - "3000:3000"
+
+volumes:
+  mysql_data:
+  frontend_node_modules:
