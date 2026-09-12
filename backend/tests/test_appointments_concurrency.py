@@ -50,12 +50,14 @@ async def test_appointment_mutex_lock_and_double_booking_prevention(client: Asyn
     assert app1["payment_status"] == "UNPAID"
 
     # 3. Segunda reserva idéntica o solapada (ej. 10:15 a 10:45) -> DEBE RETORNAR 409 CONFLICT
+    overlap_start = start_dt + datetime.timedelta(minutes=15)
+    overlap_end = overlap_start + datetime.timedelta(minutes=30)
     overlapping_payload = {
         "clinic_id": clinic_id,
         "doctor_id": doctor_id,
         "room_id": room_id,
-        "start_time": datetime.datetime(2026, 9, 20, 10, 15, 0).isoformat(),
-        "end_time": datetime.datetime(2026, 9, 20, 10, 45, 0).isoformat(),
+        "start_time": overlap_start.isoformat(),
+        "end_time": overlap_end.isoformat(),
         "reason": "Intento de segunda reserva en conflicto",
     }
 

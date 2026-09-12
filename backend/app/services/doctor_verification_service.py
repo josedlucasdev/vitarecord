@@ -11,6 +11,7 @@ from app.models.affiliation import DoctorClinicAffiliation
 from app.models.clinic import Clinic
 from app.models.user import User
 from app.repositories.audit_repository import AuditRepository
+from app.core.config import settings
 from app.repositories.clinic_repository import ClinicRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.doctor_verification import (
@@ -18,7 +19,7 @@ from app.schemas.doctor_verification import (
     VerifyDoctorRequest,
     VerifyDoctorResponse,
 )
-from app.services.email_service import send_email
+from app.services.email_service import build_branded_email_html, send_email
 
 logger = logging.getLogger("doctor_verification_service")
 
@@ -109,28 +110,46 @@ class DoctorVerificationService:
             await self.db.commit()
 
             # Notificar al médico por correo
-            email_html = f"""
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-                <h2 style="color: #059669;">¡Matrícula Profesional Verificada con Éxito!</h2>
-                <p>Estimado/a Dr./Dra. {doctor.full_name or doctor.email},</p>
-                <p>Nos complace informarle que su matrícula médica (<strong>{doctor.license_number}</strong>) ha sido verificada y aprobada por el comité de cumplimiento de ÍntimaSalud.</p>
-                <p>Su cuenta ha sido activada y sus vinculaciones clínicas están ahora plenamente operativas.</p>
-                <p style="margin: 20px 0;"><a href="http://localhost:9000/#/login" style="background-color: #059669; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px;">Ir a mi Portal Médico</a></p>
-            </div>
-            """
-            await send_email(doctor.email, "Matrícula Médica Verificada y Aprobada - ÍntimaSalud", email_html)
+            email_html = build_branded_email_html(
+                title="¡Matrícula Profesional Verificada con Éxito!",
+                subtitle="Su expediente médico ha sido acreditado por el comité de cumplimiento institucional.",
+                content_html=(
+                    f"Estimado/a Dr./Dra. <strong>{doctor.full_name or doctor.email}</strong>,<br/><br/>"
+                    f"Nos complace informarle que su matrícula médica (<strong>{doctor.license_number}</strong>) "
+                    f"ha sido verificada y aprobada por el comité de cumplimiento de <strong>VitaRecord</strong>.<br/>"
+                    f"Su cuenta profesional ha sido activada y sus vinculaciones clínicas están operativas para "
+                    f"atender citas médicas y emitir recetas electrónicas oficiales con código QR."
+                ),
+                cta_text="Ingresar a Mi Portal Médico",
+                cta_link=f"{settings.FRONTEND_URL}/#/login",
+                details_table=[
+                    ("Profesional Médico", doctor.full_name or doctor.email),
+                    ("Matrícula Verificada", doctor.license_number or "Acreditada"),
+                    ("Especialidad", doctor.specialty or "Medicina General"),
+                    ("Estado", "Verificado y Habilitado"),
+                ],
+                alert_box="Su firma y credenciales constan debidamente registradas para la emisión de recetas médicas oficiales y expedientes clínicos.",
+            )
+            await send_email(doctor.email, "Matrícula Médica Verificada y Aprobada - VitaRecord", email_html)
 
             # Notificar al personal de la clínica
             stmt_staff = select(User).where(User.role.in_(["RECEPTIONIST", "CLINIC_ADMIN"]))
             staff_res = await self.db.execute(stmt_staff)
             for staff in staff_res.scalars().all():
-                staff_html = f"""
-                <div style="font-family: Arial, sans-serif; padding: 20px;">
-                    <h3 style="color: #0284c7;">Médico Verificado en Plantilla</h3>
-                    <p>El Dr./Dra. <strong>{doctor.full_name or doctor.email}</strong> (Matrícula: {doctor.license_number}) ha sido verificado y activado formalmente.</p>
-                    <p>Ya se encuentra disponible para agendamiento de citas.</p>
-                </div>
-                """
+                staff_html = build_branded_email_html(
+                    title="Médico Verificado en Plantilla",
+                    subtitle="Nuevo profesional médico habilitado para consultas.",
+                    content_html=(
+                        f"El Dr./Dra. <strong>{doctor.full_name or doctor.email}</strong> "
+                        f"(Matrícula: <strong>{doctor.license_number}</strong>) ha completado satisfactoriamente "
+                        f"la auditoría de credenciales y ha sido activado en la plataforma."
+                    ),
+                    details_table=[
+                        ("Médico", doctor.full_name or doctor.email),
+                        ("Matrícula Profesional", doctor.license_number or "N/A"),
+                        ("Especialidad", doctor.specialty or "General"),
+                    ],
+                )
                 await send_email(staff.email, f"Médico Activado: {doctor.full_name or doctor.email}", staff_html)
 
             return VerifyDoctorResponse(
@@ -162,16 +181,26 @@ class DoctorVerificationService:
             await self.db.commit()
 
             # Notificar al médico por correo con motivo
-            email_html = f"""
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-                <h2 style="color: #dc2626;">Aviso sobre Verificación de Matrícula Profesional</h2>
-                <p>Estimado/a Dr./Dra. {doctor.full_name or doctor.email},</p>
-                <p>El comité de cumplimiento ha revisado su registro de matrícula (<strong>{doctor.license_number}</strong>) y no fue posible validarlo satisfactoriamente.</p>
-                <p><strong>Motivo indicado:</strong> {request.reason or 'Documentación insuficiente o datos no concordantes'}.</p>
-                <p>Por favor contacte con el equipo de soporte o ingrese a su portal para subsanar la documentación requerida.</p>
-            </div>
-            """
-            await send_email(doctor.email, "Observación sobre Verificación de Matrícula - ÍntimaSalud", email_html)
+            email_html = build_branded_email_html(
+                title="Aviso sobre Verificación de Matrícula Profesional",
+                subtitle="Observaciones del comité de cumplimiento médico.",
+                content_html=(
+                    f"Estimado/a Dr./Dra. <strong>{doctor.full_name or doctor.email}</strong>,<br/><br/>"
+                    f"El comité de cumplimiento ha revisado el registro de su matrícula profesional "
+                    f"(<strong>{doctor.license_number}</strong>) y no fue posible validarlo de forma concluyente.<br/><br/>"
+                    f"<strong>Motivo indicado:</strong> {request.reason or 'Documentación insuficiente o datos no concordantes'}.<br/><br/>"
+                    f"Por favor ingrese a su portal o contacte al equipo de soporte para subsanar los recaudos requeridos."
+                ),
+                cta_text="Acceder al Portal Médico",
+                cta_link=f"{settings.FRONTEND_URL}/#/login",
+                details_table=[
+                    ("Profesional", doctor.full_name or doctor.email),
+                    ("Matrícula Registrada", doctor.license_number or "N/A"),
+                    ("Dictamen", "Observado / Subsanación requerida"),
+                ],
+                alert_box="Puede volver a cargar una copia legible de su carnet de colegiatura o certificación médica vigente.",
+            )
+            await send_email(doctor.email, "Observación sobre Verificación de Matrícula - VitaRecord", email_html)
 
             return VerifyDoctorResponse(
                 doctor_id=doctor.id,

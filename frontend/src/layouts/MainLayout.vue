@@ -101,7 +101,13 @@
           <q-item-section>Panel Principal</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple to="/doctors" active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600">
+        <q-item
+          v-if="userRole !== 'DOCTOR'"
+          clickable
+          v-ripple
+          to="/doctors"
+          active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600"
+        >
           <q-item-section avatar>
             <q-icon name="medical_services" size="20px" color="teal" />
           </q-item-section>

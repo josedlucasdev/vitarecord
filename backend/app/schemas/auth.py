@@ -43,3 +43,18 @@ class SessionPublic(BaseModel):
     expires_at: str | None = None
     is_current: bool = False
 
+
+class PatientOnboardingCompleteRequest(BaseModel):
+    token: str
+    password: str
+
+
+class PatientOnboardingValidateResponse(BaseModel):
+    valid: bool
+    email: EmailStr
+    full_name: str | None = None
+    doctor_name: str | None = None
+    clinic_name: str | None = None
+    appointment_id: str | None = None
+    start_time: str | None = None
+

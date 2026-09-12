@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, generate_uuid
@@ -21,14 +21,15 @@ class Appointment(Base, TimestampMixin):
     end_time: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False, index=True)
 
     # Estados según máquina de estados del plan:
-    # PENDING_PATIENT_ACCEPTANCE, SCHEDULED, CONFIRMED, CHECKED_IN, IN_CONSULTATION,
+    # PENDING_DOCTOR_APPROVAL, PENDING_PATIENT_ACCEPTANCE, SCHEDULED, CONFIRMED, CHECKED_IN, IN_CONSULTATION,
     # COMPLETED, CANCELLED_BY_PATIENT, CANCELLED_BY_DOCTOR, CANCELLED_BY_CLINIC,
-    # REJECTED_BY_PATIENT, NO_SHOW, RESCHEDULED
+    # REJECTED_BY_PATIENT, REJECTED_BY_DOCTOR, NO_SHOW, RESCHEDULED
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="SCHEDULED", index=True)
 
     reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     cancellation_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    intake_data: Mapped[dict | None] = mapped_column(JSON, default=dict)
 
     # Relaciones
     clinic: Mapped["Clinic"] = relationship("Clinic", backref="appointments")

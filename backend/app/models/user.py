@@ -58,6 +58,14 @@ class User(Base, TimestampMixin):
     # esa regla se aplica en app/services (nunca solo a nivel de columna).
     is_available_for_emergencies: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
+    # Datos complementarios de paciente
+    identification_number: Mapped[str | None] = mapped_column(String(32))
+    birth_date: Mapped[datetime | None] = mapped_column(DateTime)
+    gender: Mapped[str | None] = mapped_column(String(16))
+    address: Mapped[str | None] = mapped_column(String(255))
+    city: Mapped[str | None] = mapped_column(String(100))
+    country: Mapped[str | None] = mapped_column(String(100), default="Venezuela")
+
 
 class RefreshToken(Base):
     """Sesion / refresh token con soporte de rotacion y deteccion de reuso

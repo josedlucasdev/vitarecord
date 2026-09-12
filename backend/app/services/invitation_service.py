@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_invitation_token, decode_token, hash_password
 from app.models.affiliation import DoctorClinicAffiliation
+from app.core.config import settings
 from app.models.clinic import Clinic
 from app.models.user import DoctorScheduleLock, User
 from app.repositories.affiliation_repository import AffiliationRepository
@@ -25,7 +26,7 @@ from app.schemas.invitation import (
     InvitationResponse,
     ValidateTokenResponse,
 )
-from app.services.email_service import send_email
+from app.services.email_service import build_branded_email_html, send_email
 
 logger = logging.getLogger("invitation_service")
 
@@ -43,15 +44,16 @@ class InvitationService:
         result = await self.db.execute(stmt)
         staff_members = result.scalars().all()
 
-        html_body = f"""
-        <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
-            <h2 style="color: #0284c7;">Aviso de Personal Médico - {clinic.name}</h2>
-            <p><strong>Médico:</strong> {doctor.full_name or doctor.email} ({doctor.email})</p>
-            <p>{message_text}</p>
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
-            <p style="font-size: 12px; color: #777;">Sistema de Gestión Clínica - ÍntimaSalud</p>
-        </div>
-        """
+        html_body = build_branded_email_html(
+            title=f"Aviso de Personal Médico - {clinic.name}",
+            subtitle="Actualización operativa en la plantilla asistencial.",
+            content_html=f"Se ha registrado una novedad respecto al profesional médico:<br/><br/>{message_text}",
+            details_table=[
+                ("Clínica / Sede", clinic.name),
+                ("Médico Especialista", doctor.full_name or doctor.email),
+                ("Correo Electrónico", doctor.email),
+            ],
+        )
 
         for staff in staff_members:
             try:
@@ -120,39 +122,47 @@ class InvitationService:
 
         # Enlace para responder o completar onboarding
         if is_new_user:
-            invitation_link = f"http://localhost:9000/#/invitations/onboarding?token={token}"
-            email_subject = f"Invitación de incorporación a {clinic.name} - ÍntimaSalud"
-            email_html = f"""
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-                <h2 style="color: #0284c7;">Bienvenido al equipo médico de {clinic.name}</h2>
-                <p>Estimado/a profesional {request.full_name or ''},</p>
-                <p>Ha sido invitado/a a formar parte de la plantilla médica de <strong>{clinic.name}</strong> en la plataforma ÍntimaSalud.</p>
-                <p>Para activar su cuenta, establecer su contraseña de acceso y registrar sus credenciales médicas, por favor ingrese en el siguiente enlace seguro (válido por 48 horas):</p>
-                <p style="margin: 25px 0;">
-                    <a href="{invitation_link}" style="background-color: #0284c7; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                        Completar Registro y Onboarding
-                    </a>
-                </p>
-                <p style="font-size: 12px; color: #666;">Si no esperaba este correo, puede ignorarlo.</p>
-            </div>
-            """
+            invitation_link = f"{settings.FRONTEND_URL}/#/invitations/onboarding?token={token}"
+            email_subject = f"Invitación de incorporación a {clinic.name} - VitaRecord"
+            email_html = build_branded_email_html(
+                title=f"Bienvenido/a al equipo de {clinic.name}",
+                subtitle="Ha recibido una invitación formal para incorporarse a la plantilla médica.",
+                content_html=(
+                    f"Estimado/a profesional <strong>{request.full_name or ''}</strong>,<br/><br/>"
+                    f"Ha sido invitado/a a formar parte de la plantilla médica de <strong>{clinic.name}</strong> "
+                    f"en la plataforma clínica <strong>VitaRecord</strong>.<br/>"
+                    f"Para activar su cuenta, establecer su contraseña de acceso y registrar sus credenciales "
+                    f"y matrícula médica, por favor ingrese en el siguiente enlace seguro:"
+                ),
+                cta_text="Completar Registro y Onboarding Médico",
+                cta_link=invitation_link,
+                details_table=[
+                    ("Institución / Clínica", clinic.name),
+                    ("Profesional", request.full_name or request.email),
+                    ("Especialidad", request.specialty or "Medicina General"),
+                ],
+                alert_box="Este enlace es seguro, intransferible y tiene una vigencia de 48 horas.",
+            )
         else:
-            invitation_link = f"http://localhost:9000/#/invitations/respond?token={token}"
-            email_subject = f"Nueva invitación de afiliación médica: {clinic.name}"
-            email_html = f"""
-            <div style="font-family: Arial, sans-serif; padding: 20px;">
-                <h2 style="color: #0284c7;">Invitación de Afiliación Clínica</h2>
-                <p>Estimado/a Dr./Dra. {doctor.full_name or doctor.email},</p>
-                <p>La clínica <strong>{clinic.name}</strong> le ha invitado a unirse a su equipo médico en ÍntimaSalud.</p>
-                <p>Puede responder directamente a esta solicitud haciendo clic en el siguiente enlace:</p>
-                <p style="margin: 25px 0;">
-                    <a href="{invitation_link}" style="background-color: #0284c7; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                        Ver y Responder Invitación
-                    </a>
-                </p>
-                <p style="font-size: 12px; color: #666;">Este enlace expira en 48 horas.</p>
-            </div>
-            """
+            invitation_link = f"{settings.FRONTEND_URL}/#/invitations/respond?token={token}"
+            email_subject = f"Nueva invitación de afiliación médica: {clinic.name} - VitaRecord"
+            email_html = build_branded_email_html(
+                title="Invitación de Afiliación Clínica",
+                subtitle=f"La sede {clinic.name} le ha invitado a unirse a su equipo médico.",
+                content_html=(
+                    f"Estimado/a Dr./Dra. <strong>{doctor.full_name or doctor.email}</strong>,<br/><br/>"
+                    f"La clínica <strong>{clinic.name}</strong> le ha invitado a afiliarse formalmente a su equipo "
+                    f"médico en <strong>VitaRecord</strong>.<br/>"
+                    f"Puede responder directamente a esta solicitud de afiliación haciendo clic en el siguiente botón:"
+                ),
+                cta_text="Ver y Responder Invitación",
+                cta_link=invitation_link,
+                details_table=[
+                    ("Institución / Clínica", clinic.name),
+                    ("Médico Especialista", doctor.full_name or doctor.email),
+                ],
+                alert_box="Enlace seguro e intransferible. Válido durante 48 horas.",
+            )
 
         await send_email(doctor.email, email_subject, email_html)
 

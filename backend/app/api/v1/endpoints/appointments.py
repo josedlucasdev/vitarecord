@@ -12,10 +12,29 @@ from app.schemas.appointment import (
     AppointmentCancelRequest,
     AppointmentCreate,
     AppointmentPublic,
+    PublicAppointmentCreate,
 )
 from app.services.appointment_service import AppointmentService
 
 router = APIRouter()
+
+
+@router.post(
+    "/public-book",
+    response_model=AppointmentPublic,
+    status_code=status.HTTP_201_CREATED,
+)
+async def public_book_appointment(
+    payload: PublicAppointmentCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Reserva de cita médica abierta al público general sin requerir inicio de sesión previo.
+    
+    Captura información de triage clínico y biométrico, dejando la cita en estado
+    PENDING_DOCTOR_APPROVAL hasta ser aceptada por el especialista.
+    """
+    service = AppointmentService(db)
+    return await service.public_book_appointment(payload)
 
 
 @router.post(
@@ -53,6 +72,29 @@ async def list_appointments(
         date=date,
         status=status_filter,
     )
+
+
+@router.post("/{appointment_id}/doctor-accept", response_model=AppointmentPublic)
+async def doctor_accept_appointment(
+    appointment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Aprobación de la cita médica por parte del doctor y envío de invitación por correo al paciente."""
+    service = AppointmentService(db)
+    return await service.doctor_accept_appointment(appointment_id, current_user)
+
+
+@router.post("/{appointment_id}/doctor-reject", response_model=AppointmentPublic)
+async def doctor_reject_appointment(
+    appointment_id: str,
+    payload: AppointmentCancelRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Rechazo justificado de cita por parte del doctor."""
+    service = AppointmentService(db)
+    return await service.doctor_reject_appointment(appointment_id, payload.cancellation_reason, current_user)
 
 
 @router.post("/{appointment_id}/accept", response_model=AppointmentPublic)

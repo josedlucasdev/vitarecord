@@ -112,7 +112,7 @@ class AuthService:
 
     async def forgot_password(self, email: str) -> None:
         from app.core.security import create_password_reset_token
-        from app.services.email_service import send_email
+        from app.services.email_service import build_branded_email_html, send_email
 
         user = await self.users.get_by_email(email)
         if not user:
@@ -120,14 +120,20 @@ class AuthService:
             return
 
         token = create_password_reset_token(user.id)
-        reset_link = f"http://localhost:9000/#/reset-password?token={token}"
-        html_body = f"""
-        <h2>Recuperación de Contraseña - ÍntimaSalud</h2>
-        <p>Has solicitado restablecer tu contraseña. Haz clic en el siguiente enlace para continuar:</p>
-        <p><a href="{reset_link}">Restablecer mi Contraseña</a></p>
-        <p>Este enlace expira en 1 hora. Si no solicitaste este cambio, ignora este mensaje.</p>
-        """
-        await send_email(user.email, "Recuperación de contraseña - ÍntimaSalud", html_body)
+        reset_link = f"{settings.FRONTEND_URL}/#/reset-password?token={token}"
+        html_body = build_branded_email_html(
+            title="Recuperación de Contraseña",
+            subtitle="Has solicitado restablecer tu contraseña de acceso a la plataforma VitaRecord.",
+            content_html=(
+                "Hemos recibido una solicitud para restablecer tu clave de acceso.<br/>"
+                "Para definir una nueva contraseña y volver a ingresar a tu cuenta de forma segura, "
+                "haz clic en el siguiente enlace:"
+            ),
+            cta_text="Restablecer Mi Contraseña",
+            cta_link=reset_link,
+            alert_box="Por seguridad, este enlace es válido durante 1 hora. Si no solicitaste este cambio, puedes ignorar este mensaje; tu cuenta permanecerá debidamente protegida.",
+        )
+        await send_email(user.email, "Recuperación de Contraseña - VitaRecord", html_body)
 
     async def reset_password(self, token: str, new_password: str) -> None:
         from app.core.security import hash_password

@@ -458,7 +458,7 @@ function bookWithDoctor (doc) {
   const firstClinicId = doc.clinics?.[0]?.id || ''
   showDetailsModal.value = false
   router.push({
-    path: '/appointments/book',
+    path: '/book-appointment',
     query: {
       doctor_id: doc.id,
       clinic_id: firstClinicId

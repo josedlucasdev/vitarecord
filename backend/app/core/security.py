@@ -66,6 +66,15 @@ def create_invitation_token(subject: str, clinic_id: str) -> str:
     return _create_token(subject, timedelta(hours=48), token_type="doctor_invitation", extra_claims={"clinic_id": clinic_id})
 
 
+def create_patient_invitation_token(subject: str, clinic_id: str, appointment_id: str) -> str:
+    return _create_token(
+        subject,
+        timedelta(hours=48),
+        token_type="patient_invitation",
+        extra_claims={"clinic_id": clinic_id, "appointment_id": appointment_id},
+    )
+
+
 
 def decode_token(token: str) -> dict[str, Any]:
     """Lanza jose.JWTError si el token es invalido o expiro."""
@@ -92,6 +101,7 @@ __all__ = [
     "create_refresh_token",
     "create_password_reset_token",
     "create_invitation_token",
+    "create_patient_invitation_token",
     "decode_token",
     "is_token_type",
     "generate_totp_secret",

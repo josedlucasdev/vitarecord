@@ -1,38 +1,50 @@
 <template>
-  <q-page class="p-6 max-w-5xl mx-auto space-y-6">
+  <q-page class="p-4 md:p-8 max-w-5xl mx-auto space-y-6">
     <!-- Header -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-xs border border-slate-200">
       <div>
         <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold">
-            <q-icon name="event_available" size="22px" />
+          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-teal-600 to-cyan-700 text-white flex items-center justify-center font-bold shadow-md shadow-teal-700/20">
+            <q-icon name="event_available" size="26px" />
           </div>
           <div>
-            <h1 class="text-xl font-bold text-slate-900">Agendar Cita Médica</h1>
+            <h1 class="text-xl font-bold text-slate-900 leading-tight">Agendar Cita Médica</h1>
             <p class="text-xs text-slate-500">
-              Reserva con garantía de bloqueo pesimista contra solapamientos de médico y sala física.
+              Reserva con garantía anti-solapamiento y registro de triage clínico para el especialista.
             </p>
           </div>
         </div>
       </div>
 
-      <q-btn
-        flat
-        color="primary"
-        icon="list_alt"
-        label="Ver Mis Citas"
-        to="/appointments/my-list"
-        no-caps
-        class="font-semibold"
-      />
+      <div class="flex items-center gap-2">
+        <q-btn
+          flat
+          color="teal-8"
+          icon="medical_services"
+          label="Directorio Médico"
+          to="/doctors"
+          no-caps
+          class="font-semibold text-xs"
+        />
+        <q-btn
+          v-if="isLoggedIn"
+          outline
+          color="primary"
+          icon="list_alt"
+          label="Ver Mis Citas"
+          to="/appointments/my-list"
+          no-caps
+          class="font-semibold text-xs"
+        />
+      </div>
     </div>
 
     <!-- Booking Form Card -->
-    <div class="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
-      <!-- 1. Beneficiario -->
-      <div>
+    <div class="bg-white p-6 md:p-8 rounded-3xl shadow-xs border border-slate-200 space-y-8">
+      <!-- SECCIÓN 1: ¿Para quién es la cita? (Modo Autenticado) o Identificación (Modo Público) -->
+      <div v-if="isLoggedIn">
         <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-          1. ¿Para quién es la cita?
+          1. Beneficiario de la Consulta
         </label>
         <div class="flex flex-wrap gap-3 items-center">
           <q-btn
@@ -80,35 +92,283 @@
         </div>
       </div>
 
+      <!-- SECCIÓN 1 (Pública): Datos Personales del Paciente y Dirección -->
+      <div v-else class="space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
+            <q-icon name="person" size="16px" class="mr-1.5 text-teal-600" />
+            1. Datos del Paciente y Contacto
+          </label>
+          <span class="text-2xs text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full font-semibold border border-teal-200">
+            No requieres cuenta previa para agendar
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <q-input
+            v-model="patientForm.full_name"
+            outlined
+            dense
+            label="Nombre y Apellido *"
+            placeholder="Ej. Ana Pérez"
+            :rules="[val => !!val || 'El nombre es obligatorio']"
+          />
+
+          <q-input
+            v-model="patientForm.id_document"
+            outlined
+            dense
+            label="Cédula / Documento de Identidad *"
+            placeholder="Ej. V-18765432"
+            :rules="[val => !!val || 'El documento es obligatorio']"
+          />
+
+          <q-input
+            v-model="patientForm.email"
+            outlined
+            dense
+            type="email"
+            label="Correo Electrónico *"
+            placeholder="correo@ejemplo.com"
+            hint="Aquí recibirás la confirmación e invitación con acceso"
+            :rules="[val => !!val && /.+@.+\..+/.test(val) || 'Correo electrónico inválido']"
+          />
+
+          <q-input
+            v-model="patientForm.phone"
+            outlined
+            dense
+            label="Teléfono de Contacto *"
+            placeholder="Ej. +58 412 1234567"
+            :rules="[val => !!val || 'El teléfono es obligatorio']"
+          />
+
+          <q-input
+            v-model="patientForm.birth_date"
+            outlined
+            dense
+            type="date"
+            label="Fecha de Nacimiento"
+          />
+
+          <q-select
+            v-model="patientForm.gender"
+            outlined
+            dense
+            :options="['Femenino', 'Masculino', 'Otro']"
+            label="Sexo Biológico"
+          />
+        </div>
+
+        <!-- Dirección de Residencia Simplificada -->
+        <div class="pt-2">
+          <div class="text-xs font-bold text-slate-600 mb-2 flex items-center">
+            <q-icon name="home" size="15px" class="mr-1.5 text-teal-600" />
+            Dirección de Residencia
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <q-input
+              v-model="patientForm.country"
+              outlined
+              dense
+              label="País"
+              placeholder="Venezuela"
+            />
+            <q-input
+              v-model="patientForm.city"
+              outlined
+              dense
+              label="Ciudad / Estado"
+              placeholder="Ej. Caracas, Miranda"
+            />
+            <q-input
+              v-model="patientForm.address"
+              outlined
+              dense
+              label="Dirección de Habitación"
+              placeholder="Calle, Edificio / Casa, Nivel"
+            />
+          </div>
+        </div>
+      </div>
+
       <q-separator />
 
-      <!-- 2. Selección de Sede/Clínica, Especialista y Fecha -->
+      <!-- SECCIÓN 2: Triage Clínico y Medidas Biométricas -->
       <div class="space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">
-            2. Selecciona Sede / Clínica, Médico y Fecha
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2">
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
+            <q-icon name="monitor_heart" size="16px" class="mr-1.5 text-teal-600" />
+            2. Medidas Biométricas y Triage Clínico Previo
+          </label>
+          <span class="text-2xs text-slate-500">
+            Información médica para preparar tu consulta
+          </span>
+        </div>
+
+        <!-- Medidas: Estatura, Peso e IMC -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
+          <div>
+            <q-input
+              v-model.number="patientForm.height_cm"
+              outlined
+              dense
+              type="number"
+              label="Estatura / Talla (cm) *"
+              placeholder="Ej. 165"
+              suffix="cm"
+              bg-color="white"
+              :rules="[val => !val || (val >= 40 && val <= 250) || 'Talla debe ser entre 40 y 250 cm']"
+            />
+          </div>
+
+          <div>
+            <q-input
+              v-model.number="patientForm.weight_kg"
+              outlined
+              dense
+              type="number"
+              step="0.1"
+              label="Peso Actual (kg) *"
+              placeholder="Ej. 62.5"
+              suffix="kg"
+              bg-color="white"
+              :rules="[val => !val || (val >= 2 && val <= 350) || 'Peso debe ser entre 2 y 350 kg']"
+            />
+          </div>
+
+          <!-- Live BMI display -->
+          <div class="flex items-center justify-center bg-white rounded-xl border border-slate-200 p-2.5">
+            <div v-if="calculatedBmi" class="text-center">
+              <div class="text-2xs font-bold uppercase tracking-wider text-slate-400">IMC Calculado</div>
+              <div class="text-lg font-black text-slate-800">{{ calculatedBmi }} <span class="text-xs font-normal text-slate-400">kg/m²</span></div>
+              <span
+                :class="bmiCategoryClass"
+                class="inline-block px-2 py-0.5 rounded-full text-2xs font-bold mt-0.5"
+              >
+                {{ bmiCategoryText }}
+              </span>
+            </div>
+            <div v-else class="text-center text-slate-400 text-xs py-1">
+              <q-icon name="calculate" size="18px" class="mb-1" />
+              <div>Ingresa talla y peso para calcular IMC</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grupo Sanguíneo y Alergias -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <q-select
+              v-model="patientForm.blood_type"
+              outlined
+              dense
+              :options="['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'No lo sé']"
+              label="Grupo Sanguíneo"
+            />
+          </div>
+
+          <div>
+            <q-input
+              v-model="patientForm.allergies"
+              outlined
+              dense
+              label="Alergias a Medicamentos o Sustancias"
+              placeholder="Ej. Penicilina, Sulfas, AINEs"
+            >
+              <template #append>
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  color="teal"
+                  label="Ninguna"
+                  class="text-2xs font-bold"
+                  @click="patientForm.allergies = 'Ninguna conocida'"
+                />
+              </template>
+            </q-input>
+          </div>
+        </div>
+
+        <!-- Antecedentes y Medicamentos -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <q-input
+              v-model="patientForm.chronic_conditions"
+              outlined
+              dense
+              label="Antecedentes Médicos / Enfermedades Crónicas"
+              placeholder="Ej. Hipertensión, Diabetes, Asma, Ninguna"
+            >
+              <template #append>
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  color="teal"
+                  label="Sin antecedentes"
+                  class="text-2xs font-bold"
+                  @click="patientForm.chronic_conditions = 'Sin antecedentes patológicos'"
+                />
+              </template>
+            </q-input>
+          </div>
+
+          <div>
+            <q-input
+              v-model="patientForm.current_medications"
+              outlined
+              dense
+              label="Medicamentos que Toma Actualmente"
+              placeholder="Ej. Losartán 50mg, Anticonceptivos, Ninguno"
+            >
+              <template #append>
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  color="teal"
+                  label="No toma"
+                  class="text-2xs font-bold"
+                  @click="patientForm.current_medications = 'No consume medicamentos actualmente'"
+                />
+              </template>
+            </q-input>
+          </div>
+        </div>
+      </div>
+
+      <q-separator />
+
+      <!-- SECCIÓN 3: Selección de Sede/Clínica, Especialista y Fecha -->
+      <div class="space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
+            <q-icon name="apartment" size="16px" class="mr-1.5 text-teal-600" />
+            3. Selecciona Sede / Clínica, Médico y Fecha
           </label>
 
           <div class="flex items-center space-x-2">
             <!-- Modalidad de búsqueda -->
-            <div class="inline-flex rounded-lg bg-slate-100 p-1 border border-slate-200 text-xs">
+            <div class="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs">
               <button
                 type="button"
-                :class="selectionFlow === 'byClinic' ? 'bg-white text-teal-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
-                class="px-3 py-1 rounded-md transition-all flex items-center"
+                :class="selectionFlow === 'byClinic' ? 'bg-white text-teal-800 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
+                class="px-3 py-1 rounded-lg transition-all flex items-center"
                 @click="setFlow('byClinic')"
               >
-                <q-icon name="apartment" size="14px" class="mr-1.5" />
-                <span>Buscar por Sede / Clínica</span>
+                <q-icon name="apartment" size="13px" class="mr-1" />
+                <span>Por Clínica</span>
               </button>
               <button
                 type="button"
-                :class="selectionFlow === 'byDoctor' ? 'bg-white text-teal-700 shadow-sm font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
-                class="px-3 py-1 rounded-md transition-all flex items-center"
+                :class="selectionFlow === 'byDoctor' ? 'bg-white text-teal-800 shadow-xs font-bold' : 'text-slate-600 hover:text-slate-900 font-medium'"
+                class="px-3 py-1 rounded-lg transition-all flex items-center"
                 @click="setFlow('byDoctor')"
               >
-                <q-icon name="medical_services" size="14px" class="mr-1.5" />
-                <span>Buscar por Médico Especialista</span>
+                <q-icon name="medical_services" size="13px" class="mr-1" />
+                <span>Por Médico</span>
               </button>
             </div>
 
@@ -178,7 +438,7 @@
               <template v-slot:option="scope">
                 <q-item v-bind="scope.itemProps">
                   <q-item-section avatar>
-                    <q-avatar size="30px" color="teal-1" text-color="teal-800" icon="person" />
+                    <q-avatar size="28px" color="teal-1" text-color="teal-800" icon="person" />
                   </q-item-section>
                   <q-item-section>
                     <q-item-label class="font-medium">{{ scope.opt.label }}</q-item-label>
@@ -207,45 +467,46 @@
           </div>
         </div>
 
-        <!-- Feedback contextual de la sede y especialista -->
-        <div v-if="selectedDoctor && selectedClinic" class="p-3 bg-teal-50/80 border border-teal-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between text-xs text-teal-900 gap-2">
+        <!-- Feedback contextual -->
+        <div v-if="selectedDoctor && selectedClinic" class="p-3.5 bg-teal-50/80 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between text-xs text-teal-900 gap-2">
           <div class="flex items-center space-x-2">
             <q-icon name="check_circle" size="18px" color="teal" />
             <span>
-              Consultando turnos en <strong>{{ selectedClinic.name }}</strong> con el especialista <strong>{{ selectedDoctor.full_name }}</strong> ({{ selectedDoctor.specialty }}).
+              Consultando turnos en <strong>{{ selectedClinic.name }}</strong> con <strong>{{ selectedDoctor.full_name }}</strong> ({{ selectedDoctor.specialty }}).
             </span>
           </div>
-          <div v-if="selectedDoctor.clinics && selectedDoctor.clinics.length > 1" class="text-2xs text-teal-800 bg-teal-100/90 px-2.5 py-1 rounded-full font-semibold">
-            Este médico atiende en {{ selectedDoctor.clinics.length }} sedes diferentes
+          <div v-if="selectedDoctor.clinics && selectedDoctor.clinics.length > 1" class="text-2xs text-teal-800 bg-teal-100/90 px-2.5 py-1 rounded-full font-semibold self-start sm:self-auto">
+            Atiende en {{ selectedDoctor.clinics.length }} sedes
           </div>
         </div>
       </div>
 
       <q-separator />
 
-      <!-- 3. Slots Disponibles (Redis) -->
+      <!-- SECCIÓN 4: Turnos Disponibles (Redis) -->
       <div>
         <div class="flex items-center justify-between mb-3">
-          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">
-            3. Turnos Disponibles en Vivo (Aceleración Redis)
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
+            <q-icon name="schedule" size="16px" class="mr-1.5 text-teal-600" />
+            4. Turnos Horarios Disponibles
           </label>
           <span v-if="loadingSlots" class="text-xs text-slate-400 flex items-center">
-            <q-spinner size="14px" class="mr-1" /> Calculando...
+            <q-spinner size="14px" class="mr-1" /> Calculando disponibilidad...
           </span>
         </div>
 
-        <div v-if="slots.length === 0" class="p-6 bg-slate-50 rounded-xl border border-slate-200 text-center">
+        <div v-if="slots.length === 0" class="p-6 bg-slate-50 rounded-2xl border border-slate-200 text-center">
           <q-icon name="schedule" size="32px" class="text-slate-300" />
           <div class="text-xs text-slate-500 mt-2 font-medium">
             No hay turnos disponibles para la fecha seleccionada.
           </div>
           <div class="text-2xs text-slate-400 mt-1">
-            Verifica que el médico tenga horario configurado ese día de la semana.
+            Por favor prueba seleccionando otro día o consulta la disponibilidad de otra sede.
           </div>
         </div>
 
         <div v-else class="space-y-3">
-          <!-- Indicador / Leyenda de disponibilidad -->
+          <!-- Leyenda -->
           <div class="flex items-center space-x-4 text-2xs text-slate-500 font-medium">
             <div class="flex items-center space-x-1.5">
               <span class="w-3 h-3 rounded-md bg-white border border-slate-300 inline-block shadow-2xs"></span>
@@ -268,12 +529,12 @@
               :key="idx"
               :disabled="!slot.is_available"
               :class="[
-                'p-3 rounded-xl border text-center transition-all font-semibold text-xs select-none',
+                'p-3 rounded-2xl border text-center transition-all font-semibold text-xs select-none',
                 !slot.is_available
                   ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed opacity-60'
                   : selectedSlot === slot
-                    ? 'bg-teal-600 text-white border-teal-700 shadow-sm scale-105 cursor-pointer ring-2 ring-teal-400 ring-offset-1'
-                    : 'bg-white hover:bg-teal-50 text-slate-800 border-slate-200 cursor-pointer'
+                    ? 'bg-teal-600 text-white border-teal-700 shadow-md scale-105 cursor-pointer ring-2 ring-teal-400 ring-offset-1'
+                    : 'bg-white hover:bg-teal-50 text-slate-800 border-slate-200 cursor-pointer shadow-2xs'
               ]"
               @click="slot.is_available ? (selectedSlot = slot) : null"
             >
@@ -291,17 +552,18 @@
 
       <q-separator />
 
-      <!-- 4. Motivo y Confirmación -->
+      <!-- SECCIÓN 5: Motivo y Confirmación -->
       <div class="space-y-4">
-        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500">
-          4. Motivo de Consulta y Confirmación
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
+          <q-icon name="comment" size="16px" class="mr-1.5 text-teal-600" />
+          5. Motivo Principal de Consulta y Confirmación
         </label>
 
         <q-input
-          v-model="reason"
+          v-model="patientForm.reason"
           outlined
-          label="Motivo de la consulta médica (opcional)"
-          placeholder="Ej. Chequeo anual, dolor pélvico recurrente, control ginecológico"
+          label="Describe brevemente tus síntomas o motivo de la consulta médica *"
+          placeholder="Ej. Chequeo preventivo anual, dolor abdominal o pélvico, control de rutina, citología..."
           type="textarea"
           rows="2"
         />
@@ -311,24 +573,34 @@
           <span>{{ bookingError }}</span>
         </div>
 
-        <div class="pt-2 flex justify-end">
+        <div class="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="text-xs text-slate-500">
+            <div v-if="!isLoggedIn" class="flex items-center text-teal-800 font-medium">
+              <q-icon name="mark_email_read" size="16px" class="mr-1.5 text-teal-600" />
+              Al ser aprobada por el médico, recibirás la invitación a tu correo para activar tu cuenta.
+            </div>
+            <div v-else class="text-slate-500">
+              Garantía de exclusión mutua mediante bloqueo pesimista en MySQL.
+            </div>
+          </div>
+
           <q-btn
-            color="primary"
+            color="teal-8"
             icon="check_circle"
             label="Confirmar y Agendar Cita"
             no-caps
-            class="px-6 py-3 font-bold text-sm shadow-md"
+            class="px-8 py-3 font-bold text-sm shadow-md rounded-2xl"
             :loading="submitting"
-            :disable="!selectedSlot || !selectedSlot.is_available"
+            :disable="!canSubmitBooking"
             @click="submitBooking"
           />
         </div>
       </div>
     </div>
 
-    <!-- Modal Registrar Familiar -->
+    <!-- Modal Registrar Familiar (Modo Autenticado) -->
     <q-dialog v-model="showAddDependentModal">
-      <q-card style="min-width: 400px; border-radius: 16px;">
+      <q-card style="min-width: 400px; border-radius: 20px;">
         <q-card-section class="bg-gradient-to-r from-teal-700 to-cyan-800 text-white p-5 flex items-center justify-between">
           <div class="flex items-center space-x-2">
             <q-icon name="person_add" size="22px" />
@@ -348,15 +620,62 @@
               required
             />
             <q-input v-model="depForm.birth_date" label="Fecha de Nacimiento *" type="date" filled required />
-            <q-select v-model="depForm.gender" :options="['F', 'M']" label="Género (Opcional)" filled />
-            <q-input v-model="depForm.id_document" label="Documento / Cédula (Opcional)" filled />
+            <q-input v-model="depForm.id_document" label="Cédula / Documento (Opcional)" filled />
+            <q-select v-model="depForm.gender" :options="['FEMENINO', 'MASCULINO', 'OTRO']" label="Género" filled />
 
-            <div class="pt-2 flex justify-end space-x-2">
+            <div class="flex justify-end space-x-2 pt-4">
               <q-btn flat label="Cancelar" v-close-popup no-caps />
-              <q-btn type="submit" color="primary" label="Guardar Familiar" no-caps class="font-semibold" />
+              <q-btn color="primary" label="Guardar Familiar" type="submit" no-caps class="font-bold" />
             </div>
           </form>
         </q-card-section>
+      </q-card>
+    </q-dialog>
+
+    <!-- Diálogo de Éxito para Agendamiento Público -->
+    <q-dialog v-model="showSuccessModal" persistent>
+      <q-card class="max-w-md w-full rounded-3xl overflow-hidden shadow-2xl p-6 md:p-8 text-center space-y-5">
+        <div class="w-16 h-16 rounded-3xl bg-teal-50 text-teal-700 flex items-center justify-center mx-auto shadow-inner">
+          <q-icon name="mark_email_read" size="36px" />
+        </div>
+
+        <div>
+          <h2 class="text-xl font-bold text-slate-900">¡Cita Médica Registrada!</h2>
+          <p class="text-xs text-slate-500 mt-1">
+            Tu turno con el <strong>{{ selectedDoctor?.full_name || 'Médico Especialista' }}</strong> ha sido reservado.
+          </p>
+        </div>
+
+        <div class="bg-teal-50/70 border border-teal-200/80 rounded-2xl p-4 text-xs text-teal-950 text-left space-y-2">
+          <div class="flex items-center text-teal-800 font-bold">
+            <q-icon name="info" size="16px" class="mr-1.5 text-teal-600" />
+            <span>Próximos Pasos:</span>
+          </div>
+          <p class="text-slate-700 leading-relaxed">
+            El especialista revisará tus datos de triage y medidas para confirmar la consulta. En cuanto sea aprobada, recibirás un correo en <strong>{{ patientForm.email }}</strong> con tu enlace para activar tu cuenta en <strong>VitaRecord</strong>.
+          </p>
+          <div class="text-2xs text-slate-500 bg-white p-2.5 rounded-xl border border-teal-100">
+            Con tu cuenta de VitaRecord podrás descargar tus <strong>recetas médicas electrónicas con código QR</strong>, acceder a tus informes y consultar tu historial clínico en cualquier momento.
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-2 pt-2">
+          <q-btn
+            color="teal-8"
+            label="Entendido, Ir al Directorio Médico"
+            to="/doctors"
+            no-caps
+            class="w-full py-2.5 font-bold rounded-xl shadow-xs"
+          />
+          <q-btn
+            flat
+            color="slate-600"
+            label="Volver al Inicio"
+            to="/"
+            no-caps
+            class="text-xs font-semibold"
+          />
+        </div>
       </q-card>
     </q-dialog>
   </q-page>
@@ -369,62 +688,103 @@ import { Notify } from 'quasar'
 import { api } from 'boot/axios'
 import { useAcl } from 'src/composables/useAcl'
 
-const router = useRouter()
 const route = useRoute()
-const { user } = useAcl()
+const router = useRouter()
+const { isLoggedIn } = useAcl()
 
-const DEFAULT_CLINIC_ID = 'c1111111-1111-1111-1111-111111111111'
-
-// 1. Modalidad de Selección y Estado Principal
-const selectionFlow = ref('byClinic') // 'byClinic' | 'byDoctor'
-
-const clinics = ref([])
-const selectedClinicId = ref(user.value?.clinicId || DEFAULT_CLINIC_ID)
-const loadingClinics = ref(false)
-
-const allDoctors = ref([])
-const selectedDoctorId = ref(null)
-const loadingDoctors = ref(false)
-
-const selectedDate = ref(new Date().toISOString().substring(0, 10))
-
-const slots = ref([])
-const loadingSlots = ref(false)
-const selectedSlot = ref(null)
-
-const reason = ref('')
-const submitting = ref(false)
-const bookingError = ref('')
-
-// Dependientes familiares
+// Estado de Beneficiario (solo usado si está logueado)
 const beneficiaryType = ref('self')
 const selectedDependentId = ref(null)
-const dependentOptions = ref([])
+const dependents = ref([])
 const loadingDependents = ref(false)
 const showAddDependentModal = ref(false)
+const showSuccessModal = ref(false)
 
 const depForm = reactive({
   full_name: '',
   relationship: 'HIJO',
   birth_date: '',
-  gender: 'F',
-  id_document: ''
+  id_document: '',
+  gender: 'FEMENINO'
 })
+
+// Formulario unificado de paciente y triage (público y logueado)
+const patientForm = reactive({
+  full_name: '',
+  id_document: '',
+  email: '',
+  phone: '',
+  birth_date: '',
+  gender: 'Femenino',
+  country: 'Venezuela',
+  city: '',
+  address: '',
+  height_cm: null,
+  weight_kg: null,
+  blood_type: 'O+',
+  allergies: '',
+  chronic_conditions: '',
+  current_medications: '',
+  reason: ''
+})
+
+// Cálculo en vivo del IMC
+const calculatedBmi = computed(() => {
+  if (patientForm.height_cm && patientForm.weight_kg && patientForm.height_cm > 0) {
+    const hM = patientForm.height_cm / 100
+    return (patientForm.weight_kg / (hM * hM)).toFixed(1)
+  }
+  return null
+})
+
+const bmiCategoryText = computed(() => {
+  const bmi = parseFloat(calculatedBmi.value)
+  if (!bmi) return ''
+  if (bmi < 18.5) return 'Bajo peso'
+  if (bmi < 25.0) return 'Peso normal'
+  if (bmi < 30.0) return 'Sobrepeso'
+  return 'Obesidad'
+})
+
+const bmiCategoryClass = computed(() => {
+  const bmi = parseFloat(calculatedBmi.value)
+  if (!bmi) return ''
+  if (bmi < 18.5) return 'bg-amber-100 text-amber-800'
+  if (bmi < 25.0) return 'bg-teal-100 text-teal-800'
+  if (bmi < 30.0) return 'bg-orange-100 text-orange-800'
+  return 'bg-red-100 text-red-800'
+})
+
+// Flujo de Selección de Sede / Especialista
+const selectionFlow = ref('byDoctor') // 'byClinic' | 'byDoctor'
+
+// Estado Clínicas y Médicos
+const clinics = ref([])
+const allDoctors = ref([])
+const selectedClinicId = ref(null)
+const selectedDoctorId = ref(null)
+const selectedDate = ref(new Date().toISOString().split('T')[0])
+const slots = ref([])
+const selectedSlot = ref(null)
+
+const loadingClinics = ref(false)
+const loadingDoctors = ref(false)
+const loadingSlots = ref(false)
+const submitting = ref(false)
+const bookingError = ref('')
 
 function setFlow (flow) {
   selectionFlow.value = flow
 }
 
-// Entidades reactivas seleccionadas
-const selectedClinic = computed(() => {
-  return clinics.value.find(c => c.id === selectedClinicId.value) || null
-})
-
 const selectedDoctor = computed(() => {
   return allDoctors.value.find(d => d.id === selectedDoctorId.value) || null
 })
 
-// Opciones calculadas de clínicas según flujo (con deduplicación estricta por ID)
+const selectedClinic = computed(() => {
+  return clinics.value.find(c => c.id === selectedClinicId.value) || null
+})
+
 const clinicOptions = computed(() => {
   let list = clinics.value
   if (selectionFlow.value === 'byDoctor' && selectedDoctor.value?.clinics?.length) {
@@ -445,7 +805,6 @@ const clinicOptions = computed(() => {
   }))
 })
 
-// Opciones calculadas de doctores según flujo (con deduplicación estricta por ID)
 const doctorOptions = computed(() => {
   let list = allDoctors.value
   if (selectionFlow.value === 'byClinic' && selectedClinicId.value) {
@@ -467,10 +826,28 @@ const doctorOptions = computed(() => {
   }))
 })
 
+const dependentOptions = computed(() => {
+  return dependents.value.map(d => ({
+    label: `${d.full_name} (${d.relationship})`,
+    value: d.id
+  }))
+})
+
+const canSubmitBooking = computed(() => {
+  if (!selectedSlot.value || !selectedSlot.value.is_available) return false
+  if (!isLoggedIn.value) {
+    return (
+      patientForm.full_name.trim().length >= 3 &&
+      patientForm.email.trim().length >= 5 &&
+      patientForm.phone.trim().length >= 7 &&
+      patientForm.id_document.trim().length >= 4
+    )
+  }
+  return true
+})
+
 async function onClinicChanged (newClinicId) {
   selectedClinicId.value = newClinicId
-
-  // Si estamos navegando por clínica, verificar si el médico seleccionado sigue siendo válido
   if (selectionFlow.value === 'byClinic') {
     const validDoctor = doctorOptions.value.some(d => d.value === selectedDoctorId.value)
     if (!validDoctor && doctorOptions.value.length > 0) {
@@ -482,8 +859,6 @@ async function onClinicChanged (newClinicId) {
 
 async function onDoctorChanged (newDoctorId) {
   selectedDoctorId.value = newDoctorId
-
-  // Si estamos navegando por médico, asegurar que la clínica elegida es una donde atiende el médico
   if (selectionFlow.value === 'byDoctor') {
     const doc = allDoctors.value.find(d => d.id === newDoctorId)
     if (doc?.clinics?.length) {
@@ -501,13 +876,12 @@ async function loadInitialData () {
   loadingDoctors.value = true
   try {
     const [clinicsRes, doctorsRes] = await Promise.all([
-      api.get('/clinics', { params: { _t: Date.now() } }),
-      api.get('/doctors', { params: { _t: Date.now() } })
+      api.get('/clinics/public', { params: { _t: Date.now() } }),
+      api.get('/doctors/public-directory', { params: { _t: Date.now() } })
     ])
     clinics.value = clinicsRes.data
     allDoctors.value = doctorsRes.data
 
-    // Manejar pre-selección desde query params (ej. desde el Directorio Médico Público)
     const queryDoctorId = route.query?.doctor_id
     const queryClinicId = route.query?.clinic_id
 
@@ -522,21 +896,20 @@ async function loadInitialData () {
         selectedClinicId.value = targetDoc.clinics[0].id
       }
     } else {
-      // Inicializar clínica seleccionada por defecto
       if (queryClinicId && clinics.value.some(c => c.id === queryClinicId)) {
         selectedClinicId.value = queryClinicId
       } else if (clinics.value.length > 0) {
-        const match = clinics.value.find(c => c.id === selectedClinicId.value)
-        if (!match) {
-          selectedClinicId.value = clinics.value[0].id
-        }
+        selectedClinicId.value = clinics.value[0].id
       }
 
-      // Inicializar médico seleccionado
       if (allDoctors.value.length > 0 && !selectedDoctorId.value) {
         const docsInClinic = allDoctors.value.filter(d => (d.clinics || []).some(c => c.id === selectedClinicId.value))
         selectedDoctorId.value = docsInClinic.length > 0 ? docsInClinic[0].id : allDoctors.value[0].id
       }
+    }
+
+    if (isLoggedIn.value) {
+      await fetchDependents()
     }
   } catch (err) {
     Notify.create({ type: 'negative', message: 'Error al consultar clínicas y médicos disponibles.' })
@@ -554,22 +927,21 @@ function selectSelf () {
 
 function selectDependentMode () {
   beneficiaryType.value = 'dependent'
-  fetchDependents()
+  if (dependents.value.length > 0 && !selectedDependentId.value) {
+    selectedDependentId.value = dependents.value[0].id
+  }
 }
 
 async function fetchDependents () {
   loadingDependents.value = true
   try {
     const { data } = await api.get('/patients/me/dependents')
-    dependentOptions.value = data.map(d => ({
-      label: `${d.full_name} (${d.relationship}) ${d.is_emancipated ? '• Emancipado' : ''}`,
-      value: d.id
-    }))
-    if (dependentOptions.value.length > 0 && !selectedDependentId.value) {
-      selectedDependentId.value = dependentOptions.value[0].value
+    dependents.value = data
+    if (beneficiaryType.value === 'dependent' && data.length > 0 && !selectedDependentId.value) {
+      selectedDependentId.value = data[0].id
     }
   } catch (err) {
-    Notify.create({ type: 'negative', message: 'Error al cargar familiares.' })
+    // Si no está autenticado o error, silenciar
   } finally {
     loadingDependents.value = false
   }
@@ -599,54 +971,82 @@ async function loadAvailableSlots () {
     const { data } = await api.get(`/clinics/${selectedClinicId.value}/doctors/${selectedDoctorId.value}/slots?date=${selectedDate.value}`)
     slots.value = data
   } catch (err) {
-    Notify.create({ type: 'negative', message: 'Error al consultar disponibilidad en Redis.' })
+    Notify.create({ type: 'negative', message: 'Error al consultar disponibilidad de turnos.' })
   } finally {
     loadingSlots.value = false
   }
 }
 
 async function submitBooking () {
-  if (!selectedSlot.value || !selectedSlot.value.is_available) return
+  if (!canSubmitBooking.value) return
   submitting.value = true
   bookingError.value = ''
 
-  let appointmentCreated = false
   try {
     const startIso = `${selectedDate.value}T${selectedSlot.value.start_time}:00`
     const endIso = `${selectedDate.value}T${selectedSlot.value.end_time}:00`
 
-    const payload = {
-      clinic_id: selectedClinicId.value,
-      doctor_id: selectedDoctorId.value,
-      dependent_id: beneficiaryType.value === 'dependent' ? selectedDependentId.value : undefined,
-      start_time: startIso,
-      end_time: endIso,
-      reason: reason.value || undefined,
-      estimated_amount: 35.00
+    if (!isLoggedIn.value) {
+      // Flujo de agendamiento público sin sesión
+      const publicPayload = {
+        clinic_id: selectedClinicId.value,
+        doctor_id: selectedDoctorId.value,
+        start_time: startIso,
+        end_time: endIso,
+        full_name: patientForm.full_name,
+        email: patientForm.email,
+        phone: patientForm.phone,
+        id_document: patientForm.id_document || undefined,
+        birth_date: patientForm.birth_date || undefined,
+        gender: patientForm.gender || undefined,
+        country: patientForm.country || 'Venezuela',
+        city: patientForm.city || undefined,
+        address: patientForm.address || undefined,
+        height_cm: patientForm.height_cm || undefined,
+        weight_kg: patientForm.weight_kg || undefined,
+        blood_type: patientForm.blood_type || undefined,
+        allergies: patientForm.allergies || undefined,
+        chronic_conditions: patientForm.chronic_conditions || undefined,
+        current_medications: patientForm.current_medications || undefined,
+        reason: patientForm.reason || undefined,
+        estimated_amount: 30.00
+      }
+
+      await api.post('/appointments/public-book', publicPayload)
+      showSuccessModal.value = true
+    } else {
+      // Flujo autenticado estándar
+      const payload = {
+        clinic_id: selectedClinicId.value,
+        doctor_id: selectedDoctorId.value,
+        dependent_id: beneficiaryType.value === 'dependent' ? selectedDependentId.value : undefined,
+        start_time: startIso,
+        end_time: endIso,
+        reason: patientForm.reason || undefined,
+        intake_data: {
+          height_cm: patientForm.height_cm,
+          weight_kg: patientForm.weight_kg,
+          bmi: calculatedBmi.value ? parseFloat(calculatedBmi.value) : undefined,
+          bmi_category: bmiCategoryText.value,
+          blood_type: patientForm.blood_type,
+          allergies: patientForm.allergies,
+          chronic_conditions: patientForm.chronic_conditions,
+          current_medications: patientForm.current_medications
+        },
+        estimated_amount: 30.00
+      }
+
+      await api.post('/appointments', payload)
+      Notify.create({
+        type: 'positive',
+        message: '¡Cita médica agendada exitosamente!'
+      })
+      router.push('/appointments/my-list')
     }
-
-    await api.post('/appointments', payload)
-    appointmentCreated = true
-
-    Notify.create({
-      type: 'positive',
-      message: '¡Cita médica agendada exitosamente! Se generó el registro de cobro inicial en UNPAID.'
-    })
   } catch (err) {
-    if (!appointmentCreated) {
-      bookingError.value = err.response?.data?.detail || err.message || 'No se pudo completar la reserva.'
-      return
-    }
+    bookingError.value = err.response?.data?.detail || err.message || 'No se pudo completar la reserva de la cita.'
   } finally {
     submitting.value = false
-  }
-
-  if (appointmentCreated) {
-    try {
-      await router.push('/appointments/my-list')
-    } catch {
-      // Ignorar redirección abortada si ya está en navegación
-    }
   }
 }
 

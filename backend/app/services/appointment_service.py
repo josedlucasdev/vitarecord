@@ -4,15 +4,23 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.redis import get_redis
+from app.core.security import create_patient_invitation_token
 from app.models.appointment import Appointment
 from app.models.payment_record import PaymentRecord
 from app.models.user import User
 from app.repositories.appointment_repository import AppointmentRepository
+from app.repositories.clinic_repository import ClinicRepository
 from app.repositories.dependent_repository import DependentRepository
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.user_repository import UserRepository
-from app.schemas.appointment import AppointmentCreate, AppointmentPublic
+from app.schemas.appointment import (
+    AppointmentCreate,
+    AppointmentPublic,
+    PublicAppointmentCreate,
+)
+from app.services.email_service import build_branded_email_html, send_email
 
 logger = logging.getLogger("appointment_service")
 
@@ -24,6 +32,7 @@ class AppointmentService:
         self.payments = PaymentRepository(db)
         self.dependents = DependentRepository(db)
         self.users = UserRepository(db)
+        self.clinics = ClinicRepository(db)
 
     async def _invalidate_redis_slots(self, doctor_id: str, target_dt: datetime.datetime) -> None:
         try:
@@ -262,6 +271,331 @@ class AppointmentService:
         )
         return [self._to_public(a) for a in items]
 
+    async def public_book_appointment(
+        self, payload: PublicAppointmentCreate
+    ) -> AppointmentPublic:
+        """Crea una cita médica desde el portal público sin requerir inicio de sesión previo.
+        
+        Captura datos personales del paciente, dirección de residencia, medidas biométricas
+        y cuestionario de triage. La cita queda en PENDING_DOCTOR_APPROVAL hasta que el médico
+        la acepte desde su panel, momento en el cual se envía la invitación por correo.
+        """
+        # 1. Validar médico
+        doctor = await self.users.get_by_id(payload.doctor_id)
+        if not doctor or doctor.role != "DOCTOR":
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Médico no encontrado.")
+
+        if doctor.license_verification_status != "VERIFIED" or doctor.status != "ACTIVE":
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "El médico no se encuentra verificado o activo en la plataforma.",
+            )
+
+        if payload.start_time >= payload.end_time:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "La hora de inicio debe ser anterior a la hora de fin.",
+            )
+
+        # 2. Adquisición atómica de cerrojos mutex en MySQL para evitar doble reserva
+        await self.appointments.acquire_locks(payload.doctor_id, payload.room_id)
+
+        # 3. Comprobación segura de solapamientos
+        conflicts = await self.appointments.find_conflicts(
+            doctor_id=payload.doctor_id,
+            room_id=payload.room_id,
+            start_time=payload.start_time,
+            end_time=payload.end_time,
+        )
+        if conflicts:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Conflicto de horario: el médico o el consultorio físico ya tienen una cita programada en ese rango horario.",
+            )
+
+        # 4. Localizar o registrar al paciente provisional
+        patient = await self.users.get_by_email(payload.email)
+        b_date = None
+        if payload.birth_date:
+            try:
+                b_date = datetime.datetime.strptime(payload.birth_date, "%Y-%m-%d")
+            except Exception:
+                pass
+
+        needs_onboarding = False
+        if not patient:
+            patient = User(
+                email=payload.email,
+                full_name=payload.full_name,
+                phone=payload.phone,
+                role="PATIENT",
+                status="PENDING_ONBOARDING",
+                identification_number=payload.id_document,
+                birth_date=b_date,
+                gender=payload.gender,
+                address=payload.address,
+                city=payload.city,
+                country=payload.country or "Venezuela",
+                mfa_enabled=False,
+            )
+            await self.users.create(patient)
+            await self.db.flush()
+            needs_onboarding = True
+        else:
+            if payload.full_name:
+                patient.full_name = payload.full_name
+            if payload.phone and not patient.phone:
+                patient.phone = payload.phone
+            if payload.id_document and not patient.identification_number:
+                patient.identification_number = payload.id_document
+            if payload.address and not patient.address:
+                patient.address = payload.address
+            if payload.city and not patient.city:
+                patient.city = payload.city
+            if b_date and not patient.birth_date:
+                patient.birth_date = b_date
+            if payload.gender and not patient.gender:
+                patient.gender = payload.gender
+
+            # Si el usuario no era un paciente activo con clave establecida:
+            if patient.role != "PATIENT" or patient.status != "ACTIVE" or not patient.hashed_password:
+                patient.role = "PATIENT"
+                patient.status = "PENDING_ONBOARDING"
+                patient.hashed_password = None
+                needs_onboarding = True
+
+        # 5. Calcular IMC si se proporcionan talla y peso
+        bmi = payload.bmi
+        bmi_cat = None
+        if payload.weight_kg and payload.height_cm and payload.height_cm > 0:
+            h_m = payload.height_cm / 100.0
+            bmi = round(payload.weight_kg / (h_m * h_m), 2)
+            if bmi < 18.5:
+                bmi_cat = "Bajo peso"
+            elif bmi < 25.0:
+                bmi_cat = "Peso normal"
+            elif bmi < 30.0:
+                bmi_cat = "Sobrepeso"
+            else:
+                bmi_cat = "Obesidad"
+
+        intake_data = {
+            "height_cm": payload.height_cm,
+            "weight_kg": payload.weight_kg,
+            "bmi": bmi,
+            "bmi_category": bmi_cat,
+            "blood_type": payload.blood_type,
+            "allergies": payload.allergies,
+            "chronic_conditions": payload.chronic_conditions,
+            "current_medications": payload.current_medications,
+            "symptoms": payload.reason,
+            "address": payload.address,
+            "city": payload.city,
+            "country": payload.country,
+            "id_document": payload.id_document,
+            "birth_date": payload.birth_date,
+            "gender": payload.gender,
+            "needs_patient_onboarding": needs_onboarding,
+        }
+
+        # 6. Crear Cita en estado PENDING_DOCTOR_APPROVAL
+        appointment = Appointment(
+            clinic_id=payload.clinic_id,
+            doctor_id=payload.doctor_id,
+            patient_id=patient.id,
+            room_id=payload.room_id,
+            start_time=payload.start_time,
+            end_time=payload.end_time,
+            status="PENDING_DOCTOR_APPROVAL",
+            reason=payload.reason,
+            intake_data=intake_data,
+        )
+        await self.appointments.create(appointment)
+
+        # 7. Registro contable inicial (UNPAID)
+        payment = PaymentRecord(
+            appointment_id=appointment.id,
+            clinic_id=payload.clinic_id,
+            amount=payload.estimated_amount or Decimal("30.00"),
+            currency=payload.currency or "USD",
+            status="UNPAID",
+        )
+        await self.payments.create(payment)
+
+        await self.db.commit()
+
+        # 8. Invalidar caché en Redis para que el turno quede bloqueado de inmediato
+        await self._invalidate_redis_slots(payload.doctor_id, payload.start_time)
+
+        fresh_app = await self.appointments.get_by_id(appointment.id)
+        return self._to_public(fresh_app)
+
+    async def doctor_accept_appointment(
+        self, appointment_id: str, current_user: User
+    ) -> AppointmentPublic:
+        """Aprobación formal de la cita por parte del médico.
+        
+        Transiciona a CONFIRMED y envía un correo con enlace seguro de invitación
+        al paciente para completar su registro en VitaRecord y fijar su contraseña.
+        """
+        app = await self.appointments.get_by_id(appointment_id)
+        if not app:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+
+        if current_user.role != "DOCTOR" or app.doctor_id != current_user.id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Solo el médico asignado a esta cita puede aceptarla.",
+            )
+
+        if app.status not in ("PENDING_DOCTOR_APPROVAL", "SCHEDULED"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"La cita no se encuentra en espera de aprobación médica (estado actual: {app.status}).",
+            )
+
+        await self.appointments.update_status(appointment_id, "CONFIRMED")
+
+        # Cargar paciente, médico y clínica
+        patient = await self.users.get_by_id(app.patient_id)
+        doctor = current_user
+        clinic = app.clinic or await self.clinics.get_by_id(app.clinic_id)
+        clinic_name = clinic.name if clinic else "Clínica VitaRecord"
+        doctor_name = doctor.full_name or f"Dr. {doctor.email}"
+        patient_name = patient.full_name or "Paciente"
+        date_str = app.start_time.strftime("%d/%m/%Y a las %H:%M")
+
+        # Si el paciente es nuevo, no tiene clave activa o no ha completado el onboarding:
+        needs_patient_onboarding = False
+        if not patient:
+            needs_patient_onboarding = False
+        elif (
+            patient.role != "PATIENT"
+            or patient.status != "ACTIVE"
+            or not patient.hashed_password
+            or (app.intake_data and app.intake_data.get("needs_patient_onboarding") is True)
+        ):
+            needs_patient_onboarding = True
+
+        if patient and needs_patient_onboarding:
+            # Asegurar rol PATIENT y estado PENDING_ONBOARDING
+            if patient.role != "PATIENT":
+                patient.role = "PATIENT"
+            if patient.status != "ACTIVE":
+                patient.status = "PENDING_ONBOARDING"
+            await self.db.flush()
+
+            token = create_patient_invitation_token(
+                subject=patient.id,
+                clinic_id=app.clinic_id,
+                appointment_id=app.id,
+            )
+            onboarding_link = f"{settings.FRONTEND_URL}/#/patient/onboarding?token={token}"
+
+            doctor_spec = f"{doctor_name} ({doctor.specialty})" if doctor.specialty else doctor_name
+            details = [
+                ("Especialista", doctor_spec),
+                ("Sede / Clínica", clinic_name),
+                ("Fecha y Hora", date_str),
+                ("Paciente", patient_name),
+            ]
+            if app.reason:
+                details.append(("Motivo", app.reason))
+
+            content_p = (
+                f"Hola <strong>{patient_name}</strong>, te informamos que el especialista "
+                f"<strong>{doctor_name}</strong> ha revisado tu solicitud de atención médica y "
+                f"ha <strong>confirmado tu cita</strong>.<br/><br/>"
+                f"Para que puedas acceder a tu cita, recibir tus <strong>recetas médicas electrónicas con código QR</strong>, "
+                f"consultar tu historia clínica, informes de consulta y resultados de exámenes, por favor completa tu registro "
+                f"creando tu contraseña personal de acceso a la plataforma:"
+            )
+
+            html_body = build_branded_email_html(
+                title="¡Tu Cita Médica ha sido Confirmada!",
+                subtitle="El especialista ha aceptado tu consulta y ha reservado tu turno.",
+                content_html=content_p,
+                cta_text="Completar Mi Registro y Crear Contraseña",
+                cta_link=onboarding_link,
+                details_table=details,
+                alert_box="Al definir tu contraseña tendrás acceso directo e inmediato al sistema de pacientes de VitaRecord.",
+            )
+            try:
+                await send_email(
+                    patient.email,
+                    f"[VitaRecord] Cita Confirmada por el {doctor_name} - Completa tu Registro",
+                    html_body,
+                )
+            except Exception as e:
+                logger.warning("No se pudo enviar correo de onboarding a %s: %s", patient.email, e)
+        else:
+            # Paciente ya registrado
+            my_appointments_link = f"{settings.FRONTEND_URL}/#/appointments/my-list"
+            doctor_spec = f"{doctor_name} ({doctor.specialty})" if doctor.specialty else doctor_name
+            details = [
+                ("Especialista", doctor_spec),
+                ("Sede / Clínica", clinic_name),
+                ("Fecha y Hora", date_str),
+                ("Paciente", patient_name),
+            ]
+            if app.reason:
+                details.append(("Motivo", app.reason))
+
+            content_p = (
+                f"Estimado/a <strong>{patient_name}</strong>,<br/><br/>"
+                f"El <strong>{doctor_name}</strong> ha confirmado tu cita programada para el "
+                f"<strong>{date_str}</strong> en <strong>{clinic_name}</strong>.<br/>"
+                f"Podrás consultar tus recetas digitales, órdenes e historial médico directamente en tu cuenta de VitaRecord."
+            )
+
+            html_body = build_branded_email_html(
+                title="¡Tu Cita Médica ha sido Confirmada!",
+                subtitle="Tu turno de atención médica ha sido agendado exitosamente.",
+                content_html=content_p,
+                cta_text="Ver Mis Citas en VitaRecord",
+                cta_link=my_appointments_link,
+                details_table=details,
+            )
+            try:
+                await send_email(patient.email, f"[VitaRecord] Cita Confirmada con el {doctor_name}", html_body)
+            except Exception as e:
+                logger.warning("No se pudo enviar correo de confirmacion a %s: %s", patient.email, e)
+
+        await self.db.commit()
+        fresh = await self.appointments.get_by_id(appointment_id)
+        return self._to_public(fresh)
+
+    async def doctor_reject_appointment(
+        self, appointment_id: str, reason: str, current_user: User
+    ) -> AppointmentPublic:
+        """Rechazo justificado de cita médica por el especialista."""
+        app = await self.appointments.get_by_id(appointment_id)
+        if not app:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+
+        if current_user.role != "DOCTOR" or app.doctor_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo el médico asignado puede rechazar esta cita.")
+
+        if app.status not in ("PENDING_DOCTOR_APPROVAL", "SCHEDULED"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"La cita no se encuentra en estado cancelable por el médico ({app.status}).",
+            )
+
+        await self.appointments.update_status(
+            appointment_id, "REJECTED_BY_DOCTOR", cancellation_reason=reason
+        )
+
+        pay_record = await self.payments.get_by_appointment_id(appointment_id)
+        if pay_record:
+            await self.payments.update_status(pay_record.id, "VOID", notes=f"Rechazada por el médico: {reason}")
+
+        await self.db.commit()
+        await self._invalidate_redis_slots(app.doctor_id, app.start_time)
+
+        fresh = await self.appointments.get_by_id(appointment_id)
+        return self._to_public(fresh)
+
     def _to_public(self, app: Appointment) -> AppointmentPublic:
         pay = app.payment_record
         return AppointmentPublic(
@@ -276,8 +610,11 @@ class AppointmentService:
             status=app.status,
             reason=app.reason,
             cancellation_reason=app.cancellation_reason,
+            intake_data=app.intake_data,
             doctor_name=app.doctor.full_name if app.doctor else None,
             patient_name=app.patient.full_name if app.patient else None,
+            patient_email=app.patient.email if app.patient else None,
+            patient_phone=app.patient.phone if app.patient else None,
             clinic_name=app.clinic.name if app.clinic else None,
             room_name=app.room.name if app.room else None,
             payment_status=pay.status if pay else None,

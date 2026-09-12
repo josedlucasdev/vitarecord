@@ -36,6 +36,16 @@ const routes = [
         path: 'doctors',
         name: 'public-doctors-directory',
         component: () => import('pages/public/DoctorsDirectory.vue')
+      },
+      {
+        path: 'book-appointment',
+        name: 'public-book-appointment',
+        component: () => import('pages/appointments/BookAppointment.vue')
+      },
+      {
+        path: 'patient/onboarding',
+        name: 'patient-onboarding',
+        component: () => import('pages/auth/PatientOnboarding.vue')
       }
     ]
   },

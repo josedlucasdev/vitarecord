@@ -20,16 +20,28 @@ async def init_db_and_seed() -> None:
         # Crea tablas registradas en Base.metadata si aun no existen
         await conn.run_sync(Base.metadata.create_all)
 
-        # Asegurar columnas de perfil profesional en la tabla users
+        # Asegurar columnas de perfil profesional y datos de paciente en la tabla users
         for col_def in [
             "ADD COLUMN academic_degrees JSON NULL",
             "ADD COLUMN work_experience JSON NULL",
             "ADD COLUMN is_public_profile_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+            "ADD COLUMN identification_number VARCHAR(32) NULL",
+            "ADD COLUMN birth_date DATETIME NULL",
+            "ADD COLUMN gender VARCHAR(16) NULL",
+            "ADD COLUMN address VARCHAR(255) NULL",
+            "ADD COLUMN city VARCHAR(100) NULL",
+            "ADD COLUMN country VARCHAR(100) NULL DEFAULT 'Venezuela'",
         ]:
             try:
                 await conn.exec_driver_sql(f"ALTER TABLE users {col_def}")
             except Exception:
                 pass  # Columna ya existe
+
+        # Asegurar columna intake_data en tabla appointments
+        try:
+            await conn.exec_driver_sql("ALTER TABLE appointments ADD COLUMN intake_data JSON NULL")
+        except Exception:
+            pass
 
     async with AsyncSessionLocal() as db:
         # Verificar si ya existe el usuario superadmin

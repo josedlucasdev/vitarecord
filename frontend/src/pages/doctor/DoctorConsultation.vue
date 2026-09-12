@@ -3,14 +3,9 @@
     <div class="max-w-5xl mx-auto space-y-6">
       <!-- Encabezado de la Consulta -->
       <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div class="flex items-center space-x-3">
-          <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center">
-            <q-icon name="clinical_notes" size="28px" />
-          </div>
-          <div>
-            <h1 class="text-xl font-bold text-slate-900 leading-tight">Consulta Médica Especializada</h1>
-            <p class="text-xs text-slate-500">Expediente Clínico Electrónico cifrado con AES-256-GCM y Receta con QR</p>
-          </div>
+        <div>
+          <h1 class="text-xl font-bold text-slate-900 leading-tight">Consulta Médica Especializada</h1>
+          <p class="text-xs text-slate-500">Expediente Clínico Electrónico cifrado con AES-256-GCM y Receta con QR</p>
         </div>
         <q-btn
           flat
@@ -80,15 +75,183 @@
               <span class="font-bold">Motivo reportado por el paciente al agendar:</span> "{{ appointment.reason }}"
             </div>
           </div>
+
+          <!-- Medidas de Triage y Antecedentes reportados al agendar -->
+          <div v-if="appointment.intake_data && Object.keys(appointment.intake_data).length > 0" class="p-4 bg-teal-50/70 border border-teal-200/80 rounded-xl space-y-2 text-xs">
+            <div class="flex items-center text-teal-800 font-bold uppercase tracking-wide text-2xs">
+              <q-icon name="monitor_heart" size="14px" class="mr-1 text-teal-600" />
+              Triage Clínico y Medidas Reportadas al Agendar
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-700">
+              <div class="bg-white p-2.5 rounded-lg border border-teal-100">
+                <span class="text-2xs text-slate-400 block font-semibold">Talla:</span>
+                <span class="font-bold text-slate-800">{{ appointment.intake_data.height_cm ? `${appointment.intake_data.height_cm} cm` : 'N/D' }}</span>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-teal-100">
+                <span class="text-2xs text-slate-400 block font-semibold">Peso:</span>
+                <span class="font-bold text-slate-800">{{ appointment.intake_data.weight_kg ? `${appointment.intake_data.weight_kg} kg` : 'N/D' }}</span>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-teal-100">
+                <span class="text-2xs text-slate-400 block font-semibold">IMC:</span>
+                <span class="font-bold text-slate-800">{{ appointment.intake_data.bmi || 'N/D' }} {{ appointment.intake_data.bmi_category ? `(${appointment.intake_data.bmi_category})` : '' }}</span>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-teal-100">
+                <span class="text-2xs text-slate-400 block font-semibold">Grupo Sanguíneo:</span>
+                <span class="font-bold text-slate-800">{{ appointment.intake_data.blood_type || 'N/D' }}</span>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-2 pt-1 text-2xs">
+              <span v-if="appointment.intake_data.allergies" class="bg-red-50 text-red-800 border border-red-200 px-2 py-0.5 rounded-md font-medium">
+                <strong>Alergias:</strong> {{ appointment.intake_data.allergies }}
+              </span>
+              <span v-if="appointment.intake_data.chronic_conditions" class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium">
+                <strong>Antecedentes:</strong> {{ appointment.intake_data.chronic_conditions }}
+              </span>
+              <span v-if="appointment.intake_data.current_medications" class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md font-medium">
+                <strong>Medicación:</strong> {{ appointment.intake_data.current_medications }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Acceso Directo al Historial Clínico Completo -->
+          <div v-if="patientHistory.length > 0 || activeTreatments.length > 0" class="p-3 bg-teal-50/50 border border-teal-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div class="flex items-center space-x-2 text-slate-700">
+              <q-icon name="folder_shared" size="20px" class="text-teal-700 shrink-0" />
+              <div>
+                <span class="font-bold text-slate-900">Historial Clínico:</span>
+                <span> {{ patientHistory.length }} consulta{{ patientHistory.length !== 1 ? 's' : '' }} previa{{ patientHistory.length !== 1 ? 's' : '' }}</span>
+                <span v-if="activeTreatments.length > 0" class="text-amber-900 font-bold ml-1.5">
+                  • ⚠️ {{ activeTreatments.length }} tratamiento{{ activeTreatments.length !== 1 ? 's' : '' }} activo{{ activeTreatments.length !== 1 ? 's' : '' }}
+                </span>
+                <span v-else class="text-emerald-700 font-medium ml-1.5">
+                  • Sin tratamientos activos vigentes
+                </span>
+              </div>
+            </div>
+            <q-btn
+              color="teal-8"
+              icon="open_in_new"
+              label="Ver Historial Completo"
+              no-caps
+              dense
+              class="text-xs px-3 py-1 font-bold shadow-xs self-start sm:self-auto"
+              @click="showHistoryDialog = true"
+            />
+          </div>
         </div>
 
-        <!-- 2. Historia Clínica Estructurada (Anamnesis y Examen Físico) -->
-        <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 space-y-5">
-          <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
-            <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center">
-              <q-icon name="edit_note" size="18px" class="mr-2 text-teal-600" />
-              2. Anamnesis y Exploración Clínica (Cifrado AES-256-GCM)
-            </h2>
+        <!-- Resumen si la Cita ya fue Completada Previamente -->
+        <div v-if="appointment.status === 'COMPLETED'" class="bg-white p-6 rounded-2xl shadow-xs border border-emerald-200 space-y-4">
+          <div class="flex items-center justify-between border-b border-emerald-100 pb-3">
+            <div class="flex items-center space-x-2 text-emerald-800 font-bold text-sm uppercase tracking-wider">
+              <q-icon name="verified" size="20px" class="text-emerald-600" />
+              <span>Consulta Finalizada y Firmada Electrónicamente</span>
+            </div>
+            <q-badge color="emerald-1" text-color="emerald-9" class="font-bold text-xs py-1 px-2.5">
+              COMPLETED
+            </q-badge>
+          </div>
+
+          <div v-if="loadingAppointmentRecord" class="p-6 text-center">
+            <q-spinner-dots color="teal" size="36px" />
+            <p class="text-xs text-slate-500 mt-2">Cargando expediente de esta consulta...</p>
+          </div>
+
+          <div v-else-if="appointmentRecord" class="space-y-4 text-xs">
+            <div class="bg-emerald-50/70 p-4 rounded-xl border border-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span class="text-2xs uppercase font-bold text-emerald-800">Diagnóstico Registrado:</span>
+                <div class="text-sm font-bold text-emerald-950 mt-0.5">{{ appointmentRecord.diagnosis }}</div>
+                <div v-if="appointmentRecord.icd10_code" class="text-2xs text-emerald-700 mt-0.5">
+                  CIE-10: <span class="font-mono font-bold">{{ appointmentRecord.icd10_code }}</span> - {{ appointmentRecord.icd10_description }}
+                </div>
+              </div>
+              <div class="text-2xs text-slate-500">
+                Atendido por: <strong class="text-slate-700">{{ appointmentRecord.doctor_name }}</strong>
+                <div v-if="appointmentRecord.doctor_specialty">({{ appointmentRecord.doctor_specialty }})</div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
+                <span class="font-bold text-slate-700 flex items-center">
+                  <q-icon name="notes" size="16px" class="mr-1 text-teal-600" />
+                  Anamnesis y Evolución
+                </span>
+                <p class="text-slate-700 whitespace-pre-line leading-relaxed">{{ appointmentRecord.anamnesis }}</p>
+              </div>
+
+              <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
+                <span class="font-bold text-slate-700 flex items-center">
+                  <q-icon name="assignment" size="16px" class="mr-1 text-teal-600" />
+                  Conducta Médica e Indicaciones
+                </span>
+                <p class="text-slate-700 whitespace-pre-line leading-relaxed">{{ appointmentRecord.plan }}</p>
+              </div>
+            </div>
+
+            <div v-if="appointmentRecord.physical_exam" class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
+              <span class="font-bold text-slate-700 flex items-center">
+                <q-icon name="monitor_heart" size="16px" class="mr-1 text-teal-600" />
+                Examen Físico
+              </span>
+              <p class="text-slate-700">{{ appointmentRecord.physical_exam }}</p>
+            </div>
+
+            <div v-if="appointmentRecord.prescriptions?.length" class="p-4 bg-teal-50/50 rounded-xl border border-teal-200 space-y-3">
+              <div class="flex items-center justify-between">
+                <div class="font-bold text-slate-800 flex items-center text-xs">
+                  <q-icon name="receipt_long" size="18px" class="mr-1.5 text-teal-600" />
+                  Receta Médica Emitida (Folio: {{ appointmentRecord.prescriptions[0].prescription_code }})
+                </div>
+                <div class="flex gap-2">
+                  <q-btn
+                    color="teal"
+                    icon="picture_as_pdf"
+                    label="Descargar PDF"
+                    dense
+                    no-caps
+                    class="text-xs px-2.5 py-1 font-bold shadow-xs"
+                    @click="downloadPdf(appointmentRecord.prescriptions[0].id)"
+                  />
+                  <q-btn
+                    outline
+                    color="slate-700"
+                    icon="qr_code"
+                    label="QR"
+                    dense
+                    no-caps
+                    class="text-xs px-2 py-1"
+                    @click="openQrPublic(appointmentRecord.prescriptions[0].verification_hash)"
+                  />
+                </div>
+              </div>
+
+              <div class="space-y-1.5 divide-y divide-teal-100">
+                <div v-for="(it, itIdx) in appointmentRecord.prescriptions[0].items" :key="itIdx" class="pt-1.5 flex flex-col sm:flex-row sm:items-center justify-between text-2xs">
+                  <div>
+                    <strong class="text-slate-800 text-xs">{{ it.medication }}</strong>
+                    <span class="text-teal-700 ml-1 font-semibold">({{ it.dosage }})</span>
+                    <span class="text-slate-600 ml-2">{{ it.frequency }} - {{ it.duration }}</span>
+                  </div>
+                  <div v-if="it.instructions" class="text-slate-500 italic">
+                    {{ it.instructions }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulario Activo de Consulta (Sólo si la cita no ha sido completada) -->
+        <template v-if="appointment.status !== 'COMPLETED'">
+          <!-- 2. Historia Clínica Estructurada (Anamnesis y Examen Físico) -->
+          <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 space-y-5">
+            <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center">
+                <q-icon name="edit_note" size="18px" class="mr-2 text-teal-600" />
+                2. Anamnesis y Exploración Clínica (Cifrado AES-256-GCM)
+              </h2>
             <div class="flex items-center text-2xs text-teal-700 bg-teal-50 py-1 px-2 rounded-lg font-medium">
               <q-icon name="lock" size="12px" class="mr-1" />
               Cifrado en Reposo por Sede
@@ -125,7 +288,7 @@
           </div>
         </div>
 
-        <!-- 3. Diagnóstico CIE-10 y Conducta Médica -->
+        <!-- 4. Diagnóstico CIE-10 y Conducta Médica -->
         <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 space-y-5">
           <div class="border-b border-slate-100 pb-3">
             <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center">
@@ -212,6 +375,29 @@
           </div>
 
           <div v-if="includePrescription" class="space-y-4">
+            <!-- Recordatorio de Interacciones / Tratamientos Activos -->
+            <div
+              v-if="activeTreatments.length > 0"
+              class="p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+            >
+              <div class="flex items-center space-x-2">
+                <q-icon name="warning_amber" size="20px" class="text-amber-600 shrink-0" />
+                <span>
+                  <strong>Recordatorio Farmacológico:</strong> El paciente tiene <strong>{{ activeTreatments.length }}</strong> tratamiento(s) activo(s). Verifique que los medicamentos a recetar no interactúen de forma adversa con ellos.
+                </span>
+              </div>
+              <q-btn
+                flat
+                dense
+                color="amber-10"
+                icon="visibility"
+                label="Ver activos"
+                no-caps
+                class="font-bold text-2xs self-start sm:self-auto shrink-0"
+                @click="showHistoryDialog = true"
+              />
+            </div>
+
             <div class="space-y-3">
               <div
                 v-for="(item, idx) in prescriptionItems"
@@ -330,6 +516,19 @@
             />
           </div>
         </div>
+      </template>
+
+      <!-- Botón de Retorno si la Cita ya fue Completada -->
+      <div v-else class="flex justify-end pt-2">
+        <q-btn
+          color="primary"
+          icon="arrow_back"
+          label="Volver a la Lista de Citas"
+          no-caps
+          class="font-bold px-6 py-2.5 shadow-sm text-xs"
+          to="/appointments/my-list"
+        />
+      </div>
       </form>
     </div>
 
@@ -386,6 +585,266 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Dialog / Modal de Historial Clínico Completo y Farmacovigilancia -->
+    <q-dialog v-model="showHistoryDialog" position="right" maximized>
+      <q-card style="width: 740px; max-width: 95vw;" class="flex flex-col h-full bg-slate-50">
+        <!-- Barra de Título del Dialog -->
+        <div class="bg-gradient-to-r from-teal-800 to-cyan-900 text-white p-4 flex items-center justify-between shadow-xs">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+              <q-icon name="folder_shared" size="24px" class="text-teal-200" />
+            </div>
+            <div>
+              <h3 class="text-sm font-bold leading-tight">Expediente Clínico del Paciente</h3>
+              <p class="text-2xs text-teal-100">
+                {{ appointment?.patient_name || 'Paciente' }}
+                <span v-if="appointment?.dependent_id"> • Dependiente Familiar</span>
+              </p>
+            </div>
+          </div>
+          <q-btn flat round dense icon="close" color="white" v-close-popup />
+        </div>
+
+        <!-- Resumen de Antecedentes y Triage del Paciente -->
+        <div v-if="appointment?.intake_data && Object.keys(appointment.intake_data).length > 0" class="bg-teal-900/10 border-b border-teal-200/60 p-3 px-4 text-xs space-y-1.5">
+          <div class="flex flex-wrap items-center gap-2 text-2xs">
+            <span v-if="appointment.intake_data.blood_type" class="bg-white px-2 py-0.5 rounded border border-teal-200 font-semibold text-slate-700">
+              🩸 Grupo: <strong>{{ appointment.intake_data.blood_type }}</strong>
+            </span>
+            <span v-if="appointment.intake_data.weight_kg" class="bg-white px-2 py-0.5 rounded border border-teal-200 text-slate-700">
+              Peso: <strong>{{ appointment.intake_data.weight_kg }} kg</strong>
+            </span>
+            <span v-if="appointment.intake_data.height_cm" class="bg-white px-2 py-0.5 rounded border border-teal-200 text-slate-700">
+              Talla: <strong>{{ appointment.intake_data.height_cm }} cm</strong>
+            </span>
+            <span v-if="appointment.intake_data.allergies" class="bg-red-50 text-red-900 px-2 py-0.5 rounded border border-red-200 font-bold">
+              ⚠️ Alergias: {{ appointment.intake_data.allergies }}
+            </span>
+            <span v-if="appointment.intake_data.chronic_conditions" class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 font-medium">
+              Antecedentes: {{ appointment.intake_data.chronic_conditions }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Tabs de Navegación del Historial -->
+        <q-tabs
+          v-model="activeHistoryTab"
+          dense
+          class="bg-white text-slate-600 border-b border-slate-200"
+          active-color="teal-8"
+          indicator-color="teal-8"
+          align="justify"
+        >
+          <q-tab name="active_meds" icon="medication" no-caps class="text-xs">
+            <div class="flex items-center gap-1.5">
+              <span>Tratamientos Activos</span>
+              <q-badge color="orange-8" rounded text-color="white" class="font-bold text-3xs">
+                {{ activeTreatments.length }}
+              </q-badge>
+            </div>
+          </q-tab>
+          <q-tab name="consultations" icon="history_edu" no-caps class="text-xs">
+            <div class="flex items-center gap-1.5">
+              <span>Consultas Previas</span>
+              <q-badge color="slate-3" rounded text-color="slate-8" class="font-bold text-3xs">
+                {{ patientHistory.length }}
+              </q-badge>
+            </div>
+          </q-tab>
+        </q-tabs>
+
+        <!-- Contenido de las Pestañas -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-4">
+          <!-- Pestaña 1: Tratamientos Activos -->
+          <div v-if="activeHistoryTab === 'active_meds'" class="space-y-3">
+            <div
+              v-if="activeTreatments.length > 0"
+              class="p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 space-y-1.5"
+            >
+              <div class="flex items-center space-x-1.5 font-bold">
+                <q-icon name="warning_amber" size="20px" class="text-amber-600 shrink-0" />
+                <span>Alerta de Farmacovigilancia y Prevención de Choque Terapéutico</span>
+              </div>
+              <p class="text-2xs text-amber-900 leading-relaxed">
+                El paciente cuenta con <strong>{{ activeTreatments.length }} tratamiento(s) vigente(s)</strong> prescrito(s) previamente.
+                Revise la siguiente lista de principios activos para evitar antagonismos, toxicidad acumulativa o duplicidades con los nuevos medicamentos que vaya a recetar en esta cita.
+              </p>
+            </div>
+
+            <div v-if="activeTreatments.length === 0" class="p-8 text-center bg-white rounded-xl border border-slate-200 space-y-2">
+              <q-icon name="check_circle" size="36px" class="text-emerald-500" />
+              <div class="text-xs font-bold text-slate-800">No hay tratamientos activos en curso</div>
+              <p class="text-2xs text-slate-500 max-w-sm mx-auto">
+                El paciente no tiene recetas vigentes registradas por otros profesionales en el sistema.
+              </p>
+            </div>
+
+            <div
+              v-for="(t, idx) in activeTreatments"
+              :key="'dlg-act-' + idx"
+              class="bg-white p-4 rounded-xl border border-amber-200 shadow-2xs space-y-2.5 hover:border-amber-400 transition"
+            >
+              <div class="flex items-start justify-between">
+                <div class="flex items-center space-x-2.5">
+                  <div class="w-9 h-9 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0">
+                    <q-icon name="medication" size="22px" />
+                  </div>
+                  <div>
+                    <div class="font-bold text-slate-900 text-sm">{{ t.medication }}</div>
+                    <div class="text-xs font-bold text-teal-700">{{ t.dosage }}</div>
+                  </div>
+                </div>
+                <span class="text-3xs font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-200">
+                  Vigente
+                </span>
+              </div>
+
+              <div class="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs text-slate-600 space-y-1">
+                <div><strong>Pauta:</strong> {{ t.frequency }} <span v-if="t.duration">• Duración: {{ t.duration }}</span></div>
+                <div v-if="t.instructions"><strong>Indicaciones / Vía:</strong> {{ t.instructions }}</div>
+                <div class="text-slate-500 pt-1 border-t border-slate-200/60 text-2xs">
+                  <strong>Prescrito por:</strong> Dr(a). {{ t.doctor_name }} <span v-if="t.doctor_specialty">({{ t.doctor_specialty }})</span>
+                  <div v-if="t.clinic_name" class="text-slate-400 text-3xs">{{ t.clinic_name }}</div>
+                </div>
+                <div class="flex items-center justify-between text-slate-400 pt-0.5 text-3xs">
+                  <span>Emisión: {{ formatDate(t.issued_at) }}</span>
+                  <span v-if="t.expires_at">Vence: {{ formatDate(t.expires_at) }}</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between pt-1">
+                <span class="font-mono text-3xs text-slate-400">Receta: {{ t.prescription_code }}</span>
+                <q-btn
+                  flat
+                  dense
+                  color="teal-8"
+                  icon="picture_as_pdf"
+                  label="Ver Receta Completa (PDF)"
+                  no-caps
+                  class="text-2xs font-semibold"
+                  @click="downloadPdf(t.prescription_id)"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Pestaña 2: Consultas Previas -->
+          <div v-else-if="activeHistoryTab === 'consultations'" class="space-y-4">
+            <div v-if="patientHistory.length === 0" class="p-8 text-center bg-white rounded-xl border border-slate-200 space-y-2">
+              <q-icon name="history_edu" size="36px" class="text-slate-400" />
+              <div class="text-xs font-bold text-slate-700">Sin consultas previas registradas</div>
+              <p class="text-2xs text-slate-500">Ésta es la primera atención médica registrada para este paciente en el sistema.</p>
+            </div>
+
+            <div
+              v-for="(rec, idx) in patientHistory"
+              :key="'dlg-rec-' + rec.id"
+              class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs space-y-3 p-4"
+            >
+              <!-- Cabecera de la consulta previa -->
+              <div class="flex items-center justify-between border-b border-slate-100 pb-2.5 text-xs">
+                <div class="flex items-center space-x-2">
+                  <div class="w-7 h-7 rounded-lg bg-teal-50 text-teal-800 font-bold flex items-center justify-center text-xs">
+                    #{{ patientHistory.length - idx }}
+                  </div>
+                  <div>
+                    <span class="font-bold text-slate-800">{{ formatDate(rec.created_at) }}</span>
+                    <span v-if="rec.clinic_name" class="text-slate-400 text-2xs ml-1">• {{ rec.clinic_name }}</span>
+                    <div class="text-2xs text-slate-500">
+                      Dr(a). <strong>{{ rec.doctor_name || 'Especialista' }}</strong>
+                      <span v-if="rec.doctor_specialty">({{ rec.doctor_specialty }})</span>
+                    </div>
+                  </div>
+                </div>
+
+                <span v-if="rec.icd10_code" class="px-2 py-0.5 rounded-md font-mono text-2xs font-bold bg-teal-50 text-teal-800 border border-teal-200">
+                  CIE-10: {{ rec.icd10_code }}
+                </span>
+              </div>
+
+              <!-- Diagnóstico -->
+              <div class="bg-teal-50/40 p-3 rounded-lg border border-teal-100 text-xs">
+                <div class="text-2xs font-bold uppercase text-teal-800">Diagnóstico Principal:</div>
+                <div class="font-bold text-slate-900 mt-0.5">{{ rec.diagnosis }}</div>
+                <div v-if="rec.icd10_description" class="text-2xs text-slate-600 mt-0.5">{{ rec.icd10_description }}</div>
+              </div>
+
+              <!-- Anamnesis y Plan -->
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-2xs">
+                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-1">
+                  <div class="font-bold text-slate-500 uppercase text-3xs flex items-center">
+                    <q-icon name="notes" size="13px" class="mr-1 text-teal-600" />
+                    Motivo / Anamnesis:
+                  </div>
+                  <div class="text-slate-700 whitespace-pre-line leading-relaxed">{{ rec.anamnesis }}</div>
+                </div>
+                <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-1">
+                  <div class="font-bold text-slate-500 uppercase text-3xs flex items-center">
+                    <q-icon name="assignment" size="13px" class="mr-1 text-teal-600" />
+                    Conducta Médica / Plan:
+                  </div>
+                  <div class="text-slate-700 whitespace-pre-line leading-relaxed">{{ rec.plan }}</div>
+                </div>
+              </div>
+
+              <!-- Examen Físico si existe -->
+              <div v-if="rec.physical_exam" class="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-0.5 text-2xs">
+                <div class="font-bold text-slate-500 uppercase text-3xs flex items-center">
+                  <q-icon name="monitor_heart" size="13px" class="mr-1 text-teal-600" />
+                  Examen Físico y Signos Vitales:
+                </div>
+                <div class="text-slate-700">{{ rec.physical_exam }}</div>
+              </div>
+
+              <!-- Recetas asociadas y medicamentos prescritos -->
+              <div v-if="rec.prescriptions?.length" class="border-t border-slate-100 pt-2 space-y-2">
+                <div class="text-3xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
+                  <q-icon name="receipt_long" size="14px" class="mr-1 text-teal-600" />
+                  Receta(s) emitida(s) en esta consulta:
+                </div>
+
+                <div v-for="p in rec.prescriptions" :key="p.id" class="p-3 bg-teal-50/40 rounded-xl border border-teal-100 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <span class="font-mono font-bold text-teal-800 text-xs">{{ p.prescription_code }}</span>
+                      <span class="text-3xs text-slate-400 ml-2">Emitido: {{ formatDate(p.issued_at) }}</span>
+                      <span class="text-3xs font-semibold ml-2" :class="isVigente(p.expires_at) ? 'text-emerald-700' : 'text-slate-400'">
+                        {{ isVigente(p.expires_at) ? '● Vigente' : '● Concluido' }}
+                      </span>
+                    </div>
+                    <q-btn
+                      flat
+                      dense
+                      size="sm"
+                      color="teal-8"
+                      icon="picture_as_pdf"
+                      label="Descargar PDF"
+                      no-caps
+                      @click="downloadPdf(p.id)"
+                    />
+                  </div>
+
+                  <!-- Lista detallada de medicamentos de esta receta -->
+                  <div v-if="p.items?.length" class="divide-y divide-teal-100/60 pt-1">
+                    <div v-for="(it, itIdx) in p.items" :key="itIdx" class="py-1 text-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                      <div>
+                        <strong class="text-slate-800">{{ it.medication }}</strong>
+                        <span class="text-teal-700 ml-1 font-semibold">({{ it.dosage }})</span>
+                        <span class="text-slate-600 ml-2">{{ it.frequency }} - {{ it.duration }}</span>
+                      </div>
+                      <div v-if="it.instructions" class="text-slate-500 italic">
+                        {{ it.instructions }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -404,6 +863,17 @@ const loadingAppointment = ref(true)
 const submitting = ref(false)
 const showSuccessModal = ref(false)
 const createdRecord = ref(null)
+
+// Estados de Historial Clínico y Farmacovigilancia
+const patientHistory = ref([])
+const loadingHistory = ref(false)
+const activeTreatments = ref([])
+const showHistoryDialog = ref(false)
+const activeHistoryTab = ref('active_meds')
+
+// Estado si la consulta ya fue completada previamente
+const appointmentRecord = ref(null)
+const loadingAppointmentRecord = ref(false)
 
 const includePrescription = ref(true)
 const prescriptionDurationDays = ref(30)
@@ -480,6 +950,83 @@ function formatDateTime (iso) {
   })
 }
 
+function formatDate (iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  })
+}
+
+function isVigente (expiresAt) {
+  if (!expiresAt) return true
+  return new Date(expiresAt) >= new Date()
+}
+
+function computeTreatments () {
+  const now = new Date()
+  const active = []
+  for (const rec of patientHistory.value) {
+    if (!rec.prescriptions || !Array.isArray(rec.prescriptions)) continue
+    for (const presc of rec.prescriptions) {
+      const isPrescActive = presc.status === 'ACTIVE' && (!presc.expires_at || new Date(presc.expires_at) >= now)
+      if (isPrescActive && presc.items && Array.isArray(presc.items)) {
+        for (const item of presc.items) {
+          active.push({
+            medication: item.medication,
+            dosage: item.dosage,
+            frequency: item.frequency,
+            duration: item.duration,
+            instructions: item.instructions,
+            route: item.route,
+            doctor_name: rec.doctor_name || 'Especialista',
+            doctor_specialty: rec.doctor_specialty || '',
+            clinic_name: rec.clinic_name || 'Clínica ÍntimaSalud',
+            issued_at: presc.issued_at,
+            expires_at: presc.expires_at,
+            prescription_code: presc.prescription_code,
+            prescription_id: presc.id,
+            diagnosis_summary: presc.diagnosis_summary || rec.diagnosis
+          })
+        }
+      }
+    }
+  }
+  activeTreatments.value = active
+}
+
+async function fetchPatientHistory (patientId, dependentId) {
+  if (!patientId) return
+  loadingHistory.value = true
+  try {
+    const params = {}
+    if (dependentId) params.dependent_id = dependentId
+    const { data } = await api.get(`/medical-records/patient/${patientId}`, { params })
+    patientHistory.value = Array.isArray(data) ? data : []
+    computeTreatments()
+  } catch (err) {
+    console.error('Error al cargar historial del paciente:', err)
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+async function fetchAppointmentRecord (apptId) {
+  if (!apptId) return
+  loadingAppointmentRecord.value = true
+  try {
+    const { data } = await api.get(`/medical-records/appointment/${apptId}`)
+    appointmentRecord.value = data
+  } catch (err) {
+    // Si aún no está creada la historia para esta cita, no es error bloqueante
+    appointmentRecord.value = null
+  } finally {
+    loadingAppointmentRecord.value = false
+  }
+}
+
 async function fetchAppointment () {
   if (!appointmentId.value) {
     loadingAppointment.value = false
@@ -491,6 +1038,12 @@ async function fetchAppointment () {
     const match = data.find(a => a.id === appointmentId.value)
     if (match) {
       appointment.value = match
+      if (match.patient_id) {
+        fetchPatientHistory(match.patient_id, match.dependent_id)
+      }
+      if (match.status === 'COMPLETED') {
+        fetchAppointmentRecord(match.id)
+      }
     } else {
       Notify.create({ type: 'warning', message: 'No se encontró la cita especificada.' })
     }
