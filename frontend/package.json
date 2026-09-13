@@ -26,6 +26,9 @@
     "vite": "^5.4.8",
     "vitest": "^2.1.1"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "*"
+  },
   "engines": {
     "node": "^20 || ^22",
     "npm": ">= 6.13.4"
