@@ -14,12 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.core.security import decode_token, hash_password, is_token_type
+from app.core.security import decode_token, hash_password, is_token_type, verify_password
 from app.models.user import User
 from app.repositories.appointment_repository import AppointmentRepository
 from app.repositories.clinic_repository import ClinicRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
+    ChangePasswordRequest,
     ForgotPasswordRequest,
     PatientOnboardingCompleteRequest,
     PatientOnboardingValidateResponse,
@@ -178,6 +179,24 @@ async def reset_password(
 ):
     """Restablece la contrasena a traves del token firmado."""
     await AuthService(db).reset_password(payload.token, payload.new_password)
+    return {"message": "Contraseña actualizada exitosamente."}
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: ChangePasswordRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Permite al usuario autenticado cambiar su contraseña verificando la actual."""
+    if not current_user.hashed_password or not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La contraseña actual no es correcta.")
+
+    if len(payload.new_password) < 8:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La nueva contraseña debe tener al menos 8 caracteres.")
+
+    current_user.hashed_password = hash_password(payload.new_password)
+    await db.commit()
     return {"message": "Contraseña actualizada exitosamente."}
 
 

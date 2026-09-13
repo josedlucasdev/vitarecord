@@ -25,6 +25,7 @@ async def init_db_and_seed() -> None:
             "ADD COLUMN academic_degrees JSON NULL",
             "ADD COLUMN work_experience JSON NULL",
             "ADD COLUMN is_public_profile_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+            "ADD COLUMN profile_picture_url VARCHAR(500) NULL",
             "ADD COLUMN identification_number VARCHAR(32) NULL",
             "ADD COLUMN birth_date DATETIME NULL",
             "ADD COLUMN gender VARCHAR(16) NULL",
@@ -34,6 +35,17 @@ async def init_db_and_seed() -> None:
         ]:
             try:
                 await conn.exec_driver_sql(f"ALTER TABLE users {col_def}")
+            except Exception:
+                pass  # Columna ya existe
+
+        # Asegurar columnas de consultorios (salas físicas)
+        for col_def in [
+            "ADD COLUMN specialty VARCHAR(100) NULL",
+            "ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE'",
+            "ADD COLUMN operating_hours JSON NULL",
+        ]:
+            try:
+                await conn.exec_driver_sql(f"ALTER TABLE clinic_rooms {col_def}")
             except Exception:
                 pass  # Columna ya existe
 
@@ -48,8 +60,9 @@ async def init_db_and_seed() -> None:
         stmt = select(User).where(User.email == "admin@intimasalud.com")
         existing_admin = (await db.execute(stmt)).scalar_one_or_none()
         if existing_admin:
-            logger.info("Base de datos ya cuenta con datos semilla. Enriqueciendo perfiles médicos...")
+            logger.info("Base de datos ya cuenta con datos semilla. Enriqueciendo perfiles médicos y consultorios...")
             await enrich_doctors_profiles(db)
+            await enrich_clinic_rooms(db)
             return
 
         logger.info("Poblando base de datos con usuarios y clinica de prueba...")
@@ -76,14 +89,22 @@ async def init_db_and_seed() -> None:
             db.add(c)
             created_clinics.append(c)
 
-            # Consultorios de la sede
-            for r_idx in (1, 2):
+            # Consultorios de la sede con especialidad y estado
+            rooms_seed_config = [
+                (1, "101", "Ginecología & Obstetricia", "Consultorio Gineco-Obstétrico"),
+                (2, "201", "Medicina Materno-Fetal", "Consultorio de Alto Riesgo y Ecografía"),
+                (3, "301", None, "Consultorio Polivalente Multifuncional"),
+            ]
+            for r_idx, r_num, r_spec, r_desc in rooms_seed_config:
                 room = ClinicRoom(
                     id=f"r{cid[1:8]}-{cid[9:13]}-{cid[14:18]}-{cid[19:23]}-{cid[24:35]}{r_idx}",
                     clinic_id=cid,
-                    name=f"Consultorio {r_idx}01 - {cname.split('(')[0].strip()}",
-                    room_number=f"{r_idx}01",
-                    description=f"Consultorio gineco-obstétrico #{r_idx}",
+                    name=f"Consultorio {r_num} - {cname.split('(')[0].strip()}",
+                    room_number=r_num,
+                    specialty=r_spec,
+                    status="ACTIVE",
+                    operating_hours={"start": "07:00", "end": "19:00"},
+                    description=r_desc,
                     is_active=True,
                 )
                 db.add(room)
@@ -329,4 +350,48 @@ async def enrich_doctors_profiles(db: AsyncSession) -> None:
     if modified:
         await db.commit()
         logger.info("Perfiles de médicos enriquecidos con títulos y experiencia exitosamente.")
+
+
+async def enrich_clinic_rooms(db: AsyncSession) -> None:
+    """Enriquece consultorios existentes con especialidades y estado para migraciones limpias."""
+    from app.models.clinic import ClinicRoom, RoomScheduleLock
+    from sqlalchemy import select
+
+    stmt = select(ClinicRoom)
+    res = await db.execute(stmt)
+    rooms = list(res.scalars().all())
+
+    modified = False
+    for r in rooms:
+        # Asegurar status por defecto
+        if not getattr(r, "status", None):
+            r.status = "ACTIVE"
+            modified = True
+        # Asegurar horario por defecto
+        if not getattr(r, "operating_hours", None):
+            r.operating_hours = {"start": "07:00", "end": "19:00"}
+            modified = True
+        # Asignar especialidad según nombre o número si no tiene
+        if not getattr(r, "specialty", None):
+            if "101" in (r.room_number or "") or "1" in (r.name or ""):
+                r.specialty = "Ginecología & Obstetricia"
+            elif "201" in (r.room_number or "") or "2" in (r.name or ""):
+                r.specialty = "Medicina Materno-Fetal"
+            else:
+                r.specialty = None  # Polivalente
+            modified = True
+
+        # Asegurar cerrojo mutex en room_schedule_locks
+        from sqlalchemy import text
+        try:
+            await db.execute(
+                text("INSERT IGNORE INTO room_schedule_locks (room_id) VALUES (:rid)"),
+                {"rid": r.id},
+            )
+        except Exception:
+            pass
+
+    if modified:
+        await db.commit()
+        logger.info("Consultorios físicos enriquecidos con especialidades y estado exitosamente.")
 

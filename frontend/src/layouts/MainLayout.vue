@@ -186,6 +186,22 @@
               <q-item-label caption>Mutex lock agenda</q-item-label>
             </q-item-section>
           </q-item>
+
+          <q-item
+            v-if="can('staff:manage')"
+            clickable
+            v-ripple
+            to="/clinic/users"
+            active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600"
+          >
+            <q-item-section avatar>
+              <q-icon name="manage_accounts" size="20px" color="teal" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>Personal y Usuarios</q-item-label>
+              <q-item-label caption>Admins, recepción, médicos, pacientes</q-item-label>
+            </q-item-section>
+          </q-item>
         </template>
 
         <!-- Agenda Médica -->
@@ -346,23 +362,25 @@
           </q-item>
         </template>
 
-        <q-item-label header class="text-xs font-bold text-slate-400 uppercase tracking-wider q-mt-md">
-          Seguridad y Cuenta
-        </q-item-label>
+        <template v-if="['SUPERADMIN', 'MODERATOR'].includes(user?.role)">
+          <q-item-label header class="text-xs font-bold text-slate-400 uppercase tracking-wider q-mt-md">
+            Seguridad y Cuenta
+          </q-item-label>
 
-        <q-item clickable v-ripple @click="openSessionsModal">
-          <q-item-section avatar>
-            <q-icon name="devices" size="20px" />
-          </q-item-section>
-          <q-item-section>Sesiones Activas</q-item-section>
-        </q-item>
+          <q-item clickable v-ripple @click="openSessionsModal">
+            <q-item-section avatar>
+              <q-icon name="devices" size="20px" />
+            </q-item-section>
+            <q-item-section>Sesiones Activas</q-item-section>
+          </q-item>
 
-        <q-item clickable v-ripple to="/forgot-password">
-          <q-item-section avatar>
-            <q-icon name="lock_reset" size="20px" />
-          </q-item-section>
-          <q-item-section>Restablecer Contraseña</q-item-section>
-        </q-item>
+          <q-item clickable v-ripple to="/forgot-password">
+            <q-item-section avatar>
+              <q-icon name="lock_reset" size="20px" />
+            </q-item-section>
+            <q-item-section>Restablecer Contraseña</q-item-section>
+          </q-item>
+        </template>
       </q-list>
 
       <div class="absolute-bottom p-4 border-t border-slate-200 bg-white">

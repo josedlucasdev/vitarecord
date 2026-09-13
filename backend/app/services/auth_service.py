@@ -152,6 +152,8 @@ class AuthService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuario no encontrado")
 
         user.hashed_password = hash_password(new_password)
+        if user.status == "PENDING_ONBOARDING":
+            user.status = "ACTIVE"
         # Revocar todas las sesiones activas por seguridad
         await self.refresh_tokens.revoke_all_for_user(user.id)
         await self.db.commit()

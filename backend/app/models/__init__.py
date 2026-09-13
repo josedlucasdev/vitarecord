@@ -1,4 +1,4 @@
-from app.models.affiliation import DoctorClinicAffiliation
+from app.models.affiliation import DoctorClinicAffiliation, PatientClinicAffiliation
 from app.models.appointment import Appointment
 from app.models.audit import AuditLog
 from app.models.base import Base
@@ -24,6 +24,7 @@ __all__ = [
     "RefreshToken",
     "DoctorScheduleLock",
     "DoctorClinicAffiliation",
+    "PatientClinicAffiliation",
     "PatientDependent",
     "Appointment",
     "PaymentRecord",

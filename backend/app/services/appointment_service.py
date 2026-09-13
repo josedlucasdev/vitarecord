@@ -14,12 +14,14 @@ from app.repositories.appointment_repository import AppointmentRepository
 from app.repositories.clinic_repository import ClinicRepository
 from app.repositories.dependent_repository import DependentRepository
 from app.repositories.payment_repository import PaymentRepository
+from app.repositories.room_repository import RoomRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.appointment import (
     AppointmentCreate,
     AppointmentPublic,
     PublicAppointmentCreate,
 )
+from app.services.availability_service import is_room_open_at, is_specialty_compatible
 from app.services.email_service import build_branded_email_html, send_email
 
 logger = logging.getLogger("appointment_service")
@@ -33,16 +35,95 @@ class AppointmentService:
         self.dependents = DependentRepository(db)
         self.users = UserRepository(db)
         self.clinics = ClinicRepository(db)
+        self.rooms = RoomRepository(db)
 
-    async def _invalidate_redis_slots(self, doctor_id: str, target_dt: datetime.datetime) -> None:
+    async def _invalidate_redis_slots(self, clinic_id: str, doctor_id: str, target_dt: datetime.datetime) -> None:
         try:
             r = get_redis()
             date_str = target_dt.strftime("%Y-%m-%d")
-            keys = await r.keys(f"slots:*:{doctor_id}:{date_str}")
-            if keys:
-                await r.delete(*keys)
+            keys_doc = await r.keys(f"slots:*:{doctor_id}:{date_str}")
+            keys_clinic = await r.keys(f"slots:{clinic_id}:*:{date_str}")
+            all_keys = set(keys_doc + keys_clinic)
+            if all_keys:
+                await r.delete(*all_keys)
         except Exception as exc:
             logger.warning("No se pudo invalidar cache en Redis: %s", exc)
+
+    async def _resolve_and_lock_room(
+        self,
+        clinic_id: str,
+        doctor: User,
+        requested_room_id: str | None,
+        start_time: datetime.datetime,
+        end_time: datetime.datetime,
+    ) -> str:
+        """Valida o asigna automáticamente un consultorio compatible y adquiere cerrojo mutex."""
+        if requested_room_id:
+            room = await self.rooms.get_by_id(requested_room_id)
+            if not room or room.clinic_id != clinic_id:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Consultorio no encontrado en esta clínica.")
+            if not room.is_active or getattr(room, "status", "ACTIVE") != "ACTIVE":
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"El consultorio '{room.name}' se encuentra en {getattr(room, 'status', 'inactivo')} y no admite reservas.",
+                )
+            if not is_specialty_compatible(doctor.specialty, getattr(room, "specialty", None)):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"El consultorio '{room.name}' ({room.specialty or 'Polivalente'}) no es compatible con la especialidad del médico ({doctor.specialty}).",
+                )
+            selected_room_id = room.id
+        else:
+            clinic_rooms = await self.rooms.list_by_clinic(clinic_id, active_only=True)
+            active_rooms = [r for r in clinic_rooms if getattr(r, "status", "ACTIVE") == "ACTIVE"]
+            compatible_rooms = [
+                r for r in active_rooms
+                if is_specialty_compatible(doctor.specialty, getattr(r, "specialty", None))
+            ]
+            if not compatible_rooms:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"La sede no cuenta con consultorios operativos compatibles con la especialidad '{doctor.specialty or 'General'}'.",
+                )
+
+            day_of_week = start_time.weekday()
+            assigned_room = None
+            for cand_room in compatible_rooms:
+                if not is_room_open_at(cand_room, start_time.time(), end_time.time(), day_of_week):
+                    continue
+                conflicts = await self.appointments.find_conflicts(
+                    doctor_id=doctor.id,
+                    room_id=cand_room.id,
+                    start_time=start_time,
+                    end_time=end_time,
+                )
+                room_conflicts = [c for c in conflicts if c.room_id == cand_room.id]
+                if not room_conflicts:
+                    assigned_room = cand_room
+                    break
+
+            if not assigned_room:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "No hay consultorios disponibles en esta sede para la especialidad solicitada en ese horario.",
+                )
+            selected_room_id = assigned_room.id
+
+        await self.appointments.acquire_locks(doctor.id, selected_room_id)
+
+        conflicts = await self.appointments.find_conflicts(
+            doctor_id=doctor.id,
+            room_id=selected_room_id,
+            start_time=start_time,
+            end_time=end_time,
+        )
+        if conflicts:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Conflicto de horario: el médico o el consultorio físico ya tienen una cita programada en ese rango horario.",
+            )
+
+        return selected_room_id
 
     async def book_appointment(
         self, payload: AppointmentCreate, current_user: User
@@ -90,23 +171,16 @@ class AppointmentService:
                 "La hora de inicio debe ser anterior a la hora de fin.",
             )
 
-        # 5. Adquisición atómica de cerrojos mutex en MySQL
-        await self.appointments.acquire_locks(payload.doctor_id, payload.room_id)
-
-        # 6. Comprobación segura de solapamientos
-        conflicts = await self.appointments.find_conflicts(
-            doctor_id=payload.doctor_id,
-            room_id=payload.room_id,
+        # 5. Adquisición atómica de cerrojos mutex y resolución de consultorio físico compatible
+        selected_room_id = await self._resolve_and_lock_room(
+            clinic_id=payload.clinic_id,
+            doctor=doctor,
+            requested_room_id=payload.room_id,
             start_time=payload.start_time,
             end_time=payload.end_time,
         )
-        if conflicts:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Conflicto de horario: el médico o el consultorio físico ya tienen una cita programada en ese rango horario.",
-            )
 
-        # 7. Máquina de estados: Si agenda el personal de la clínica -> PENDING_PATIENT_ACCEPTANCE
+        # 6. Máquina de estados: Si agenda el personal de la clínica -> PENDING_PATIENT_ACCEPTANCE
         #    Si agenda el propio paciente -> SCHEDULED o CONFIRMED
         if current_user.role in ("RECEPTIONIST", "CLINIC_ADMIN", "SUPERADMIN") and current_user.id != patient_id:
             initial_status = "PENDING_PATIENT_ACCEPTANCE"
@@ -118,7 +192,7 @@ class AppointmentService:
             doctor_id=payload.doctor_id,
             patient_id=patient_id,
             dependent_id=payload.dependent_id,
-            room_id=payload.room_id,
+            room_id=selected_room_id,
             start_time=payload.start_time,
             end_time=payload.end_time,
             status=initial_status,
@@ -126,7 +200,7 @@ class AppointmentService:
         )
         await self.appointments.create(appointment)
 
-        # 8. Registro contable inicial (UNPAID)
+        # 7. Registro contable inicial (UNPAID)
         payment = PaymentRecord(
             appointment_id=appointment.id,
             clinic_id=payload.clinic_id,
@@ -138,8 +212,8 @@ class AppointmentService:
 
         await self.db.commit()
 
-        # 9. Invalidar caché en Redis
-        await self._invalidate_redis_slots(payload.doctor_id, payload.start_time)
+        # 8. Invalidar caché en Redis para el médico y toda la clínica
+        await self._invalidate_redis_slots(payload.clinic_id, payload.doctor_id, payload.start_time)
 
         fresh_app = await self.appointments.get_by_id(appointment.id)
         return self._to_public(fresh_app)
@@ -195,7 +269,7 @@ class AppointmentService:
         await self.db.commit()
 
         # Invalidar caché en Redis para que el slot vuelva a verse libre de inmediato
-        await self._invalidate_redis_slots(app.doctor_id, app.start_time)
+        await self._invalidate_redis_slots(app.clinic_id, app.doctor_id, app.start_time)
 
         fresh = await self.appointments.get_by_id(appointment_id)
         return self._to_public(fresh)
@@ -239,7 +313,7 @@ class AppointmentService:
         await self.db.commit()
 
         # Invalidar caché en Redis para liberar el turno al instante
-        await self._invalidate_redis_slots(app.doctor_id, app.start_time)
+        await self._invalidate_redis_slots(app.clinic_id, app.doctor_id, app.start_time)
 
         fresh = await self.appointments.get_by_id(appointment_id)
         return self._to_public(fresh)
@@ -297,21 +371,14 @@ class AppointmentService:
                 "La hora de inicio debe ser anterior a la hora de fin.",
             )
 
-        # 2. Adquisición atómica de cerrojos mutex en MySQL para evitar doble reserva
-        await self.appointments.acquire_locks(payload.doctor_id, payload.room_id)
-
-        # 3. Comprobación segura de solapamientos
-        conflicts = await self.appointments.find_conflicts(
-            doctor_id=payload.doctor_id,
-            room_id=payload.room_id,
+        # 2. Adquisición atómica de cerrojos mutex y resolución de consultorio físico compatible
+        selected_room_id = await self._resolve_and_lock_room(
+            clinic_id=payload.clinic_id,
+            doctor=doctor,
+            requested_room_id=payload.room_id,
             start_time=payload.start_time,
             end_time=payload.end_time,
         )
-        if conflicts:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "Conflicto de horario: el médico o el consultorio físico ya tienen una cita programada en ese rango horario.",
-            )
 
         # 4. Localizar o registrar al paciente provisional
         patient = await self.users.get_by_email(payload.email)
@@ -403,7 +470,7 @@ class AppointmentService:
             clinic_id=payload.clinic_id,
             doctor_id=payload.doctor_id,
             patient_id=patient.id,
-            room_id=payload.room_id,
+            room_id=selected_room_id,
             start_time=payload.start_time,
             end_time=payload.end_time,
             status="PENDING_DOCTOR_APPROVAL",
@@ -424,8 +491,8 @@ class AppointmentService:
 
         await self.db.commit()
 
-        # 8. Invalidar caché en Redis para que el turno quede bloqueado de inmediato
-        await self._invalidate_redis_slots(payload.doctor_id, payload.start_time)
+        # 8. Invalidar caché en Redis para el médico y toda la clínica
+        await self._invalidate_redis_slots(payload.clinic_id, payload.doctor_id, payload.start_time)
 
         fresh_app = await self.appointments.get_by_id(appointment.id)
         return self._to_public(fresh_app)
@@ -591,7 +658,7 @@ class AppointmentService:
             await self.payments.update_status(pay_record.id, "VOID", notes=f"Rechazada por el médico: {reason}")
 
         await self.db.commit()
-        await self._invalidate_redis_slots(app.doctor_id, app.start_time)
+        await self._invalidate_redis_slots(app.clinic_id, app.doctor_id, app.start_time)
 
         fresh = await self.appointments.get_by_id(appointment_id)
         return self._to_public(fresh)

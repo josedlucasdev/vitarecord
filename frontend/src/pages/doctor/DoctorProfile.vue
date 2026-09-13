@@ -48,11 +48,71 @@
         <!-- Columna Izquierda: Formulario Principal (2 Cols) -->
         <div class="lg:col-span-2 space-y-6">
           <!-- Datos Generales y Biografía -->
-          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-5">
             <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
               <q-icon name="person" color="teal" size="18px" />
               Información Profesional & Visibilidad
             </h2>
+
+            <!-- Foto de Perfil Profesional -->
+            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 flex flex-col sm:flex-row items-center gap-5">
+              <div class="relative group shrink-0">
+                <div class="w-24 h-24 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-2xl shadow-md overflow-hidden border-2 border-white ring-2 ring-teal-100">
+                  <img
+                    v-if="profile.profile_picture_url"
+                    :src="profile.profile_picture_url"
+                    class="w-full h-full object-cover"
+                    alt="Foto de perfil"
+                  />
+                  <span v-else>{{ getInitials(profile.full_name) }}</span>
+                </div>
+                <div v-if="uploadingAvatar" class="absolute inset-0 bg-black/40 rounded-2xl flex items-center justify-center">
+                  <q-spinner color="white" size="24px" />
+                </div>
+              </div>
+
+              <div class="flex-1 text-center sm:text-left space-y-1">
+                <div class="text-sm font-bold text-slate-800">Fotografía Profesional de Perfil</div>
+                <div class="text-xs text-slate-500 leading-relaxed">
+                  Sube tu foto profesional oficial. Se mostrará a tus pacientes en el Directorio Médico y en tus recetas emitidas.
+                </div>
+                <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1.5">
+                  <input
+                    ref="avatarInputRef"
+                    type="file"
+                    accept="image/png, image/jpeg, image/webp"
+                    class="hidden"
+                    @change="handleAvatarFileSelect"
+                  />
+                  <q-btn
+                    unelevated
+                    dense
+                    size="sm"
+                    color="teal-8"
+                    icon="photo_camera"
+                    label="Subir Fotografía"
+                    :loading="uploadingAvatar"
+                    no-caps
+                    class="px-3 py-1 font-semibold"
+                    @click="triggerAvatarUpload"
+                  />
+                  <q-btn
+                    v-if="profile.profile_picture_url"
+                    outline
+                    dense
+                    size="sm"
+                    color="negative"
+                    icon="delete"
+                    label="Eliminar"
+                    :loading="deletingAvatar"
+                    no-caps
+                    class="px-2 py-1 text-xs"
+                    @click="removeAvatar"
+                  />
+                </div>
+                <div class="text-3xs text-slate-400">Formatos permitidos: JPG, PNG, WEBP. Máximo 5 MB.</div>
+              </div>
+            </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <q-input
@@ -112,6 +172,80 @@
                 <div class="text-3xs text-slate-500">Permite que pacientes puedan encontrarte y agendar citas en línea</div>
               </div>
               <q-toggle v-model="profile.is_public_profile_enabled" color="teal" />
+            </div>
+          </div>
+
+          <!-- Sedes Clínicas Afiliadas & Centros de Trabajo -->
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <q-icon name="apartment" color="teal" size="18px" />
+                  Sedes Clínicas Afiliadas
+                </h2>
+                <p class="text-xs text-slate-500 mt-0.5">
+                  Centros de salud donde estás habilitado para atender citas médicas y gestionar horarios.
+                </p>
+              </div>
+              <span class="px-2.5 py-1 rounded-full text-2xs font-extrabold bg-teal-50 text-teal-700 border border-teal-100">
+                {{ (profile.clinics && profile.clinics.length) || 0 }} {{ (profile.clinics && profile.clinics.length === 1) ? 'Sede Activa' : 'Sedes Activas' }}
+              </span>
+            </div>
+
+            <div v-if="profile.clinics && profile.clinics.length > 0" class="space-y-3">
+              <div
+                v-for="clinic in profile.clinics"
+                :key="clinic.id"
+                class="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              >
+                <div class="flex items-start gap-3">
+                  <div class="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold shrink-0 mt-0.5">
+                    <q-icon name="local_hospital" size="20px" />
+                  </div>
+                  <div>
+                    <div class="font-bold text-sm text-slate-900 flex items-center gap-2">
+                      <span>{{ clinic.name }}</span>
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-3xs font-extrabold bg-emerald-100 text-emerald-800">
+                        <q-icon name="check_circle" size="10px" color="positive" />
+                        AFILIACIÓN ACTIVA
+                      </span>
+                    </div>
+                    <div class="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+                      <span v-if="clinic.timezone" class="flex items-center gap-1">
+                        <q-icon name="schedule" size="12px" color="slate-400" />
+                        {{ clinic.timezone }}
+                      </span>
+                      <span v-if="clinic.country_code" class="flex items-center gap-1 font-mono text-3xs uppercase">
+                        <q-icon name="flag" size="12px" color="slate-400" />
+                        {{ clinic.country_code }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="sm:self-center">
+                  <q-btn
+                    outline
+                    dense
+                    color="negative"
+                    icon="link_off"
+                    label="Desvincularme"
+                    no-caps
+                    class="text-xs font-semibold px-3 py-1 bg-white hover:bg-rose-50"
+                    @click="confirmDisaffiliation(clinic)"
+                  >
+                    <q-tooltip>Dejar de atender en esta sede y notificar a la administración</q-tooltip>
+                  </q-btn>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="text-xs text-slate-400 p-6 text-center border-2 border-dashed border-slate-200 rounded-xl space-y-1">
+              <q-icon name="domain_disabled" size="32px" color="slate-300" class="mb-1" />
+              <div class="font-semibold text-slate-600">No tienes sedes clínicas vinculadas actualmente.</div>
+              <p class="text-3xs text-slate-400">
+                Las clínicas pueden enviarte una invitación para autorizar consultorios y turnos en su centro.
+              </p>
             </div>
           </div>
 
@@ -218,6 +352,92 @@
               No has documentado cargos o experiencia previa. Añade tu trayectoria para que los pacientes conozcan tu experiencia.
             </div>
           </div>
+
+          <!-- Seguridad & Cambio de Contraseña -->
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+            <div class="flex items-center justify-between">
+              <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                <q-icon name="lock" color="teal" size="18px" />
+                Seguridad y Contraseña de Acceso
+              </h2>
+              <span class="px-2 py-0.5 rounded text-3xs font-extrabold bg-blue-50 text-blue-700">
+                Credenciales
+              </span>
+            </div>
+
+            <p class="text-xs text-slate-500">
+              Actualiza tu contraseña periódicamente para salvaguardar la privacidad de las historias clínicas y recetas emitidas.
+            </p>
+
+            <div class="space-y-3 max-w-md">
+              <q-input
+                v-model="passwordForm.currentPassword"
+                :type="showCurrentPassword ? 'text' : 'password'"
+                label="Contraseña Actual"
+                outlined
+                dense
+                placeholder="Ingresa tu clave actual"
+              >
+                <template v-slot:append>
+                  <q-icon
+                    :name="showCurrentPassword ? 'visibility_off' : 'visibility'"
+                    class="cursor-pointer"
+                    @click="showCurrentPassword = !showCurrentPassword"
+                  />
+                </template>
+              </q-input>
+
+              <q-input
+                v-model="passwordForm.newPassword"
+                :type="showNewPassword ? 'text' : 'password'"
+                label="Nueva Contraseña"
+                outlined
+                dense
+                placeholder="Mínimo 8 caracteres"
+                hint="Debe tener al menos 8 caracteres"
+              >
+                <template v-slot:append>
+                  <q-icon
+                    :name="showNewPassword ? 'visibility_off' : 'visibility'"
+                    class="cursor-pointer"
+                    @click="showNewPassword = !showNewPassword"
+                  />
+                </template>
+              </q-input>
+
+              <q-input
+                v-model="passwordForm.confirmPassword"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                label="Confirmar Nueva Contraseña"
+                outlined
+                dense
+                placeholder="Repite la nueva contraseña"
+                :error="passwordMismatch"
+                error-message="Las contraseñas no coinciden"
+              >
+                <template v-slot:append>
+                  <q-icon
+                    :name="showConfirmPassword ? 'visibility_off' : 'visibility'"
+                    class="cursor-pointer"
+                    @click="showConfirmPassword = !showConfirmPassword"
+                  />
+                </template>
+              </q-input>
+
+              <div class="pt-2">
+                <q-btn
+                  unelevated
+                  color="teal-8"
+                  icon="lock_reset"
+                  label="Actualizar Contraseña"
+                  :loading="changingPassword"
+                  no-caps
+                  class="font-bold text-xs shadow-sm"
+                  @click="handleChangePassword"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Columna Derecha: Vista Previa en Vivo (1 Col) -->
@@ -235,8 +455,14 @@
             <!-- Mock Card del Directorio -->
             <div class="p-5 rounded-2xl border border-slate-200 bg-slate-50/40 space-y-4 shadow-sm">
               <div class="flex items-start gap-3">
-                <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
-                  DR
+                <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0 overflow-hidden">
+                  <img
+                    v-if="profile.profile_picture_url"
+                    :src="profile.profile_picture_url"
+                    class="w-full h-full object-cover"
+                    alt="Foto Dr."
+                  />
+                  <span v-else>{{ getInitials(profile.full_name) }}</span>
                 </div>
                 <div class="min-w-0">
                   <div class="flex items-center gap-1 mb-0.5">
@@ -385,11 +611,65 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Modal Confirmar Desvinculación de Sede -->
+    <q-dialog v-model="showDisaffiliateModal" persistent>
+      <q-card class="w-full max-w-md rounded-2xl p-5">
+        <q-card-section class="space-y-4">
+          <div class="w-14 h-14 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center font-bold mx-auto shadow-sm">
+            <q-icon name="warning_amber" size="32px" />
+          </div>
+
+          <div class="text-center space-y-1">
+            <h3 class="text-base font-bold text-slate-900">¿Confirmar Desvinculación de Sede?</h3>
+            <p class="text-xs text-slate-500">
+              Estás a punto de solicitar tu salida voluntaria de la sede médica:
+            </p>
+            <div class="font-bold text-sm text-teal-900 bg-teal-50 py-2.5 px-3 rounded-xl border border-teal-100 mt-2">
+              {{ clinicToDisaffiliate?.name }}
+            </div>
+          </div>
+
+          <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-1.5">
+            <div class="font-bold flex items-center gap-1.5 text-amber-800">
+              <q-icon name="info" size="16px" />
+              Efectos inmediatos de esta acción:
+            </div>
+            <ul class="list-disc list-inside text-3xs space-y-1 text-amber-800 pl-1">
+              <li>Tus turnos y horarios de atención en esta clínica serán desactivados.</li>
+              <li>Dejarás de figurar en el directorio médico de esta sede ante los pacientes.</li>
+              <li><strong>Se enviará una notificación por correo formal a la administración de la sede.</strong></li>
+            </ul>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right" class="gap-2 pt-2">
+          <q-btn
+            flat
+            label="Cancelar"
+            color="slate-600"
+            no-caps
+            :disable="disaffiliating"
+            @click="showDisaffiliateModal = false"
+          />
+          <q-btn
+            unelevated
+            color="negative"
+            icon="link_off"
+            label="Sí, Desvincularme"
+            :loading="disaffiliating"
+            no-caps
+            class="font-bold text-xs shadow-sm"
+            @click="executeDisaffiliation"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Notify } from 'quasar'
 import { api } from 'boot/axios'
 
@@ -402,11 +682,179 @@ const profile = reactive({
   phone: '',
   specialty: '',
   biography: '',
+  profile_picture_url: '',
   license_number: '',
   is_public_profile_enabled: true,
   academic_degrees: [],
-  work_experience: []
+  work_experience: [],
+  clinics: []
 })
+
+// Gestión de Sedes y Desvinculación
+const showDisaffiliateModal = ref(false)
+const clinicToDisaffiliate = ref(null)
+const disaffiliating = ref(false)
+
+function confirmDisaffiliation (clinic) {
+  clinicToDisaffiliate.value = clinic
+  showDisaffiliateModal.value = true
+}
+
+async function executeDisaffiliation () {
+  if (!clinicToDisaffiliate.value) return
+  disaffiliating.value = true
+  try {
+    const clinicId = clinicToDisaffiliate.value.id
+    const { data } = await api.post(`/doctors/me/clinics/${clinicId}/disaffiliate`)
+    Notify.create({
+      type: 'positive',
+      message: data.message || 'Te has desvinculado exitosamente de la sede.',
+      position: 'top',
+      timeout: 5000
+    })
+    // Remover localmente la clínica
+    profile.clinics = profile.clinics.filter(c => c.id !== clinicId)
+    showDisaffiliateModal.value = false
+    clinicToDisaffiliate.value = null
+  } catch (err) {
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al procesar la desvinculación de la sede.'
+    })
+  } finally {
+    disaffiliating.value = false
+  }
+}
+
+// Gestión de Fotografía de Perfil (Avatar)
+const avatarInputRef = ref(null)
+const uploadingAvatar = ref(false)
+const deletingAvatar = ref(false)
+
+function triggerAvatarUpload () {
+  avatarInputRef.value?.click()
+}
+
+async function handleAvatarFileSelect (e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    Notify.create({
+      type: 'warning',
+      message: 'Formato no soportado. Selecciona una imagen JPG, PNG o WEBP.'
+    })
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    Notify.create({
+      type: 'warning',
+      message: 'La imagen supera los 5 MB de tamaño máximo permitido.'
+    })
+    return
+  }
+
+  uploadingAvatar.value = true
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const { data } = await api.post('/doctors/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    profile.profile_picture_url = `${data.profile_picture_url}?t=${Date.now()}`
+    Notify.create({
+      type: 'positive',
+      message: '¡Foto de perfil actualizada exitosamente!'
+    })
+  } catch (err) {
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al subir la fotografía de perfil.'
+    })
+  } finally {
+    uploadingAvatar.value = false
+    if (avatarInputRef.value) avatarInputRef.value.value = ''
+  }
+}
+
+async function removeAvatar () {
+  deletingAvatar.value = true
+  try {
+    await api.delete('/doctors/me/avatar')
+    profile.profile_picture_url = ''
+    Notify.create({
+      type: 'positive',
+      message: 'Foto de perfil eliminada. Se mostrarán tus iniciales.'
+    })
+  } catch (err) {
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al eliminar la fotografía.'
+    })
+  } finally {
+    deletingAvatar.value = false
+  }
+}
+
+// Gestión de Cambio de Contraseña
+const passwordForm = reactive({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+const showCurrentPassword = ref(false)
+const showNewPassword = ref(false)
+const showConfirmPassword = ref(false)
+const changingPassword = ref(false)
+
+const passwordMismatch = computed(() => {
+  return passwordForm.confirmPassword.length > 0 && passwordForm.newPassword !== passwordForm.confirmPassword
+})
+
+async function handleChangePassword () {
+  if (!passwordForm.currentPassword) {
+    Notify.create({ type: 'warning', message: 'Por favor ingresa tu contraseña actual.' })
+    return
+  }
+  if (!passwordForm.newPassword || passwordForm.newPassword.length < 8) {
+    Notify.create({ type: 'warning', message: 'La nueva contraseña debe tener al menos 8 caracteres.' })
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    Notify.create({ type: 'warning', message: 'Las contraseñas no coinciden.' })
+    return
+  }
+
+  changingPassword.value = true
+  try {
+    await api.post('/auth/change-password', {
+      current_password: passwordForm.currentPassword,
+      new_password: passwordForm.newPassword
+    })
+    Notify.create({
+      type: 'positive',
+      message: '¡Contraseña actualizada exitosamente!'
+    })
+    passwordForm.currentPassword = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+  } catch (err) {
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al actualizar la contraseña.'
+    })
+  } finally {
+    changingPassword.value = false
+  }
+}
+
+function getInitials (name) {
+  if (!name) return 'DR'
+  const parts = name.trim().split(' ').filter(Boolean)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
+}
 
 const showDegreeModal = ref(false)
 const newDegree = reactive({
@@ -477,10 +925,12 @@ async function loadMyProfile () {
     profile.phone = data.phone || ''
     profile.specialty = data.specialty || ''
     profile.biography = data.biography || ''
+    profile.profile_picture_url = data.profile_picture_url || ''
     profile.license_number = data.license_number || ''
     profile.is_public_profile_enabled = data.is_public_profile_enabled ?? true
     profile.academic_degrees = data.academic_degrees ? [...data.academic_degrees] : []
     profile.work_experience = data.work_experience ? [...data.work_experience] : []
+    profile.clinics = data.clinics ? [...data.clinics] : []
   } catch (err) {
     Notify.create({ type: 'negative', message: 'Error al cargar tu perfil profesional.' })
   } finally {
@@ -495,6 +945,7 @@ async function saveProfile () {
       biography: profile.biography,
       phone: profile.phone,
       specialty: profile.specialty,
+      profile_picture_url: profile.profile_picture_url,
       is_public_profile_enabled: profile.is_public_profile_enabled,
       academic_degrees: profile.academic_degrees,
       work_experience: profile.work_experience

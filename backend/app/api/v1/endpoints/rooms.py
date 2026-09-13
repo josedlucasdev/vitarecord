@@ -32,12 +32,13 @@ async def list_clinic_rooms(
     clinic_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_permission(Permission.ROOMS_READ))],
+    active_only: bool = True,
 ):
     """Lista las salas y consultorios fisicos de la clinica."""
     clinic = await ClinicRepository(db).get_by_id(clinic_id)
     if not clinic:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada.")
-    return await RoomRepository(db).list_by_clinic(clinic_id)
+    return await RoomRepository(db).list_by_clinic(clinic_id, active_only=active_only)
 
 
 @router.post(
@@ -57,12 +58,20 @@ async def create_clinic_room(
     if not clinic:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada.")
 
+    valid_statuses = ("ACTIVE", "MAINTENANCE", "INACTIVE")
+    room_status = payload.status.upper() if payload.status else "ACTIVE"
+    if room_status not in valid_statuses:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Estado inválido. Valores permitidos: {valid_statuses}")
+
     room = ClinicRoom(
         clinic_id=clinic_id,
         name=payload.name,
         room_number=payload.room_number,
         description=payload.description,
-        is_active=True,
+        specialty=payload.specialty.strip() if payload.specialty else None,
+        status=room_status,
+        operating_hours=payload.operating_hours or {"start": "07:00", "end": "19:00"},
+        is_active=room_status != "INACTIVE",
     )
     await RoomRepository(db).create(room)
     await db.commit()
@@ -90,8 +99,26 @@ async def update_clinic_room(
         room.room_number = payload.room_number
     if payload.description is not None:
         room.description = payload.description
+    if payload.specialty is not None:
+        room.specialty = payload.specialty.strip() if payload.specialty else None
+    if payload.status is not None:
+        valid_statuses = ("ACTIVE", "MAINTENANCE", "INACTIVE")
+        st = payload.status.upper()
+        if st not in valid_statuses:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Estado inválido. Valores permitidos: {valid_statuses}")
+        room.status = st
+        if st == "INACTIVE":
+            room.is_active = False
+        elif st in ("ACTIVE", "MAINTENANCE"):
+            room.is_active = True
+    if payload.operating_hours is not None:
+        room.operating_hours = payload.operating_hours
     if payload.is_active is not None:
         room.is_active = payload.is_active
+        if not payload.is_active and room.status == "ACTIVE":
+            room.status = "INACTIVE"
+        elif payload.is_active and room.status == "INACTIVE":
+            room.status = "ACTIVE"
 
     await repo.update(room)
     await db.commit()

@@ -53,6 +53,7 @@ class DoctorPublicWithClinics(BaseModel):
     phone: str | None = None
     specialty: str | None = None
     biography: str | None = None
+    profile_picture_url: str | None = None
     license_number: str | None = None
     license_verification_status: str = "VERIFIED"
     is_available_for_emergencies: bool = False
@@ -68,6 +69,7 @@ class DoctorProfileUpdateRequest(BaseModel):
     biography: str | None = None
     phone: str | None = None
     specialty: str | None = None
+    profile_picture_url: str | None = None
     is_public_profile_enabled: bool = True
     academic_degrees: list[AcademicDegree] = []
     work_experience: list[WorkExperience] = []

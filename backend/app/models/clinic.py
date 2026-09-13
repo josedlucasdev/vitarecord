@@ -1,6 +1,6 @@
 """Clinica, salas fisicas y su fila mutex (plan/plan.md seccion 2.B.1 y 2.B.4)."""
 
-from sqlalchemy import Boolean, ForeignKey, String
+from sqlalchemy import Boolean, ForeignKey, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.tenant import TenantScopedMixin
@@ -27,6 +27,9 @@ class ClinicRoom(Base, TimestampMixin, TenantScopedMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     room_number: Mapped[str | None] = mapped_column(String(50))
     description: Mapped[str | None] = mapped_column(String(255))
+    specialty: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
+    operating_hours: Mapped[dict | None] = mapped_column(JSON, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 

@@ -135,8 +135,14 @@
         >
           <!-- Cabecera de la Tarjeta -->
           <div class="p-6 pb-4 flex items-start gap-4">
-            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-xl shadow-sm shrink-0">
-              {{ getInitials(doctor.full_name) }}
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-xl shadow-sm shrink-0 overflow-hidden">
+              <img
+                v-if="doctor.profile_picture_url"
+                :src="doctor.profile_picture_url"
+                class="w-full h-full object-cover"
+                alt="Foto doctor"
+              />
+              <span v-else>{{ getInitials(doctor.full_name) }}</span>
             </div>
 
             <div class="min-w-0 flex-1">
@@ -235,8 +241,14 @@
           />
 
           <div class="flex items-center space-x-4">
-            <div class="w-16 h-16 rounded-2xl bg-white text-teal-800 flex items-center justify-center font-bold text-2xl shadow-md shrink-0">
-              {{ getInitials(selectedDoctorDetails.full_name) }}
+            <div class="w-16 h-16 rounded-2xl bg-white text-teal-800 flex items-center justify-center font-bold text-2xl shadow-md shrink-0 overflow-hidden">
+              <img
+                v-if="selectedDoctorDetails.profile_picture_url"
+                :src="selectedDoctorDetails.profile_picture_url"
+                class="w-full h-full object-cover"
+                alt="Foto doctor"
+              />
+              <span v-else>{{ getInitials(selectedDoctorDetails.full_name) }}</span>
             </div>
 
             <div>

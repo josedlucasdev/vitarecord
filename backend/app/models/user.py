@@ -33,6 +33,7 @@ class User(Base, TimestampMixin):
     specialty: Mapped[str | None] = mapped_column(String(100))
     license_number: Mapped[str | None] = mapped_column(String(100))
     biography: Mapped[str | None] = mapped_column(String(1000))
+    profile_picture_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     academic_degrees: Mapped[list | None] = mapped_column(JSON, default=list)
     work_experience: Mapped[list | None] = mapped_column(JSON, default=list)
     is_public_profile_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

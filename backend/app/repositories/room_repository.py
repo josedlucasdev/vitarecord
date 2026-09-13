@@ -8,7 +8,7 @@ class RoomRepository:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
 
-    async def list_by_clinic(self, clinic_id: str, active_only: bool = True) -> list[ClinicRoom]:
+    async def list_by_clinic(self, clinic_id: str, active_only: bool = False) -> list[ClinicRoom]:
         stmt = select(ClinicRoom).where(ClinicRoom.clinic_id == clinic_id)
         if active_only:
             stmt = stmt.where(ClinicRoom.is_active.is_(True))

@@ -87,6 +87,12 @@ const routes = [
         meta: { requiresAuth: true, requiredPermission: 'rooms:read' }
       },
       {
+        path: 'clinic/users',
+        name: 'clinic-users-management',
+        component: () => import('pages/clinic/ClinicUsersManagement.vue'),
+        meta: { requiresAuth: true, requiredPermission: 'staff:manage' }
+      },
+      {
         path: 'doctor/schedule',
         name: 'doctor-schedule',
         component: () => import('pages/doctor/DoctorScheduleConfig.vue'),
