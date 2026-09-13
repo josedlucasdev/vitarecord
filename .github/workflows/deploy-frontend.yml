@@ -1,4 +1,4 @@
-name: Deploy Frontend to cPanel (app.vitarecord.com)
+name: Deploy Frontend to cPanel - app.vitarecord.com
 
 on:
   push:
