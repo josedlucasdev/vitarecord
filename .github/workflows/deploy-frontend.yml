@@ -27,7 +27,9 @@ jobs:
 
       - name: 📦 Instalar dependencias
         working-directory: frontend
-        run: npm ci
+        run: |
+          npm ci
+          npm install --no-save @rollup/rollup-linux-x64-gnu
 
       - name: 🏗️ Compilar Quasar SPA para Producción
         working-directory: frontend
