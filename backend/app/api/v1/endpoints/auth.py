@@ -13,15 +13,19 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_token, hash_password, is_token_type, verify_password
 from app.models.user import User
 from app.repositories.appointment_repository import AppointmentRepository
+import httpx
 from app.repositories.clinic_repository import ClinicRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
     ChangePasswordRequest,
+    FacebookLoginRequest,
     ForgotPasswordRequest,
+    GoogleLoginRequest,
     PatientOnboardingCompleteRequest,
     PatientOnboardingValidateResponse,
     RefreshRequest,
@@ -126,6 +130,134 @@ async def login(
 ):
     service = AuthService(db)
     user = await service.authenticate(form_data.username, form_data.password, mfa_code)
+    access_token, refresh_token = await service.issue_token_pair(
+        user,
+        device_info=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return TokenPair(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/facebook", response_model=TokenPair, summary="Iniciar sesión o registrar paciente con Facebook")
+async def login_with_facebook(
+    request: Request,
+    payload: FacebookLoginRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Autenticación y registro automático de pacientes mediante Facebook Login."""
+    token = payload.access_token.strip()
+    picture_url = None
+
+    if token.startswith("dev_fb_"):
+        # Emulación para pruebas automatizadas y desarrollo local
+        fb_id = token.replace("dev_fb_", "")
+        email = f"paciente_fb_{fb_id[:8]}@example.com"
+        name = "Paciente Facebook"
+    else:
+        url = f"https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token={token}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.get(url)
+                if res.status_code != 200:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Token de Facebook inválido o expirado.")
+                fb_data = res.json()
+                fb_id = fb_data.get("id")
+                name = fb_data.get("name", "Paciente Facebook")
+                email = fb_data.get("email") or f"fb_{fb_id}@facebook.intimasalud.com"
+                picture_url = fb_data.get("picture", {}).get("data", {}).get("url")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Error conectando con Meta Graph API: {exc}")
+
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_email(email)
+
+    if not user:
+        # Registrar paciente automáticamente
+        user = User(
+            email=email,
+            full_name=name,
+            role="PATIENT",
+            status="ACTIVE",
+            profile_picture_url=picture_url,
+            preferred_notification_channels=["PUSH", "WHATSAPP", "EMAIL"],
+        )
+        db.add(user)
+        await db.flush()
+    else:
+        if picture_url and not user.profile_picture_url:
+            user.profile_picture_url = picture_url
+            await db.flush()
+
+    service = AuthService(db)
+    access_token, refresh_token = await service.issue_token_pair(
+        user,
+        device_info=request.headers.get("user-agent"),
+        ip_address=request.client.host if request.client else None,
+    )
+    await db.commit()
+    return TokenPair(access_token=access_token, refresh_token=refresh_token)
+
+
+@router.post("/google", response_model=TokenPair, summary="Iniciar sesión o registrar paciente con Google")
+async def login_with_google(
+    request: Request,
+    payload: GoogleLoginRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Autenticación y registro automático de pacientes mediante Google Identity Services."""
+    credential = payload.credential.strip()
+    picture_url = None
+
+    if credential.startswith("dev_google_"):
+        # Emulación para pruebas automatizadas y desarrollo local
+        google_sub = credential.replace("dev_google_", "")
+        email = f"paciente_google_{google_sub[:8]}@example.com"
+        name = "Paciente Google"
+    else:
+        # Verificación directa de Google ID Token con Google OAuth2 TokenInfo API
+        url = f"https://oauth2.googleapis.com/tokeninfo?id_token={credential}"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.get(url)
+                if res.status_code != 200:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Token de Google inválido o expirado.")
+                google_data = res.json()
+                if settings.GOOGLE_CLIENT_ID and google_data.get("aud") != settings.GOOGLE_CLIENT_ID:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "El token de Google no corresponde a esta aplicación.")
+                email = google_data.get("email")
+                if not email:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "El token de Google no contiene un correo electrónico válido.")
+                name = google_data.get("name") or google_data.get("given_name") or "Paciente Google"
+                picture_url = google_data.get("picture")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Error conectando con Google Auth API: {exc}")
+
+    user_repo = UserRepository(db)
+    user = await user_repo.get_by_email(email)
+
+    if not user:
+        # Registrar paciente automáticamente
+        user = User(
+            email=email,
+            full_name=name,
+            role="PATIENT",
+            status="ACTIVE",
+            profile_picture_url=picture_url,
+            preferred_notification_channels=["PUSH", "WHATSAPP", "EMAIL"],
+        )
+        db.add(user)
+        await db.flush()
+    else:
+        if picture_url and not user.profile_picture_url:
+            user.profile_picture_url = picture_url
+            await db.flush()
+
+    service = AuthService(db)
     access_token, refresh_token = await service.issue_token_pair(
         user,
         device_info=request.headers.get("user-agent"),

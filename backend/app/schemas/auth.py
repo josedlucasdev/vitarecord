@@ -11,6 +11,14 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class FacebookLoginRequest(BaseModel):
+    access_token: str
+
+
+class GoogleLoginRequest(BaseModel):
+    credential: str
+
+
 class MFAVerifyRequest(BaseModel):
     email: EmailStr
     code: str

@@ -181,6 +181,58 @@
             class="full-width py-2.5 rounded-xl font-bold shadow-lg shadow-teal-700/20 text-white tracking-wide"
             no-caps
           />
+
+          <!-- Divisor Social -->
+          <div class="relative my-3.5">
+            <div class="absolute inset-0 flex items-center">
+              <div class="w-full border-t border-slate-200"></div>
+            </div>
+            <div class="relative flex justify-center text-xs">
+              <span class="bg-white px-2 text-slate-400 font-medium">o accede rápidamente</span>
+            </div>
+          </div>
+
+          <!-- Botón Google Login -->
+          <div id="googleBtnContainer" class="w-full flex justify-center min-h-[40px] mb-2.5">
+            <q-btn
+              v-if="!googleButtonRendered"
+              unelevated
+              :loading="googleLoading"
+              class="full-width py-2.5 rounded-xl font-bold bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 tracking-wide shadow-sm"
+              no-caps
+              @click="loginWithGoogle"
+            >
+              <template v-slot:default>
+                <div class="flex items-center justify-center space-x-2.5">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"/>
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.94 0 12s.45 3.84 1.25 5.42l4.03-3.15z"/>
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+                  </svg>
+                  <span>Continuar con Google</span>
+                </div>
+              </template>
+            </q-btn>
+          </div>
+
+          <!-- Botón Facebook Login -->
+          <q-btn
+            unelevated
+            :loading="fbLoading"
+            class="full-width py-2.5 rounded-xl font-bold bg-[#1877F2] hover:bg-[#166fe5] text-white tracking-wide shadow-sm"
+            no-caps
+            @click="loginWithFacebook"
+          >
+            <template v-slot:default>
+              <div class="flex items-center justify-center space-x-2.5">
+                <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                </svg>
+                <span>Continuar con Facebook</span>
+              </div>
+            </template>
+          </q-btn>
         </q-form>
 
         <!-- Accesos directos para pruebas locales -->
@@ -252,16 +304,161 @@ const email = ref('')
 const password = ref('')
 const mfaCode = ref('')
 const loading = ref(false)
+const fbLoading = ref(false)
+const googleLoading = ref(false)
+const googleButtonRendered = ref(false)
 const errorMessage = ref('')
 
 const router = useRouter()
 const { isLoggedIn } = useAcl()
 
+// Google Client ID oficial generado en Firebase / Google Cloud para Vita Record
+const GOOGLE_CLIENT_ID = '398180197268-bqtm2q48fp00vra1p5ar9uop02ed0p4u.apps.googleusercontent.com'
+
+function initGoogleClient () {
+  if (window.google?.accounts?.id) {
+    try {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredentialResponse,
+        auto_select: false
+      })
+      const container = document.getElementById('googleBtnContainer')
+      if (container) {
+        const targetWidth = Math.min(container.clientWidth || 370, 380)
+        window.google.accounts.id.renderButton(container, {
+          type: 'standard',
+          shape: 'rectangular',
+          theme: 'outline',
+          text: 'continue_with',
+          size: 'large',
+          logo_alignment: 'center',
+          width: targetWidth
+        })
+        googleButtonRendered.value = true
+      }
+    } catch (err) {
+      console.warn('Error inicializando Google Identity Services:', err)
+    }
+  }
+}
+
 onMounted(() => {
   if (isLoggedIn.value) {
     router.replace({ name: 'home' })
   }
+
+  // Inicializar Meta Facebook JavaScript SDK oficial
+  if (!window.FB && !document.getElementById('facebook-jssdk')) {
+    window.fbAsyncInit = function () {
+      window.FB.init({
+        appId: '1150121370684613',
+        cookie: true,
+        xfbml: true,
+        version: 'v20.0'
+      })
+    }
+    const script = document.createElement('script')
+    script.id = 'facebook-jssdk'
+    script.src = 'https://connect.facebook.net/es_LA/sdk.js'
+    script.async = true
+    script.defer = true
+    document.head.appendChild(script)
+  }
+
+  // Inicializar Google Identity Services SDK
+  if (!window.google && !document.getElementById('google-gsi-client')) {
+    const gScript = document.createElement('script')
+    gScript.id = 'google-gsi-client'
+    gScript.src = 'https://accounts.google.com/gsi/client'
+    gScript.async = true
+    gScript.defer = true
+    gScript.onload = () => {
+      initGoogleClient()
+    }
+    document.head.appendChild(gScript)
+  } else if (window.google) {
+    initGoogleClient()
+  }
 })
+
+async function loginWithGoogle () {
+  googleLoading.value = true
+  errorMessage.value = ''
+
+  if (window.google?.accounts?.id) {
+    window.google.accounts.id.prompt((notification) => {
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        googleLoading.value = false
+      }
+    })
+  } else {
+    // Si aún no ha cargado la librería de Google o para pruebas directas en dev
+    await submitGoogleCredential('dev_google_paciente_demo')
+  }
+}
+
+async function handleGoogleCredentialResponse (response) {
+  if (response && response.credential) {
+    await submitGoogleCredential(response.credential)
+  }
+}
+
+async function submitGoogleCredential (credential) {
+  googleLoading.value = true
+  errorMessage.value = ''
+  try {
+    const { data } = await api.post('/auth/google', { credential })
+    setAuthToken(data.access_token, data.refresh_token)
+
+    const redirectPath = router.currentRoute.value.query?.redirect
+    if (redirectPath) {
+      router.push(redirectPath)
+    } else {
+      router.push({ name: 'home' })
+    }
+  } catch (err) {
+    errorMessage.value = err.response?.data?.detail || 'Error al iniciar sesión con Google'
+  } finally {
+    googleLoading.value = false
+  }
+}
+
+async function loginWithFacebook () {
+  fbLoading.value = true
+  errorMessage.value = ''
+
+  if (window.FB) {
+    window.FB.login((response) => {
+      if (response.authResponse && response.authResponse.accessToken) {
+        submitFacebookToken(response.authResponse.accessToken)
+      } else {
+        fbLoading.value = false
+      }
+    }, { scope: 'public_profile' })
+  } else {
+    // Si la conexión directa a Meta está bloqueada o en modo de prueba local
+    await submitFacebookToken('dev_fb_paciente_demo')
+  }
+}
+
+async function submitFacebookToken (token) {
+  try {
+    const { data } = await api.post('/auth/facebook', { access_token: token })
+    setAuthToken(data.access_token, data.refresh_token)
+
+    const redirectPath = router.currentRoute.value.query?.redirect
+    if (redirectPath) {
+      router.push(redirectPath)
+    } else {
+      router.push({ name: 'home' })
+    }
+  } catch (err) {
+    errorMessage.value = err.response?.data?.detail || 'Error al iniciar sesión con Facebook'
+  } finally {
+    fbLoading.value = false
+  }
+}
 
 function fillCreds (userEmail) {
   email.value = userEmail

@@ -11,8 +11,10 @@ from app.api.v1.endpoints import (
     emergencies,
     invitations,
     medical_records,
+    notifications,
     payments,
     rooms,
+    webhooks,
 )
 
 api_router = APIRouter()
@@ -28,4 +30,7 @@ api_router.include_router(dependents.router, tags=["dependents"])
 api_router.include_router(payments.router, tags=["payments"])
 api_router.include_router(emergencies.router, prefix="/emergencies", tags=["emergencies"])
 api_router.include_router(medical_records.router, prefix="/medical-records", tags=["medical-records"])
+api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
+api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
+
 

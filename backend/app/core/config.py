@@ -48,7 +48,36 @@ class Settings(BaseSettings):
     SMTP_HOST: str = "mailtrap"
     SMTP_PORT: int = 1025
 
+    # Meta WhatsApp Cloud API
+    WHATSAPP_API_URL: str = "https://graph.facebook.com/v20.0"
+    WHATSAPP_PHONE_NUMBER_ID: str = "101526655923922"
+    WHATSAPP_BUSINESS_ACCOUNT_ID: str = "110504608346732"
+    WHATSAPP_ACCESS_TOKEN: str = "EAATmvZCRxNm8BSRvVzjhRsLQuMBM7uf8mcMFGW1zuEDlbNLaIZBgT6QTIYuSae4YpuYlo6NEs9NB4z7rYtF8AnfAJJL7ppZC5zBDv2o4qhs9FJe6PbnKZBicGNfK1yV0zhXARQJCorgStSaUsy92S5fqRqN3NTgvVc01tWycOyaWguKQbKAYaRTQhxhXoBP5lSuly0e6CtBRr1ZChvgtyePOSJ1ZAWDhhRGMAlXRVxI2wUZAiS8phohZBkRrZBGT5bW0ThlTgoZB7ZAc3P5T2VXF8EgrojPTlfjYqJD4ygWmwZDZD"
+    WHATSAPP_VERIFY_TOKEN: str = "intimasalud_dev_webhook_verify_token"
+
+    # Twilio SMS & Voice
+    TWILIO_ACCOUNT_SID: str = "dev_twilio_sid"
+    TWILIO_AUTH_TOKEN: str = "dev_twilio_token"
+    TWILIO_FROM_NUMBER: str = "+15005550006"
+
+    # Push FCM (Firebase Cloud Messaging HTTP v1 API)
+    FIREBASE_CREDENTIALS_FILE: str | None = "/app/firebase-credentials.json"
+    FCM_SERVER_KEY: str | None = "dev_fcm_server_key"
+    FCM_PROJECT_ID: str = "vita-record"
+    FCM_API_URL: str = "https://fcm.googleapis.com/fcm/send"
+
+    # Facebook Login
+    FACEBOOK_APP_ID: str = "1150121370684613"
+    FACEBOOK_APP_SECRET: str = "d4797ebcd90c781fc0b5c4cc7bec3dc4"
+
+    # Google Sign-In
+    GOOGLE_CLIENT_ID: str = "398180197268-bqtm2q48fp00vra1p5ar9uop02ed0p4u.apps.googleusercontent.com"
+
+    # Recordatorios automáticos
+    REMINDER_CHECK_INTERVAL_SECONDS: int = 60
+
     SENTRY_DSN: str | None = None
 
 
 settings = Settings()
+

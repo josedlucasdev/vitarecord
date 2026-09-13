@@ -1,8 +1,11 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.core.config import settings
 from app.core.database import engine
 from app.main import app
+
+settings.ENVIRONMENT = "testing"
 
 
 @pytest.fixture

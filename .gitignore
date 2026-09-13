@@ -19,3 +19,7 @@ dist/
 
 # Datos locales del contenedor de almacenamiento (S3Proxy)
 _data/
+
+# Secretos y credenciales de Firebase
+*firebase*.json
+google-services.json

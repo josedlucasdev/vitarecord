@@ -74,6 +74,18 @@ async def list_appointments(
     )
 
 
+@router.get("/{appointment_id}", response_model=AppointmentPublic)
+async def get_appointment(
+    appointment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Obtiene el detalle de una cita médica por su identificador único."""
+    service = AppointmentService(db)
+    return await service.get_appointment(appointment_id, current_user)
+
+
+
 @router.post("/{appointment_id}/doctor-accept", response_model=AppointmentPublic)
 async def doctor_accept_appointment(
     appointment_id: str,

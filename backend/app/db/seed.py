@@ -55,6 +55,26 @@ async def init_db_and_seed() -> None:
         except Exception:
             pass
 
+        # Asegurar columnas para el Módulo 6 en notification_logs
+        for col_def in [
+            "ADD COLUMN appointment_id VARCHAR(36) NULL",
+            "ADD COLUMN external_message_id VARCHAR(500) NULL",
+            "ADD COLUMN metadata_payload JSON NULL",
+            "ADD COLUMN is_read BOOLEAN NOT NULL DEFAULT FALSE",
+            "ADD COLUMN read_at DATETIME NULL",
+        ]:
+            try:
+                await conn.exec_driver_sql(f"ALTER TABLE notification_logs {col_def}")
+            except Exception:
+                pass
+
+        try:
+            await conn.exec_driver_sql("ALTER TABLE notification_logs MODIFY COLUMN external_message_id VARCHAR(500) NULL")
+        except Exception:
+            pass
+
+
+
     async with AsyncSessionLocal() as db:
         # Verificar si ya existe el usuario superadmin
         stmt = select(User).where(User.email == "admin@intimasalud.com")

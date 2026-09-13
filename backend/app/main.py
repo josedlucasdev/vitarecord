@@ -20,14 +20,26 @@ from app.core.emergency_hub import emergency_hub
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     listener_task = None
+    reminder_task = None
+    notif_listener_task = None
     try:
         await init_db_and_seed()
         listener_task = asyncio.create_task(emergency_hub.start_redis_listener())
+        from app.core.notification_hub import notification_hub
+        notif_listener_task = asyncio.create_task(notification_hub.start_redis_listener())
+        from app.tasks.reminders import start_reminder_scheduler
+        reminder_task = asyncio.create_task(start_reminder_scheduler())
     except Exception as exc:  # noqa: BLE001
-        logging.getLogger("main").warning("No se pudo autosembrar la BD en arranque: %s", exc)
+        logging.getLogger("main").warning("No se pudo autosembrar la BD o iniciar tareas en arranque: %s", exc)
     yield
     if listener_task:
         listener_task.cancel()
+    if notif_listener_task:
+        notif_listener_task.cancel()
+    if reminder_task:
+        reminder_task.cancel()
+
+
 
 
 app = FastAPI(title="ÍntimaSalud API", version="0.1.0", lifespan=lifespan)

@@ -82,7 +82,7 @@ async def test_public_booking_prevents_double_booking_conflict(client: AsyncClie
 
     import random
     delta_days = 400 + random.randint(1, 20000)
-    start_dt = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=delta_days, hours=14)
+    start_dt = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=delta_days)).replace(hour=10, minute=0, second=0, microsecond=0)
     end_dt = start_dt + datetime.timedelta(minutes=30)
 
     payload = {

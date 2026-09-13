@@ -18,40 +18,112 @@
         </q-toolbar-title>
 
         <div v-if="isLoggedIn" class="row items-center q-gutter-sm">
-          <q-btn
-            unelevated
-            color="negative"
-            icon="emergency"
-            label="SOS Urgencia"
-            class="text-weight-bold"
-            @click="showEmergencyModal = true"
-          />
+          <!-- Campana de Notificaciones In-App -->
+          <q-btn flat round dense icon="notifications" class="relative-position">
 
-          <q-btn
-            v-if="can('emergency:monitor')"
-            flat
-            dense
-            icon="radar"
-            label="Torre de Control"
-            to="/admin/control-tower"
-            class="gt-xs"
-          />
+            <q-badge
+              v-if="unreadNotificationsCount > 0"
+              color="red"
+              floating
+              rounded
+              class="text-2xs font-bold"
+            >
+              {{ unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount }}
+            </q-badge>
+            <q-tooltip>Notificaciones</q-tooltip>
 
-          <q-btn
-            v-if="userRole === 'SUPERADMIN' || userRole === 'COMPLIANCE_REVIEWER'"
-            flat
-            dense
-            icon="verified"
-            label="Verificación Médica"
-            to="/admin/doctor-verification"
-            class="gt-xs"
-          />
+            <q-menu
+              anchor="bottom right"
+              self="top right"
+              :offset="[0, 10]"
+              class="rounded-2xl shadow-xl border border-slate-200"
+              style="width: 360px; max-width: 90vw;"
+              @show="fetchInAppNotifications"
+            >
+              <div class="p-3 bg-gradient-to-r from-teal-700 to-cyan-700 text-white flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                  <q-icon name="notifications" size="18px" />
+                  <span class="font-bold text-xs">Centro de Notificaciones</span>
+                </div>
+                <div class="flex items-center space-x-1">
 
-          <q-badge color="white" text-color="primary" :label="userRole" class="font-bold px-2 py-1" />
+                  <q-btn
+                    flat
+                    dense
+                    size="xs"
+                    icon="send"
+                    label="Probar"
+                    text-color="teal-100"
+                    no-caps
+                    @click="triggerTestNotification"
+                  >
+                    <q-tooltip>Emitir aviso de prueba</q-tooltip>
+                  </q-btn>
+                  <q-btn
+                    v-if="unreadNotificationsCount > 0"
+                    flat
+                    dense
+                    size="xs"
+                    label="Marcar leídas"
+                    text-color="teal-100"
+                    no-caps
+                    @click="markAllAsRead"
+                  />
+                </div>
+              </div>
+
+
+              <!-- Lista de Notificaciones -->
+              <q-scroll-area style="height: 320px;">
+                <div v-if="loadingNotifications" class="flex justify-center p-6">
+                  <q-spinner-dots color="teal" size="30px" />
+                </div>
+
+                <div v-else-if="!inAppNotifications.length" class="p-6 text-center text-slate-400">
+                  <q-icon name="notifications_none" size="36px" class="opacity-40 mb-2" />
+                  <p class="text-xs m-0">No tienes notificaciones recientes.</p>
+                </div>
+
+                <q-list v-else separator class="text-slate-800">
+                  <q-item
+                    v-for="notif in inAppNotifications"
+                    :key="notif.id"
+                    clickable
+                    v-ripple
+                    :class="notif.is_read ? 'bg-white opacity-75' : 'bg-teal-50/40 font-medium'"
+                    @click="handleNotificationClick(notif)"
+                  >
+                    <q-item-section avatar top class="min-w-0 pr-2">
+                      <div
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs shadow-xs"
+                        :class="getNotifIconColor(notif)"
+                      >
+                        <q-icon :name="getNotifIcon(notif)" size="16px" />
+                      </div>
+                    </q-item-section>
+
+                    <q-item-section>
+                      <q-item-label class="text-xs font-bold leading-snug">
+                        {{ notif.metadata_payload?.subject || notif.channel }}
+                      </q-item-label>
+                      <q-item-label caption class="text-2xs text-slate-600 line-clamp-2 mt-0.5">
+                        {{ notif.metadata_payload?.message || notif.error_message || 'Aviso de cita médica o servicio' }}
+                      </q-item-label>
+                      <q-item-label caption class="text-3xs text-slate-400 mt-1 flex items-center justify-between">
+                        <span>{{ formatTimeAgo(notif.sent_at) }}</span>
+                        <span v-if="!notif.is_read" class="text-teal-700 font-bold">• Nueva</span>
+                      </q-item-label>
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-scroll-area>
+            </q-menu>
+          </q-btn>
 
           <q-btn flat round dense icon="logout" @click="logout">
             <q-tooltip>Cerrar Sesión</q-tooltip>
           </q-btn>
+
         </div>
         <q-btn v-else flat :to="{ name: 'login' }" label="Iniciar sesión" />
       </q-toolbar>
@@ -572,11 +644,13 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { Notify } from 'quasar'
 import { api } from 'boot/axios'
 import { useAcl } from 'src/composables/useAcl'
 import EmergencySosModal from 'src/components/EmergencySosModal.vue'
+
 
 const router = useRouter()
 const leftDrawerOpen = ref(false)
@@ -689,4 +763,182 @@ function formatDate (isoStr) {
     return isoStr
   }
 }
+
+// =====================================================================
+// NOTIFICACIONES IN-APP Y TIEMPO REAL
+// =====================================================================
+const unreadNotificationsCount = ref(0)
+const inAppNotifications = ref([])
+const loadingNotifications = ref(false)
+let notifSocket = null
+
+async function fetchInAppNotifications () {
+  if (!isLoggedIn.value) return
+  loadingNotifications.value = true
+  try {
+    const { data } = await api.get('/notifications/my-notifications')
+    unreadNotificationsCount.value = data.unread_count || 0
+    inAppNotifications.value = data.notifications || []
+  } catch (err) {
+    console.error('Error al cargar notificaciones in-app:', err)
+  } finally {
+    loadingNotifications.value = false
+  }
+}
+
+async function markAllAsRead () {
+  try {
+    await api.post('/notifications/mark-all-read')
+    unreadNotificationsCount.value = 0
+    inAppNotifications.value.forEach(n => { n.is_read = true })
+  } catch (err) {
+    console.error('Error marcando todas como leídas:', err)
+  }
+}
+
+async function triggerTestNotification () {
+  try {
+    await api.post('/notifications/test-send', null, {
+      params: {
+        subject: '¡Prueba In-App Exitosa!',
+        message: 'Esta es una notificación de prueba en tiempo real desde ÍntimaSalud.'
+      }
+    })
+    Notify.create({
+      type: 'positive',
+      message: 'Notificación de prueba emitida con éxito.',
+      position: 'top'
+    })
+    fetchInAppNotifications()
+  } catch (err) {
+    console.error('Error enviando notificación de prueba:', err)
+  }
+}
+
+async function handleNotificationClick (notif) {
+
+  if (!notif.is_read) {
+    try {
+      await api.post(`/notifications/${notif.id}/read`)
+      notif.is_read = true
+      if (unreadNotificationsCount.value > 0) {
+        unreadNotificationsCount.value--
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  if (notif.appointment_id) {
+    router.push('/appointments/my-list')
+  } else if (notif.incident_id && can('emergency:monitor')) {
+    router.push('/admin/control-tower')
+  }
+}
+
+function getNotifIcon (notif) {
+  const type = notif.metadata_payload?.type || ''
+  if (type === 'APPOINTMENT_PROPOSAL') return 'event_available'
+  if (type === 'APPOINTMENT_REMINDER') return 'alarm'
+  if (type === 'EMERGENCY_DISPATCH') return 'emergency'
+  return 'notifications'
+}
+
+function getNotifIconColor (notif) {
+  const type = notif.metadata_payload?.type || ''
+  if (type === 'APPOINTMENT_PROPOSAL') return 'bg-teal-600'
+  if (type === 'APPOINTMENT_REMINDER') return 'bg-amber-500'
+  if (type === 'EMERGENCY_DISPATCH') return 'bg-red-600'
+  return 'bg-blue-600'
+}
+
+function formatTimeAgo (isoStr) {
+  if (!isoStr) return ''
+  try {
+    const d = new Date(isoStr)
+    const diffMin = Math.round((Date.now() - d.getTime()) / 60000)
+    if (diffMin < 1) return 'Ahora mismo'
+    if (diffMin < 60) return `Hace ${diffMin} min`
+    const diffHours = Math.floor(diffMin / 60)
+    if (diffHours < 24) return `Hace ${diffHours} h`
+    return d.toLocaleDateString()
+  } catch {
+    return ''
+  }
+}
+
+function connectNotificationWebSocket () {
+  const token = localStorage.getItem('access_token')
+  if (!token) return
+
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/api/v1/notifications/ws?token=${token}`
+
+  try {
+    notifSocket = new WebSocket(wsUrl)
+    notifSocket.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data)
+        if (payload.event === 'IN_APP_NOTIFICATION' && payload.data) {
+          unreadNotificationsCount.value++
+          inAppNotifications.value.unshift({
+            id: payload.data.id,
+            channel: 'IN_APP',
+            status: 'DELIVERED',
+            is_read: false,
+            sent_at: payload.data.created_at,
+            metadata_payload: {
+              subject: payload.data.subject,
+              message: payload.data.message,
+              type: payload.data.metadata?.type,
+            },
+            appointment_id: payload.data.appointment_id,
+            incident_id: payload.data.incident_id,
+          })
+
+          Notify.create({
+            type: 'info',
+            icon: 'notifications_active',
+            message: payload.data.subject || 'Aviso en ÍntimaSalud',
+            caption: payload.data.message,
+            position: 'top-right',
+            timeout: 7000,
+            actions: [
+              {
+                label: 'Ver Cita',
+                color: 'white',
+                handler: () => router.push('/appointments/my-list')
+              }
+            ]
+          })
+        }
+      } catch (err) {
+        console.error('Error parseando websocket notification:', err)
+      }
+    }
+
+    notifSocket.onclose = () => {
+      if (isLoggedIn.value) {
+        setTimeout(connectNotificationWebSocket, 6000)
+      }
+    }
+  } catch (err) {
+    console.warn('No se pudo establecer WebSocket de notificaciones:', err)
+  }
+}
+
+onMounted(() => {
+  if (isLoggedIn.value) {
+    fetchInAppNotifications()
+    connectNotificationWebSocket()
+  }
+})
+
+onUnmounted(() => {
+  if (notifSocket) {
+    notifSocket.close()
+    notifSocket = null
+  }
+})
+
 </script>

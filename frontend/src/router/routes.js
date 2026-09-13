@@ -46,6 +46,16 @@ const routes = [
         path: 'patient/onboarding',
         name: 'patient-onboarding',
         component: () => import('pages/auth/PatientOnboarding.vue')
+      },
+      {
+        path: 'privacy',
+        name: 'privacy-policy',
+        component: () => import('pages/public/PrivacyPolicy.vue')
+      },
+      {
+        path: 'data-deletion',
+        name: 'data-deletion',
+        component: () => import('pages/public/DataDeletion.vue')
       }
     ]
   },

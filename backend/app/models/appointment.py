@@ -38,3 +38,4 @@ class Appointment(Base, TimestampMixin):
     dependent: Mapped["PatientDependent"] = relationship("PatientDependent", backref="appointments")
     room: Mapped["ClinicRoom"] = relationship("ClinicRoom", backref="appointments")
     payment_record: Mapped["PaymentRecord"] = relationship("PaymentRecord", back_populates="appointment", uselist=False)
+    notification_logs: Mapped[list["NotificationLog"]] = relationship("NotificationLog", back_populates="appointment", cascade="all, delete-orphan")

@@ -18,6 +18,17 @@
 
       <div class="flex items-center gap-3">
         <q-btn
+          flat
+          color="teal-8"
+          icon="notifications_active"
+          label="Mis Canales"
+          no-caps
+          class="font-semibold bg-teal-50/70 border border-teal-200/60"
+          @click="showNotificationModal = true"
+        >
+          <q-tooltip>Configurar canales de notificación (WhatsApp, SMS, Email)</q-tooltip>
+        </q-btn>
+        <q-btn
           outline
           color="primary"
           icon="refresh"
@@ -35,6 +46,7 @@
           class="font-semibold shadow-sm"
         />
       </div>
+
     </div>
 
     <!-- Banner informativo específico para Pacientes -->
@@ -383,20 +395,27 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <!-- Modal de Configuración de Canales de Notificación (Módulo 6) -->
+    <NotificationPreferencesModal v-model="showNotificationModal" />
   </q-page>
+
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { Dialog, Notify } from 'quasar'
 import { api } from 'boot/axios'
+import NotificationPreferencesModal from 'components/NotificationPreferencesModal.vue'
 
 const appointments = ref([])
 const loading = ref(false)
 const currentUserRole = ref('')
 const showTriageModal = ref(false)
+const showNotificationModal = ref(false)
 const selectedTriageApp = ref(null)
 const processingAcceptId = ref(null)
+
 
 function openTriageModal (app) {
   selectedTriageApp.value = app

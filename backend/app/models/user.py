@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship as sa_relationship
 
 from app.models.base import Base, TimestampMixin, generate_uuid
 
@@ -66,6 +66,10 @@ class User(Base, TimestampMixin):
     address: Mapped[str | None] = mapped_column(String(255))
     city: Mapped[str | None] = mapped_column(String(100))
     country: Mapped[str | None] = mapped_column(String(100), default="Venezuela")
+
+    device_tokens: Mapped[list["UserDeviceToken"]] = sa_relationship(
+        "UserDeviceToken", back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class RefreshToken(Base):
