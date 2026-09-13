@@ -23,3 +23,7 @@ _data/
 # Secretos y credenciales de Firebase
 *firebase*.json
 google-services.json
+
+# Cargas locales
+backend/uploads/
+uploads/
