@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,8 +23,23 @@ class Settings(BaseSettings):
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCKOUT_MINUTES: int = 15
 
-    CORS_ORIGINS: list[str] = ["http://localhost:9000"]
-    FRONTEND_URL: str = "http://localhost:9000"
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:9000",
+        "https://app.vitarecord.com",
+        "https://vitarecord.com",
+    ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
+        if isinstance(v, str):
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                return json.loads(v)
+            return [i.strip() for i in v.split(",") if i.strip()]
+        return v
+
+    FRONTEND_URL: str = "https://app.vitarecord.com"
 
     VAULT_ADDR: str = "http://vault:8200"
     VAULT_TOKEN: str = "devroot_dev_only"
