@@ -1162,7 +1162,16 @@ function connectNotificationWebSocket () {
   if (!token) return
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/api/v1/notifications/ws?token=${token}`
+  let host = window.location.host
+  if (process.env.API_URL) {
+    try {
+      const parsed = new URL(process.env.API_URL)
+      host = parsed.host
+    } catch {
+      host = process.env.API_URL.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    }
+  }
+  const wsUrl = `${protocol}//${host}/api/v1/notifications/ws?token=${token}`
 
   try {
     notifSocket = new WebSocket(wsUrl)

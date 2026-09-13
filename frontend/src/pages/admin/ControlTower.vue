@@ -430,8 +430,16 @@ async function openAuditDialog (incidentId) {
 
 function initWebSocket () {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = window.location.hostname
-  const wsUrl = `${protocol}//${host}:8000/api/v1/emergencies/ws/control-tower`
+  let wsHost = `${window.location.hostname}:8000`
+  if (process.env.API_URL) {
+    try {
+      const parsed = new URL(process.env.API_URL)
+      wsHost = parsed.host
+    } catch {
+      wsHost = process.env.API_URL.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+    }
+  }
+  const wsUrl = `${protocol}//${wsHost}/api/v1/emergencies/ws/control-tower`
 
   try {
     ws = new WebSocket(wsUrl)

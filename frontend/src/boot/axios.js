@@ -5,8 +5,8 @@ import { clearAuthToken } from 'src/composables/useAcl'
 
 // En desarrollo, quasar.config.js reenvia /api al backend (ver
 // devServer.proxy). En produccion, el reverse proxy hace el mismo trabajo
-// (plan/plan.md Diagrama 1).
-const api = axios.create({ baseURL: '/api/v1' })
+const apiBase = (process.env.API_URL || '').replace(/\/$/, '')
+const api = axios.create({ baseURL: `${apiBase}/api/v1` })
 
 let routerInstance = null
 

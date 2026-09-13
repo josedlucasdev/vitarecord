@@ -13,7 +13,10 @@ export default configure(function (/* ctx */) {
         browser: ['es2019', 'edge88', 'firefox78', 'chrome87', 'safari13.1'],
         node: 'node20'
       },
-      vueRouterMode: 'hash'
+      vueRouterMode: 'hash',
+      env: {
+        API_URL: process.env.API_URL || process.env.VITE_API_URL || ''
+      }
     },
 
     devServer: {
