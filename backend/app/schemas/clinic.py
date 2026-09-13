@@ -66,12 +66,28 @@ class DoctorPublicWithClinics(BaseModel):
 
 
 class DoctorProfileUpdateRequest(BaseModel):
-    biography: str | None = None
+    full_name: str | None = None
     phone: str | None = None
     specialty: str | None = None
+    biography: str | None = None
     profile_picture_url: str | None = None
-    is_public_profile_enabled: bool = True
+    academic_degrees: list[AcademicDegree] | None = None
+    work_experience: list[WorkExperience] | None = None
+    is_public_profile_enabled: bool | None = None
+
+
+class DoctorSearchResult(BaseModel):
+    id: str
+    full_name: str | None = None
+    email: str
+    phone: str | None = None
+    specialty: str | None = None
+    identification_number: str | None = None
+    license_number: str | None = None
+    profile_picture_url: str | None = None
+    license_verification_status: str = "NOT_APPLICABLE"
+    is_already_affiliated: bool = False
+    affiliation_status: str | None = None
+    status: str = "ACTIVE"
     academic_degrees: list[AcademicDegree] = []
     work_experience: list[WorkExperience] = []
-
-

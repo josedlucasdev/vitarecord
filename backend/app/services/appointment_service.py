@@ -218,19 +218,28 @@ class AppointmentService:
         fresh_app = await self.appointments.get_by_id(appointment.id)
 
         # 9. Notificación multicanal interactiva (Módulo 6 / 2.B.5)
-        if initial_status == "PENDING_PATIENT_ACCEPTANCE":
-            try:
-                from app.services.notification_service import NotificationService
-                notif_service = NotificationService(self.db)
-                clinic_name = fresh_app.clinic.name if (fresh_app and fresh_app.clinic) else "ÍntimaSalud"
+        try:
+            from app.services.notification_service import NotificationService
+            notif_service = NotificationService(self.db)
+            clinic_name = fresh_app.clinic.name if (fresh_app and fresh_app.clinic) else "ÍntimaSalud"
+            if initial_status == "PENDING_PATIENT_ACCEPTANCE":
                 await notif_service.send_appointment_proposal(
                     appointment=fresh_app,
                     patient=patient,
                     doctor=doctor,
                     clinic_name=clinic_name,
                 )
-            except Exception as exc:
-                logger.warning("No se pudo despachar notificación multicanal de propuesta: %s", exc)
+            else:
+                # Cita confirmada agendada directamente: Notificar al médico en tiempo real
+                await notif_service.send_new_appointment_to_doctor(
+                    appointment=fresh_app,
+                    doctor=doctor,
+                    patient=patient,
+                    clinic_name=clinic_name,
+                    is_pending_approval=False,
+                )
+        except Exception as exc:
+            logger.warning("No se pudo despachar notificación de cita: %s", exc)
 
         return self._to_public(fresh_app)
 
@@ -518,6 +527,21 @@ class AppointmentService:
         await self._invalidate_redis_slots(payload.clinic_id, payload.doctor_id, payload.start_time)
 
         fresh_app = await self.appointments.get_by_id(appointment.id)
+        # Notificar al médico de nueva cita / solicitud pendiente
+        try:
+            from app.services.notification_service import NotificationService
+            notif_service = NotificationService(self.db)
+            clinic_name = fresh_app.clinic.name if (fresh_app and fresh_app.clinic) else "ÍntimaSalud"
+            await notif_service.send_new_appointment_to_doctor(
+                appointment=fresh_app,
+                doctor=doctor,
+                patient=patient,
+                clinic_name=clinic_name,
+                is_pending_approval=True,
+            )
+        except Exception as exc:
+            logger.warning("No se pudo notificar al médico sobre solicitud pública: %s", exc)
+
         return self._to_public(fresh_app)
 
     async def doctor_accept_appointment(

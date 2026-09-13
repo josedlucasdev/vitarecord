@@ -483,88 +483,267 @@
       <router-view />
     </q-page-container>
 
-    <!-- Modal de Invitar Médico -->
+    <!-- Modal de Invitar / Vincular Médico con 2 Tabs: Vincular existente & Crear y vincular -->
     <q-dialog v-model="showInviteModal">
-      <q-card style="min-width: 440px; max-width: 520px; border-radius: 16px;">
-        <q-card-section class="bg-gradient-to-r from-teal-700 to-cyan-800 text-white p-5 flex items-center justify-between">
-          <div class="flex items-center space-x-2">
-            <q-icon name="person_add" size="24px" />
-            <h3 class="text-lg font-bold">Invitar Médico a la Clínica</h3>
+      <q-card style="min-width: 540px; max-width: 720px; width: 100%; border-radius: 16px;" class="overflow-hidden">
+        <q-card-section class="bg-gradient-to-r from-teal-700 to-cyan-800 text-white p-5 pb-0">
+          <div class="flex items-center justify-between pb-3">
+            <div class="flex items-center space-x-2">
+              <q-icon name="person_add" size="24px" />
+              <h3 class="text-lg font-bold">Afiliar o Invitar Médico a la Clínica</h3>
+            </div>
+            <q-btn flat round dense icon="close" text-color="white" v-close-popup />
           </div>
-          <q-btn flat round dense icon="close" text-color="white" v-close-popup />
+
+          <q-tabs
+            v-model="activeInviteTab"
+            dense
+            class="text-teal-100"
+            active-color="white"
+            indicator-color="amber-400"
+            align="justify"
+            narrow-indicator
+          >
+            <q-tab name="link_existing" icon="person_search" label="Vincular existente" no-caps class="font-semibold text-sm" />
+            <q-tab name="create_new" icon="person_add_alt" label="Crear y vincular" no-caps class="font-semibold text-sm" />
+          </q-tabs>
         </q-card-section>
 
-        <q-card-section class="p-6 space-y-4">
-          <div v-if="inviteResult" class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
-            <div class="flex items-center text-emerald-800 font-bold text-sm">
-              <q-icon name="check_circle" size="18px" class="mr-2" />
-              <span>Invitación generada exitosamente</span>
+        <q-tab-panels v-model="activeInviteTab" animated class="p-0">
+          <!-- TAB 1: Vincular existente -->
+          <q-tab-panel name="link_existing" class="p-6 space-y-4">
+            <div class="p-3.5 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-900 leading-relaxed flex items-start gap-2.5">
+              <q-icon name="manage_search" color="teal" size="20px" class="mt-0.5 shrink-0" />
+              <div>
+                <strong>Buscador global de médicos en VitaRecord:</strong>
+                <p class="mt-0.5 text-slate-600">
+                  Busca profesionales médicos por <strong>nombre</strong>, <strong>correo electrónico</strong>, <strong>cédula</strong> o <strong>matrícula profesional</strong> para afiliarlo a esta sede de inmediato o enviarle una invitación.
+                </p>
+              </div>
             </div>
-            <p class="text-xs text-slate-600">
-              Se ha enviado un correo con el enlace firmado. También puedes copiar el enlace directo a continuación:
-            </p>
-            <div class="p-2 bg-white rounded border border-emerald-100 text-2xs font-mono break-all text-slate-800 select-all">
-              {{ inviteResult.invitation_link }}
-            </div>
-            <div class="pt-2 flex justify-end">
+
+            <!-- Buscador Input -->
+            <div class="flex gap-2 items-center">
+              <q-input
+                v-model="inviteDoctorSearchQuery"
+                outlined
+                dense
+                placeholder="Buscar por nombre, correo, cédula o matrícula médica..."
+                class="flex-1 text-xs"
+                clearable
+                @update:model-value="onInviteDoctorSearchInput"
+                @keyup.enter="searchInviteDoctors"
+              >
+                <template #prepend>
+                  <q-icon name="search" color="teal" />
+                </template>
+              </q-input>
               <q-btn
-                flat
-                size="sm"
                 color="primary"
-                label="Abrir enlace"
-                tag="a"
-                :href="inviteResult.invitation_link"
-                target="_blank"
-              />
-            </div>
-          </div>
-
-          <form v-else class="space-y-4" @submit.prevent="submitInvite">
-            <p class="text-xs text-slate-600">
-              Ingresa el correo del profesional. Si ya está registrado (Caso A), recibirá enlace de vinculación inmediata. Si es nuevo (Caso B), recibirá enlace de onboarding.
-            </p>
-
-            <q-input
-              v-model="inviteEmail"
-              type="email"
-              label="Correo electrónico del médico"
-              filled
-              required
-            />
-            <q-input
-              v-model="inviteFullName"
-              label="Nombre completo (opcional)"
-              filled
-            />
-            <q-input
-              v-model="inviteSpecialty"
-              label="Especialidad médica (ej. Ginecología)"
-              filled
-            />
-            <q-input
-              v-model="invitePhone"
-              label="Teléfono / WhatsApp (opcional)"
-              filled
-            />
-
-            <div v-if="inviteError" class="p-3 bg-red-50 text-red-700 text-xs rounded-lg flex items-center">
-              <q-icon name="warning" class="mr-2" size="16px" />
-              <span>{{ inviteError }}</span>
-            </div>
-
-            <div class="pt-2 flex justify-end space-x-3">
-              <q-btn flat label="Cancelar" v-close-popup no-caps />
-              <q-btn
-                type="submit"
-                color="primary"
-                label="Generar y Enviar Invitación"
+                icon="search"
+                label="Buscar"
+                dense
                 no-caps
-                class="font-semibold"
-                :loading="submittingInvite"
+                class="px-4 h-[40px] font-semibold"
+                :loading="searchingInviteDoctors"
+                @click="searchInviteDoctors"
               />
             </div>
-          </form>
-        </q-card-section>
+
+            <!-- Loading Spinner -->
+            <div v-if="searchingInviteDoctors" class="py-8 text-center text-teal-700 space-y-2">
+              <q-spinner-dots size="36px" color="teal" />
+              <p class="text-xs text-slate-500">Buscando profesionales en VitaRecord...</p>
+            </div>
+
+            <!-- Resultados -->
+            <div v-else-if="inviteDoctorSearchResults.length > 0" class="space-y-3 max-h-96 overflow-y-auto pr-1">
+              <div
+                v-for="doc in inviteDoctorSearchResults"
+                :key="doc.id"
+                class="p-4 rounded-xl border border-slate-200 bg-white hover:border-teal-300 hover:shadow-sm transition-all space-y-3"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex items-center space-x-3 min-w-0">
+                    <q-avatar size="44px" color="teal-1" text-color="teal-9" class="font-bold border border-teal-200">
+                      <img v-if="doc.profile_picture_url" :src="doc.profile_picture_url" />
+                      <span v-else>{{ getDoctorInitials(doc.full_name || doc.email) }}</span>
+                    </q-avatar>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <h4 class="text-sm font-bold text-slate-900 truncate">
+                          {{ doc.full_name || 'Médico sin nombre' }}
+                        </h4>
+                        <q-badge v-if="doc.specialty" color="teal-1" text-color="teal-9" class="text-2xs font-semibold">
+                          {{ doc.specialty }}
+                        </q-badge>
+                      </div>
+                      <p class="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5">
+                        <q-icon name="mail" size="14px" color="slate-400" />
+                        {{ doc.email }}
+                        <span v-if="doc.phone" class="ml-2 flex items-center gap-1">
+                          <q-icon name="phone" size="14px" color="slate-400" />
+                          {{ doc.phone }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Badges / Acciones -->
+                  <div class="shrink-0 flex flex-col items-end gap-1.5">
+                    <div v-if="doc.is_already_affiliated">
+                      <q-badge color="positive" class="p-1.5 text-2xs font-bold" icon="check_circle">
+                        Ya Afiliado
+                      </q-badge>
+                    </div>
+                    <div v-else-if="doc.affiliation_status === 'PENDING'">
+                      <q-badge color="amber-8" class="p-1.5 text-2xs font-bold" icon="hourglass_top">
+                        Invitación Pendiente
+                      </q-badge>
+                    </div>
+                    <div v-else class="flex items-center gap-2">
+                      <q-btn
+                        size="sm"
+                        color="teal"
+                        icon="link"
+                        label="Vincular Directamente"
+                        no-caps
+                        class="font-semibold shadow-sm"
+                        :loading="affiliatingInviteDoctorId === doc.id"
+                        @click="affiliateInviteDoctor(doc, 'DIRECT')"
+                      >
+                        <q-tooltip>Vincular y activar de inmediato a esta clínica</q-tooltip>
+                      </q-btn>
+                      <q-btn
+                        size="sm"
+                        outline
+                        color="primary"
+                        icon="send"
+                        label="Enviar Invitación"
+                        no-caps
+                        class="font-semibold"
+                        :loading="affiliatingInviteDoctorId === doc.id"
+                        @click="affiliateInviteDoctor(doc, 'INVITE')"
+                      >
+                        <q-tooltip>Enviar correo formal de invitación</q-tooltip>
+                      </q-btn>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Fila de Identificación y Matrícula -->
+                <div class="grid grid-cols-2 gap-2 text-2xs pt-2 border-t border-slate-100 text-slate-600">
+                  <div class="flex items-center gap-1.5">
+                    <q-icon name="badge" size="14px" color="teal" />
+                    <span>Cédula / DNI: <strong>{{ doc.identification_number || 'No registrada' }}</strong></span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <q-icon name="verified_user" size="14px" color="teal" />
+                    <span>Matrícula Médica: <strong>{{ doc.license_number || 'No registrada' }}</strong></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sin resultados -->
+            <div v-else-if="inviteDoctorSearchPerformed" class="p-6 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-center space-y-3">
+              <q-icon name="person_search" size="36px" color="slate-400" />
+              <div>
+                <p class="text-xs font-semibold text-slate-700">No se encontró ningún médico con ese término</p>
+                <p class="text-2xs text-slate-500 mt-1">Verifica el nombre, correo o cédula, o invítalo como nuevo médico en la otra pestaña.</p>
+              </div>
+              <q-btn
+                outline
+                dense
+                color="primary"
+                icon="person_add_alt"
+                label="Crear y vincular como nuevo médico"
+                no-caps
+                class="text-xs font-semibold px-3 py-1"
+                @click="switchToCreateNewDoctor"
+              />
+            </div>
+
+            <!-- Estado inicial antes de buscar -->
+            <div v-else class="p-8 text-center text-slate-400 space-y-2">
+              <q-icon name="search" size="40px" class="opacity-40" />
+              <p class="text-xs">Escribe el nombre, correo, cédula o matrícula del médico para comenzar la búsqueda.</p>
+            </div>
+          </q-tab-panel>
+
+          <!-- TAB 2: Crear y vincular -->
+          <q-tab-panel name="create_new" class="p-6 space-y-4">
+            <div v-if="inviteResult" class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+              <div class="flex items-center text-emerald-800 font-bold text-sm">
+                <q-icon name="check_circle" size="18px" class="mr-2" />
+                <span>Invitación generada exitosamente</span>
+              </div>
+              <p class="text-xs text-slate-600">
+                Se ha enviado un correo con el enlace firmado. También puedes copiar el enlace directo a continuación:
+              </p>
+              <div class="p-2 bg-white rounded border border-emerald-100 text-2xs font-mono break-all text-slate-800 select-all">
+                {{ inviteResult.invitation_link }}
+              </div>
+              <div class="pt-2 flex justify-end">
+                <q-btn
+                  flat
+                  size="sm"
+                  color="primary"
+                  label="Abrir enlace"
+                  tag="a"
+                  :href="inviteResult.invitation_link"
+                  target="_blank"
+                />
+              </div>
+            </div>
+
+            <form v-else class="space-y-4" @submit.prevent="submitInvite">
+              <p class="text-xs text-slate-600">
+                Ingresa los datos del profesional. Si es nuevo, recibirá un correo formal para completar su onboarding y perfil en VitaRecord vinculado a esta sede.
+              </p>
+
+              <q-input
+                v-model="inviteEmail"
+                type="email"
+                label="Correo electrónico del médico *"
+                filled
+                required
+              />
+              <q-input
+                v-model="inviteFullName"
+                label="Nombre completo (opcional)"
+                filled
+              />
+              <q-input
+                v-model="inviteSpecialty"
+                label="Especialidad médica (ej. Ginecología)"
+                filled
+              />
+              <q-input
+                v-model="invitePhone"
+                label="Teléfono / WhatsApp (opcional)"
+                filled
+              />
+
+              <div v-if="inviteError" class="p-3 bg-red-50 text-red-700 text-xs rounded-lg flex items-center">
+                <q-icon name="warning" class="mr-2" size="16px" />
+                <span>{{ inviteError }}</span>
+              </div>
+
+              <div class="pt-2 flex justify-end space-x-3">
+                <q-btn flat label="Cancelar" v-close-popup no-caps />
+                <q-btn
+                  type="submit"
+                  color="primary"
+                  label="Generar y Enviar Invitación"
+                  no-caps
+                  class="font-semibold"
+                  :loading="submittingInvite"
+                />
+              </div>
+            </form>
+          </q-tab-panel>
+        </q-tab-panels>
       </q-card>
     </q-dialog>
 
@@ -644,7 +823,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Notify } from 'quasar'
 import { api } from 'boot/axios'
@@ -671,8 +850,16 @@ function logout () {
   router.push({ name: 'login' })
 }
 
-// Modal Invitar Médico
+// Modal Invitar / Afiliar Médico
 const showInviteModal = ref(false)
+const activeInviteTab = ref('link_existing')
+const inviteDoctorSearchQuery = ref('')
+const inviteDoctorSearchResults = ref([])
+const searchingInviteDoctors = ref(false)
+const inviteDoctorSearchPerformed = ref(false)
+const affiliatingInviteDoctorId = ref(null)
+let inviteSearchDebounceTimeout = null
+
 const inviteEmail = ref('')
 const inviteFullName = ref('')
 const inviteSpecialty = ref('')
@@ -681,13 +868,116 @@ const submittingInvite = ref(false)
 const inviteError = ref('')
 const inviteResult = ref(null)
 
+watch(showInviteModal, (val) => {
+  if (val) {
+    activeInviteTab.value = 'link_existing'
+    inviteDoctorSearchQuery.value = ''
+    inviteDoctorSearchResults.value = []
+    inviteDoctorSearchPerformed.value = false
+    inviteResult.value = null
+    inviteError.value = ''
+  }
+})
+
+function getDoctorInitials (name) {
+  if (!name) return 'DR'
+  return name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+}
+
+function onInviteDoctorSearchInput (val) {
+  if (inviteSearchDebounceTimeout) clearTimeout(inviteSearchDebounceTimeout)
+  if (!val || val.trim().length < 2) {
+    inviteDoctorSearchResults.value = []
+    inviteDoctorSearchPerformed.value = false
+    return
+  }
+  inviteSearchDebounceTimeout = setTimeout(() => {
+    searchInviteDoctors()
+  }, 400)
+}
+
+async function searchInviteDoctors () {
+  if (!inviteDoctorSearchQuery.value || inviteDoctorSearchQuery.value.trim().length < 2) {
+    inviteDoctorSearchResults.value = []
+    inviteDoctorSearchPerformed.value = false
+    return
+  }
+  searchingInviteDoctors.value = true
+  inviteDoctorSearchPerformed.value = true
+  try {
+    const clinicId = user.value?.clinicId || 'c1111111-1111-1111-1111-111111111111'
+    const token = localStorage.getItem('access_token')
+    const res = await api.get(`/clinics/${clinicId}/doctors/search-to-affiliate`, {
+      params: { q: inviteDoctorSearchQuery.value.trim() },
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    inviteDoctorSearchResults.value = res.data || []
+  } catch (err) {
+    console.error('Error buscando médicos:', err)
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al buscar profesionales médicos.',
+      position: 'bottom-right'
+    })
+  } finally {
+    searchingInviteDoctors.value = false
+  }
+}
+
+async function affiliateInviteDoctor (doctor, mode = 'DIRECT') {
+  const clinicId = user.value?.clinicId || 'c1111111-1111-1111-1111-111111111111'
+  affiliatingInviteDoctorId.value = doctor.id
+  try {
+    const token = localStorage.getItem('access_token')
+    const res = await api.post(
+      `/clinics/${clinicId}/doctors/${doctor.id}/affiliate`,
+      { mode },
+      {
+        params: { mode },
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    )
+    Notify.create({
+      type: 'positive',
+      message: res.data?.message || (mode === 'DIRECT' ? `Médico ${doctor.full_name || doctor.email} vinculado exitosamente.` : `Invitación enviada a ${doctor.email}.`),
+      position: 'bottom-right',
+      icon: 'verified'
+    })
+    if (mode === 'DIRECT') {
+      doctor.is_already_affiliated = true
+      doctor.affiliation_status = 'ACTIVE'
+    } else {
+      doctor.affiliation_status = 'PENDING'
+    }
+  } catch (err) {
+    console.error('Error afiliando médico:', err)
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al vincular el profesional a la clínica.',
+      position: 'bottom-right'
+    })
+  } finally {
+    affiliatingInviteDoctorId.value = null
+  }
+}
+
+function switchToCreateNewDoctor () {
+  const q = (inviteDoctorSearchQuery.value || '').trim()
+  if (q.includes('@')) {
+    inviteEmail.value = q
+  } else if (q.length > 0) {
+    inviteFullName.value = q
+  }
+  activeInviteTab.value = 'create_new'
+}
+
 async function submitInvite () {
   submittingInvite.value = true
   inviteError.value = ''
   inviteResult.value = null
 
   try {
-    const clinicId = 'c1111111-1111-1111-1111-111111111111'
+    const clinicId = user.value?.clinicId || 'c1111111-1111-1111-1111-111111111111'
     const token = localStorage.getItem('access_token')
     const { data } = await api.post(
       `/clinics/${clinicId}/invitations`,
@@ -911,6 +1201,18 @@ function connectNotificationWebSocket () {
               }
             ]
           })
+
+          // Notificación nativa del sistema / navegador web
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+            try {
+              new window.Notification(payload.data.subject || 'Aviso en ÍntimaSalud', {
+                body: payload.data.message,
+                icon: '/favicon.ico'
+              })
+            } catch (e) {
+              console.debug('Error desplegando notificación nativa del navegador:', e)
+            }
+          }
         }
       } catch (err) {
         console.error('Error parseando websocket notification:', err)
@@ -931,6 +1233,11 @@ onMounted(() => {
   if (isLoggedIn.value) {
     fetchInAppNotifications()
     connectNotificationWebSocket()
+
+    // Solicitar permiso de notificaciones del navegador web
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
   }
 })
 

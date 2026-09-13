@@ -289,130 +289,311 @@
       </div>
     </div>
 
-    <!-- Create User Dialog -->
+    <!-- Create User Dialog with Two Tabs: Vincular existente & Crear y vincular -->
     <q-dialog v-model="showCreateDialog">
-      <q-card style="min-width: 440px; max-width: 560px; border-radius: 16px;">
-        <q-card-section class="bg-gradient-to-r from-teal-700 to-cyan-800 text-white p-5 flex items-center justify-between">
-          <div class="flex items-center space-x-2">
-            <q-icon name="person_add" size="24px" />
-            <h3 class="text-lg font-bold">Registrar / Vincular Usuario</h3>
+      <q-card style="min-width: 540px; max-width: 720px; width: 100%; border-radius: 16px;" class="overflow-hidden">
+        <!-- Card Header with Gradient and Tabs -->
+        <q-card-section class="bg-gradient-to-r from-teal-700 to-cyan-800 text-white p-5 pb-0">
+          <div class="flex items-center justify-between pb-3">
+            <div class="flex items-center space-x-2">
+              <q-icon name="person_add" size="24px" />
+              <h3 class="text-lg font-bold">Gestión de Personal y Vinculaciones</h3>
+            </div>
+            <q-btn flat round dense icon="close" text-color="white" v-close-popup />
           </div>
-          <q-btn flat round dense icon="close" text-color="white" v-close-popup />
+
+          <q-tabs
+            v-model="activeModalTab"
+            dense
+            class="text-teal-100"
+            active-color="white"
+            indicator-color="amber-400"
+            align="justify"
+            narrow-indicator
+          >
+            <q-tab name="link_existing" icon="person_search" label="Vincular existente" no-caps class="font-semibold text-sm" />
+            <q-tab name="create_new" icon="person_add_alt" label="Crear y vincular" no-caps class="font-semibold text-sm" />
+          </q-tabs>
         </q-card-section>
 
-        <q-card-section class="p-6 space-y-4">
-          <div class="p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-900 leading-relaxed space-y-1">
-            <div class="font-bold flex items-center gap-1.5">
-              <q-icon name="mail" color="teal" size="16px" />
-              Gestión de Cuentas:
+        <!-- Tab Panels -->
+        <q-tab-panels v-model="activeModalTab" animated class="p-0">
+          <!-- TAB 1: Vincular existente -->
+          <q-tab-panel name="link_existing" class="p-6 space-y-4">
+            <div class="p-3.5 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-900 leading-relaxed flex items-start gap-2.5">
+              <q-icon name="manage_search" color="teal" size="20px" class="mt-0.5 shrink-0" />
+              <div>
+                <strong>Buscador global de médicos en VitaRecord:</strong>
+                <p class="mt-0.5 text-slate-600">
+                  Busca profesionales médicos por <strong>nombre</strong>, <strong>correo electrónico</strong>, <strong>cédula</strong> o <strong>matrícula profesional</strong> para afiliarlo a esta sede de inmediato o enviarle una invitación.
+                </p>
+              </div>
             </div>
-            <div>
-              • <strong>Médicos y Pacientes:</strong> Si el usuario ya existe en la plataforma, será vinculado a esta clínica. Si es nuevo, se creará su cuenta y recibirá el correo para configurar su contraseña.
-            </div>
-            <div>
-              • <strong>Administradores y Secretarias:</strong> Son exclusivos de esta sede y su correo debe ser único en el sistema.
-            </div>
-          </div>
 
-          <form class="space-y-4" @submit.prevent="submitCreateUser">
-            <!-- Rol -->
-            <q-select
-              v-model="form.role"
-              :options="creatableRoleOptions"
-              emit-value
-              map-options
-              label="Rol de Usuario *"
-              filled
-              required
-            >
-              <template #prepend>
-                <q-icon name="admin_panel_settings" color="teal" />
-              </template>
-            </q-select>
-
-            <!-- Nombre Completo -->
-            <q-input
-              v-model="form.full_name"
-              label="Nombre y Apellido *"
-              placeholder="Ej. Dra. Carmen Morales"
-              filled
-              required
-            >
-              <template #prepend>
-                <q-icon name="person" color="teal" />
-              </template>
-            </q-input>
-
-            <!-- Correo Electrónico -->
-            <q-input
-              v-model="form.email"
-              label="Correo Electrónico *"
-              placeholder="ejemplo@intimasalud.com"
-              type="email"
-              filled
-              required
-            >
-              <template #prepend>
-                <q-icon name="email" color="teal" />
-              </template>
-            </q-input>
-
-            <!-- Teléfono -->
-            <q-input
-              v-model="form.phone"
-              label="Teléfono Móvil (Opcional)"
-              placeholder="+58 412 1234567"
-              filled
-            >
-              <template #prepend>
-                <q-icon name="phone" color="teal" />
-              </template>
-            </q-input>
-
-            <!-- Campos específicos para Médicos -->
-            <div v-if="form.role === 'DOCTOR'" class="space-y-4 pt-2 border-t border-slate-200">
-              <p class="text-xs font-bold text-slate-700 flex items-center gap-1">
-                <q-icon name="medical_services" color="teal" />
-                Información Profesional del Médico
-              </p>
-
-              <q-select
-                v-model="form.specialty"
-                :options="specialtyOptions"
-                label="Especialidad Médica"
-                filled
-                clearable
-                use-input
-                new-value-mode="add-unique"
-              />
-
+            <!-- Buscador Input -->
+            <div class="flex gap-2 items-center">
               <q-input
-                v-model="form.license_number"
-                label="Matrícula / Licencia Médica"
-                placeholder="Ej. MPPS-84920"
-                filled
-              />
-            </div>
-
-            <div v-if="formError" class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2">
-              <q-icon name="error" color="negative" size="18px" />
-              <span>{{ formError }}</span>
-            </div>
-
-            <div class="flex justify-end space-x-3 pt-4 border-t border-slate-100">
-              <q-btn flat label="Cancelar" no-caps v-close-popup />
+                v-model="doctorSearchQuery"
+                outlined
+                dense
+                placeholder="Buscar por nombre, correo, cédula o matrícula médica..."
+                class="flex-1 text-xs"
+                clearable
+                @update:model-value="onDoctorSearchInput"
+                @keyup.enter="searchDoctorsToAffiliate"
+              >
+                <template #prepend>
+                  <q-icon name="search" color="teal" />
+                </template>
+              </q-input>
               <q-btn
-                type="submit"
                 color="primary"
-                label="Guardar / Vincular"
-                icon="send"
+                icon="search"
+                label="Buscar"
+                dense
                 no-caps
-                class="font-semibold"
-                :loading="submitting"
+                class="px-4 h-[40px] font-semibold"
+                :loading="searchingDoctors"
+                @click="searchDoctorsToAffiliate"
               />
             </div>
-          </form>
-        </q-card-section>
+
+            <!-- Loading Spinner -->
+            <div v-if="searchingDoctors" class="py-8 text-center text-teal-700 space-y-2">
+              <q-spinner-dots size="36px" color="teal" />
+              <p class="text-xs text-slate-500">Buscando profesionales en VitaRecord...</p>
+            </div>
+
+            <!-- Resultados de Búsqueda -->
+            <div v-else-if="doctorSearchResults.length > 0" class="space-y-3 max-h-96 overflow-y-auto pr-1">
+              <div
+                v-for="doc in doctorSearchResults"
+                :key="doc.id"
+                class="p-4 rounded-xl border border-slate-200 bg-white hover:border-teal-300 hover:shadow-sm transition-all space-y-3"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex items-center space-x-3 min-w-0">
+                    <q-avatar size="44px" color="teal-1" text-color="teal-9" class="font-bold border border-teal-200">
+                      <img v-if="doc.profile_picture_url" :src="doc.profile_picture_url" />
+                      <span v-else>{{ getInitials(doc.full_name || doc.email) }}</span>
+                    </q-avatar>
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <h4 class="text-sm font-bold text-slate-900 truncate">
+                          {{ doc.full_name || 'Médico sin nombre' }}
+                        </h4>
+                        <q-badge v-if="doc.specialty" color="teal-1" text-color="teal-9" class="text-2xs font-semibold">
+                          {{ doc.specialty }}
+                        </q-badge>
+                      </div>
+                      <p class="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5">
+                        <q-icon name="mail" size="14px" color="slate-400" />
+                        {{ doc.email }}
+                        <span v-if="doc.phone" class="ml-2 flex items-center gap-1">
+                          <q-icon name="phone" size="14px" color="slate-400" />
+                          {{ doc.phone }}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Badges / Acciones -->
+                  <div class="shrink-0 flex flex-col items-end gap-1.5">
+                    <div v-if="doc.is_already_affiliated">
+                      <q-badge color="positive" class="p-1.5 text-2xs font-bold" icon="check_circle">
+                        Ya Afiliado
+                      </q-badge>
+                    </div>
+                    <div v-else-if="doc.affiliation_status === 'PENDING'">
+                      <q-badge color="amber-8" class="p-1.5 text-2xs font-bold" icon="hourglass_top">
+                        Invitación Pendiente
+                      </q-badge>
+                    </div>
+                    <div v-else class="flex items-center gap-2">
+                      <q-btn
+                        size="sm"
+                        color="teal"
+                        icon="link"
+                        label="Vincular Directamente"
+                        no-caps
+                        class="font-semibold shadow-sm"
+                        :loading="affiliatingDoctorId === doc.id"
+                        @click="affiliateDoctor(doc, 'DIRECT')"
+                      >
+                        <q-tooltip>Vincular y activar de inmediato a esta clínica</q-tooltip>
+                      </q-btn>
+                      <q-btn
+                        size="sm"
+                        outline
+                        color="primary"
+                        icon="send"
+                        label="Enviar Invitación"
+                        no-caps
+                        class="font-semibold"
+                        :loading="affiliatingDoctorId === doc.id"
+                        @click="affiliateDoctor(doc, 'INVITE')"
+                      >
+                        <q-tooltip>Enviar correo formal de invitación</q-tooltip>
+                      </q-btn>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Fila de Identificación y Matrícula -->
+                <div class="grid grid-cols-2 gap-2 text-2xs pt-2 border-t border-slate-100 text-slate-600">
+                  <div class="flex items-center gap-1.5">
+                    <q-icon name="badge" size="14px" color="teal" />
+                    <span>Cédula / DNI: <strong>{{ doc.identification_number || 'No registrada' }}</strong></span>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <q-icon name="verified_user" size="14px" color="teal" />
+                    <span>Matrícula Médica: <strong>{{ doc.license_number || 'No registrada' }}</strong></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sin resultados tras buscar -->
+            <div v-else-if="doctorSearchPerformed" class="p-6 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-center space-y-3">
+              <q-icon name="person_search" size="36px" color="slate-400" />
+              <div>
+                <p class="text-xs font-semibold text-slate-700">No se encontró ningún profesional con ese término</p>
+                <p class="text-2xs text-slate-500 mt-1">Verifica el nombre, correo o cédula, o créalo como nuevo profesional en la otra pestaña.</p>
+              </div>
+              <q-btn
+                outline
+                dense
+                color="primary"
+                icon="person_add_alt"
+                label="Crear y vincular como nuevo profesional"
+                no-caps
+                class="text-xs font-semibold px-3 py-1"
+                @click="switchToCreateDoctor"
+              />
+            </div>
+
+            <!-- Estado inicial antes de buscar -->
+            <div v-else class="p-8 text-center text-slate-400 space-y-2">
+              <q-icon name="search" size="40px" class="opacity-40" />
+              <p class="text-xs">Escribe el nombre, correo, cédula o matrícula del médico para comenzar la búsqueda.</p>
+            </div>
+          </q-tab-panel>
+
+          <!-- TAB 2: Crear y vincular -->
+          <q-tab-panel name="create_new" class="p-6 space-y-4">
+            <div class="p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-900 leading-relaxed space-y-1">
+              <div class="font-bold flex items-center gap-1.5">
+                <q-icon name="mail" color="teal" size="16px" />
+                Gestión de Cuentas:
+              </div>
+              <div>
+                • <strong>Médicos y Pacientes:</strong> Si el usuario no existe, se creará su cuenta en VitaRecord y recibirá correo para activar su contraseña y perfil.
+              </div>
+              <div>
+                • <strong>Administradores y Secretarias:</strong> Son exclusivos de esta sede y su correo debe ser único en el sistema.
+              </div>
+            </div>
+
+            <form class="space-y-4" @submit.prevent="submitCreateUser">
+              <!-- Rol -->
+              <q-select
+                v-model="form.role"
+                :options="creatableRoleOptions"
+                emit-value
+                map-options
+                label="Rol de Usuario *"
+                filled
+                required
+              >
+                <template #prepend>
+                  <q-icon name="admin_panel_settings" color="teal" />
+                </template>
+              </q-select>
+
+              <!-- Nombre Completo -->
+              <q-input
+                v-model="form.full_name"
+                label="Nombre y Apellido *"
+                placeholder="Ej. Dra. Carmen Morales"
+                filled
+                required
+              >
+                <template #prepend>
+                  <q-icon name="person" color="teal" />
+                </template>
+              </q-input>
+
+              <!-- Correo Electrónico -->
+              <q-input
+                v-model="form.email"
+                label="Correo Electrónico *"
+                placeholder="ejemplo@intimasalud.com"
+                type="email"
+                filled
+                required
+              >
+                <template #prepend>
+                  <q-icon name="email" color="teal" />
+                </template>
+              </q-input>
+
+              <!-- Teléfono -->
+              <q-input
+                v-model="form.phone"
+                label="Teléfono Móvil (Opcional)"
+                placeholder="+58 412 1234567"
+                filled
+              >
+                <template #prepend>
+                  <q-icon name="phone" color="teal" />
+                </template>
+              </q-input>
+
+              <!-- Campos específicos para Médicos -->
+              <div v-if="form.role === 'DOCTOR'" class="space-y-4 pt-2 border-t border-slate-200">
+                <p class="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <q-icon name="medical_services" color="teal" />
+                  Información Profesional del Médico
+                </p>
+
+                <q-select
+                  v-model="form.specialty"
+                  :options="specialtyOptions"
+                  label="Especialidad Médica"
+                  filled
+                  clearable
+                  use-input
+                  new-value-mode="add-unique"
+                />
+
+                <q-input
+                  v-model="form.license_number"
+                  label="Matrícula / Licencia Médica"
+                  placeholder="Ej. MPPS-84920"
+                  filled
+                />
+              </div>
+
+              <div v-if="formError" class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2">
+                <q-icon name="error" color="negative" size="18px" />
+                <span>{{ formError }}</span>
+              </div>
+
+              <div class="flex justify-end space-x-3 pt-4 border-t border-slate-100">
+                <q-btn flat label="Cancelar" no-caps v-close-popup />
+                <q-btn
+                  type="submit"
+                  color="primary"
+                  label="Crear y Vincular"
+                  icon="person_add"
+                  no-caps
+                  class="font-semibold"
+                  :loading="submitting"
+                />
+              </div>
+            </form>
+          </q-tab-panel>
+        </q-tab-panels>
       </q-card>
     </q-dialog>
 
@@ -474,6 +655,13 @@ const users = ref([])
 const loading = ref(false)
 const submitting = ref(false)
 const showCreateDialog = ref(false)
+const activeModalTab = ref('link_existing')
+const doctorSearchQuery = ref('')
+const doctorSearchResults = ref([])
+const searchingDoctors = ref(false)
+const doctorSearchPerformed = ref(false)
+const affiliatingDoctorId = ref(null)
+let searchDebounceTimeout = null
 const formError = ref('')
 const selectedRole = ref('ALL')
 const searchQuery = ref('')
@@ -660,7 +848,96 @@ async function fetchUsers () {
 
 function openCreateDialog () {
   resetForm()
+  activeModalTab.value = 'link_existing'
+  doctorSearchQuery.value = ''
+  doctorSearchResults.value = []
+  doctorSearchPerformed.value = false
   showCreateDialog.value = true
+}
+
+function onDoctorSearchInput (val) {
+  if (searchDebounceTimeout) clearTimeout(searchDebounceTimeout)
+  if (!val || val.trim().length < 2) {
+    doctorSearchResults.value = []
+    doctorSearchPerformed.value = false
+    return
+  }
+  searchDebounceTimeout = setTimeout(() => {
+    searchDoctorsToAffiliate()
+  }, 400)
+}
+
+async function searchDoctorsToAffiliate () {
+  if (!doctorSearchQuery.value || doctorSearchQuery.value.trim().length < 2) {
+    doctorSearchResults.value = []
+    doctorSearchPerformed.value = false
+    return
+  }
+  searchingDoctors.value = true
+  doctorSearchPerformed.value = true
+  try {
+    const clinicId = activeClinicId.value || user.value?.clinicId || DEFAULT_CLINIC_ID
+    const res = await api.get(`/clinics/${clinicId}/doctors/search-to-affiliate`, {
+      params: { q: doctorSearchQuery.value.trim() }
+    })
+    doctorSearchResults.value = res.data || []
+  } catch (err) {
+    console.error('Error buscando médicos:', err)
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al buscar profesionales médicos.',
+      position: 'bottom-right'
+    })
+  } finally {
+    searchingDoctors.value = false
+  }
+}
+
+async function affiliateDoctor (doctor, mode = 'DIRECT') {
+  const clinicId = activeClinicId.value || user.value?.clinicId || DEFAULT_CLINIC_ID
+  affiliatingDoctorId.value = doctor.id
+  try {
+    const res = await api.post(
+      `/clinics/${clinicId}/doctors/${doctor.id}/affiliate`,
+      { mode },
+      { params: { mode } }
+    )
+    Notify.create({
+      type: 'positive',
+      message: res.data?.message || (mode === 'DIRECT' ? `Médico ${doctor.full_name || doctor.email} vinculado exitosamente.` : `Invitación enviada a ${doctor.email}.`),
+      position: 'bottom-right',
+      icon: 'verified'
+    })
+    if (mode === 'DIRECT') {
+      doctor.is_already_affiliated = true
+      doctor.affiliation_status = 'ACTIVE'
+    } else {
+      doctor.affiliation_status = 'PENDING'
+    }
+    await fetchUsers()
+  } catch (err) {
+    console.error('Error afiliando médico:', err)
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al vincular el profesional a la clínica.',
+      position: 'bottom-right'
+    })
+  } finally {
+    affiliatingDoctorId.value = null
+  }
+}
+
+function switchToCreateDoctor () {
+  form.role = 'DOCTOR'
+  const q = (doctorSearchQuery.value || '').trim()
+  if (q.includes('@')) {
+    form.email = q
+  } else if (/^\d+$/.test(q)) {
+    form.license_number = q
+  } else if (q.length > 0) {
+    form.full_name = q
+  }
+  activeModalTab.value = 'create_new'
 }
 
 async function submitCreateUser () {

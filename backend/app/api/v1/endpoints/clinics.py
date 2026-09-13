@@ -1,9 +1,11 @@
 """Endpoints para aprovisionamiento y consulta de clinicas/tenants (plan/plan.md seccion 2.B.0 y 2.B.1)."""
 
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, time, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,7 +19,13 @@ from app.models.clinic import Clinic
 from app.models.schedule import DoctorWeeklySchedule
 from app.models.user import DoctorScheduleLock, User
 from app.repositories.clinic_repository import ClinicRepository
-from app.schemas.clinic import ClinicCreateRequest, ClinicDoctorPublic, ClinicPublic
+from app.repositories.user_repository import UserRepository
+from app.schemas.clinic import (
+    ClinicCreateRequest,
+    ClinicDoctorPublic,
+    ClinicPublic,
+    DoctorSearchResult,
+)
 from app.schemas.clinic_user import (
     ALLOWED_CLINIC_ROLES,
     GLOBAL_ROLES,
@@ -143,6 +151,218 @@ async def list_clinic_doctors(
         doctors = list(result2.scalars().all())
 
     return doctors
+
+
+class DoctorAffiliateRequest(BaseModel):
+    mode: str = "DIRECT"  # "DIRECT" o "INVITE"
+
+
+@router.get("/{clinic_id}/doctors/search-to-affiliate", response_model=list[DoctorSearchResult])
+async def search_doctors_to_affiliate(
+    clinic_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_permission(Permission.DOCTORS_INVITE))],
+    q: Annotated[str, Query(description="Búsqueda por nombre, correo, cédula o matrícula")] = "",
+):
+    """Busca médicos registrados globalmente en VitaRecord para vincularlos o invitarlos a la sede."""
+    if current_user.role != "SUPERADMIN" and current_user.clinic_id != clinic_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "No tienes permisos para buscar médicos en otra clínica.",
+        )
+
+    clean_q = q.strip()
+    conditions = [
+        User.role == "DOCTOR",
+        ~User.email.like("%@clinica.com"),
+        ~User.email.like("dr.registrado.%"),
+        ~User.email.like("dr.nuevo.%"),
+    ]
+
+    if clean_q:
+        search_pattern = f"%{clean_q}%"
+        conditions.append(
+            or_(
+                User.full_name.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+                User.identification_number.ilike(search_pattern),
+                User.license_number.ilike(search_pattern),
+                User.specialty.ilike(search_pattern),
+            )
+        )
+
+    stmt = (
+        select(User, DoctorClinicAffiliation)
+        .outerjoin(
+            DoctorClinicAffiliation,
+            (DoctorClinicAffiliation.doctor_id == User.id)
+            & (DoctorClinicAffiliation.clinic_id == clinic_id),
+        )
+        .where(*conditions)
+        .order_by(User.full_name.asc())
+        .limit(25)
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    doctors_out: list[DoctorSearchResult] = []
+    for user_obj, aff in rows:
+        is_aff = (aff is not None and aff.status == "ACTIVE") or (user_obj.clinic_id == clinic_id)
+        aff_status = aff.status if aff else ("ACTIVE" if user_obj.clinic_id == clinic_id else None)
+        doctors_out.append(
+            DoctorSearchResult(
+                id=user_obj.id,
+                full_name=user_obj.full_name,
+                email=user_obj.email,
+                phone=user_obj.phone,
+                specialty=user_obj.specialty,
+                identification_number=user_obj.identification_number,
+                license_number=user_obj.license_number,
+                profile_picture_url=user_obj.profile_picture_url,
+                license_verification_status=user_obj.license_verification_status,
+                is_already_affiliated=is_aff,
+                affiliation_status=aff_status,
+                status=user_obj.status,
+            )
+        )
+    return doctors_out
+
+
+@router.post("/{clinic_id}/doctors/{doctor_id}/affiliate")
+async def affiliate_existing_doctor(
+    clinic_id: str,
+    doctor_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_permission(Permission.DOCTORS_INVITE))],
+    payload: DoctorAffiliateRequest | None = None,
+    mode: Annotated[str | None, Query(description="DIRECT o INVITE")] = None,
+):
+    """Vincula o invita a un médico existente a la clínica."""
+    if current_user.role != "SUPERADMIN" and current_user.clinic_id != clinic_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "No tienes permisos para afiliar médicos en otra clínica.",
+        )
+
+    clinic_repo = ClinicRepository(db)
+    clinic = await clinic_repo.get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    user_repo = UserRepository(db)
+    doctor = await user_repo.get_by_id(doctor_id)
+    if not doctor or doctor.role != "DOCTOR":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Médico no encontrado")
+
+    eff_mode = "DIRECT"
+    if payload and payload.mode:
+        eff_mode = payload.mode
+    elif mode:
+        eff_mode = mode
+    eff_mode = eff_mode.strip().upper()
+
+    if eff_mode == "INVITE":
+        from app.repositories.affiliation_repository import AffiliationRepository
+        from app.schemas.invitation import CreateInvitationRequest
+        from app.services.invitation_service import InvitationService
+
+        inv_service = InvitationService(db)
+        inv_res = await inv_service.invite_doctor(
+            clinic_id,
+            CreateInvitationRequest(
+                email=doctor.email,
+                full_name=doctor.full_name,
+                specialty=doctor.specialty,
+                phone=doctor.phone,
+            ),
+            inviting_user=current_user,
+        )
+        return {
+            "success": True,
+            "mode": "INVITE",
+            "message": f"Invitación formal enviada a {doctor.full_name or doctor.email}.",
+            "invitation_link": inv_res.invitation_link,
+            "status": "INVITED",
+        }
+    else:
+        # Modo DIRECT: vinculación inmediata
+        aff_stmt = select(DoctorClinicAffiliation).where(
+            DoctorClinicAffiliation.doctor_id == doctor.id,
+            DoctorClinicAffiliation.clinic_id == clinic_id,
+        )
+        aff = await db.scalar(aff_stmt)
+        if aff:
+            aff.status = "ACTIVE"
+            aff.responded_at = datetime.now(timezone.utc)
+        else:
+            aff = DoctorClinicAffiliation(
+                doctor_id=doctor.id,
+                clinic_id=clinic_id,
+                status="ACTIVE",
+                responded_at=datetime.now(timezone.utc),
+            )
+            db.add(aff)
+
+        # Fila mutex de agendamiento
+        lock = await db.scalar(select(DoctorScheduleLock).where(DoctorScheduleLock.doctor_id == doctor.id))
+        if not lock:
+            db.add(DoctorScheduleLock(doctor_id=doctor.id))
+
+        # Reactivar horarios existentes o crear horario base por defecto
+        schedules = (await db.scalars(
+            select(DoctorWeeklySchedule).where(
+                DoctorWeeklySchedule.doctor_id == doctor.id,
+                DoctorWeeklySchedule.clinic_id == clinic_id,
+            )
+        )).all()
+        if schedules:
+            for s in schedules:
+                s.is_active = True
+        else:
+            for day in range(6):
+                db.add(
+                    DoctorWeeklySchedule(
+                        id=str(uuid.uuid4()),
+                        doctor_id=doctor.id,
+                        clinic_id=clinic_id,
+                        day_of_week=day,
+                        start_time=time(8, 0),
+                        end_time=time(17, 0),
+                        slot_duration_minutes=30,
+                        is_active=True,
+                    )
+                )
+
+        await db.commit()
+
+        # Notificar por correo al médico de su afiliación directa
+        try:
+            email_html = build_branded_email_html(
+                title=f"Vinculación a {clinic.name}",
+                subtitle="Has sido afiliado/a activamente al equipo médico de la sede.",
+                content_html=(
+                    f"Hola Estimado/a Dr./Dra. <strong>{doctor.full_name or doctor.email}</strong>,<br/><br/>"
+                    f"La administración de <strong>{clinic.name}</strong> te ha vinculado a su plantilla médica activa en <strong>VitaRecord</strong>.<br/>"
+                    "Ya puedes configurar tus horarios de atención para esta sede y comenzar a recibir pacientes."
+                ),
+                cta_text="Ingresar a VitaRecord",
+                cta_link=f"{settings.FRONTEND_URL}/#/login",
+                details_table=[
+                    ("Clínica / Sede", clinic.name),
+                    ("Médico Especialista", doctor.full_name or doctor.email),
+                    ("Especialidad", doctor.specialty or "Medicina General"),
+                ],
+            )
+            await send_email(doctor.email, f"Afiliación médica activa: {clinic.name} - VitaRecord", email_html)
+        except Exception:
+            pass
+
+        return {
+            "success": True,
+            "mode": "DIRECT",
+            "message": f"El Dr./Dra. {doctor.full_name or doctor.email} ha sido vinculado exitosamente a {clinic.name}.",
+            "status": "ACTIVE",
+        }
 
 
 @router.get("/{clinic_id}/users", response_model=list[ClinicUserPublic])
@@ -362,6 +582,20 @@ async def create_clinic_user(
         db.add(affiliation)
 
         db.add(DoctorScheduleLock(doctor_id=new_user.id))
+
+        for day in range(6):
+            db.add(
+                DoctorWeeklySchedule(
+                    id=str(uuid.uuid4()),
+                    doctor_id=new_user.id,
+                    clinic_id=clinic_id,
+                    day_of_week=day,
+                    start_time=time(8, 0),
+                    end_time=time(17, 0),
+                    slot_duration_minutes=30,
+                    is_active=True,
+                )
+            )
 
         reset_token = create_password_reset_token(new_user.id)
         reset_url = f"{settings.FRONTEND_URL}/#/reset-password?token={reset_token}"

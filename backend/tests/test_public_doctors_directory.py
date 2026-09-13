@@ -203,10 +203,11 @@ async def test_doctor_clinic_disaffiliation(client: AsyncClient):
     remaining_ids = [c["id"] for c in prof_after.json().get("clinics", [])]
     assert clinic_id not in remaining_ids
 
-    # 4. Restaurar afiliación para no afectar otras suites de pruebas
+    # 4. Restaurar afiliación y horarios para no afectar otras suites ni el entorno en vivo
     from sqlalchemy import select
     from app.core.database import AsyncSessionLocal
     from app.models.affiliation import DoctorClinicAffiliation
+    from app.models.schedule import DoctorWeeklySchedule
     async with AsyncSessionLocal() as session:
         aff = await session.scalar(
             select(DoctorClinicAffiliation).where(
@@ -216,4 +217,14 @@ async def test_doctor_clinic_disaffiliation(client: AsyncClient):
         )
         if aff:
             aff.status = "ACTIVE"
-            await session.commit()
+
+        schedules = (await session.scalars(
+            select(DoctorWeeklySchedule).where(
+                DoctorWeeklySchedule.doctor_id == "u2222222-2222-2222-2222-222222222222",
+                DoctorWeeklySchedule.clinic_id == clinic_id,
+            )
+        )).all()
+        for s in schedules:
+            s.is_active = True
+
+        await session.commit()

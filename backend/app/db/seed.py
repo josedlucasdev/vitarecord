@@ -198,8 +198,8 @@ async def init_db_and_seed() -> None:
                 )
                 db.add(aff)
 
-                # Horario semanal de Lunes a Sábado (08:00 a 17:00)
-                for day in range(6):
+                # Horario semanal de Lunes a Domingo (08:00 a 17:00)
+                for day in range(7):
                     sched = DoctorWeeklySchedule(
                         doctor_id=doc.id,
                         clinic_id=target_clinic.id,

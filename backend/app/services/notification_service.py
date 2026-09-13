@@ -781,3 +781,47 @@ class NotificationService:
             appointment_id=appointment.id,
             metadata_payload=metadata,
         )
+
+    async def send_new_appointment_to_doctor(
+        self,
+        appointment: Appointment,
+        doctor: User,
+        patient: User,
+        clinic_name: str,
+        is_pending_approval: bool = False,
+    ) -> list[NotificationLog]:
+        """Notifica al médico que un paciente ha reservado o solicitado una cita en su agenda."""
+        date_str = appointment.start_time.strftime("%d/%m/%Y a las %H:%M")
+        patient_name = patient.full_name or patient.email
+        reason_text = appointment.reason or "Consulta médica general"
+
+        if is_pending_approval:
+            subject = f"Nueva solicitud de cita médica: {patient_name}"
+            message = (
+                f"El paciente {patient_name} ha solicitado una cita para el {date_str} "
+                f"en {clinic_name}. Motivo: {reason_text}. Pendiente de tu aprobación."
+            )
+            event_type = "APPOINTMENT_REQUEST"
+        else:
+            subject = f"Nueva cita agendada: {patient_name}"
+            message = (
+                f"El paciente {patient_name} ha confirmado una cita para el {date_str} "
+                f"en {clinic_name}. Motivo: {reason_text}."
+            )
+            event_type = "NEW_APPOINTMENT"
+
+        metadata = {
+            "type": event_type,
+            "appointment_id": appointment.id,
+            "patient_name": patient_name,
+            "scheduled_time": appointment.start_time.isoformat(),
+            "clinic_name": clinic_name,
+        }
+
+        return await self.send_multichannel_notification(
+            recipient=doctor,
+            subject=subject,
+            message=message,
+            appointment_id=appointment.id,
+            metadata_payload=metadata,
+        )
