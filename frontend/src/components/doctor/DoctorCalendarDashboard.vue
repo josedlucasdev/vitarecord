@@ -347,13 +347,13 @@
             class="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col md:flex-row items-stretch"
           >
             <!-- Franja Izquierda: Hora y Duración (En móvil se muestra como barra superior) -->
-            <div class="bg-slate-50/90 px-4 py-2.5 md:py-4 md:w-36 flex md:flex-col items-center justify-between md:justify-center text-center border-b md:border-b-0 md:border-r md:[border-right-style:dashed] border-slate-200/70 shrink-0 bg-white">
-              <div class="flex md:flex-col items-center md:items-center gap-2 md:gap-0">
-                <span class="text-xs font-extrabold text-slate-900 leading-tight">
+            <div class="bg-slate-50/90 px-4 py-2.5 md:py-3.5 md:w-36 flex md:flex-col items-center justify-between md:justify-center text-center md:gap-1.5 border-b md:border-b-0 md:border-r md:[border-right-style:dashed] border-slate-200/70 shrink-0 bg-white">
+              <div class="flex md:flex-col items-center justify-center gap-1 md:gap-0 leading-none">
+                <span class="text-xs font-extrabold text-slate-900 leading-none">
                   {{ formatTime(app.start_time) }}
                 </span>
-                <span class="text-3xs text-slate-400 md:my-0.5">-</span>
-                <span class="text-xs font-semibold text-slate-700 leading-tight">
+                <span class="text-3xs text-slate-400 leading-none my-0">-</span>
+                <span class="text-xs font-semibold text-slate-700 leading-none">
                   {{ formatTime(app.end_time) }}
                 </span>
               </div>
