@@ -240,6 +240,32 @@
                 </div>
               </div>
             </div>
+
+            <!-- Procedimientos Realizados (si existen) -->
+            <div v-if="appointment?.procedures?.length" class="p-4 bg-teal-50/50 rounded-xl border border-teal-200 space-y-2">
+              <div class="font-bold text-slate-800 flex items-center justify-between text-xs">
+                <div class="flex items-center">
+                  <q-icon name="healing" size="18px" class="mr-1.5 text-teal-600" />
+                  Procedimientos Médicos Aplicados en Consulta ({{ appointment.procedures.length }})
+                </div>
+                <span class="text-xs font-black text-teal-900">
+                  Total Liquidado: ${{ Number(appointment.payment_amount || 0).toFixed(2) }} {{ appointment.currency || 'USD' }}
+                </span>
+              </div>
+              <div class="divide-y divide-teal-100/70 pt-1">
+                <div
+                  v-for="proc in appointment.procedures"
+                  :key="proc.id"
+                  class="py-1.5 flex items-center justify-between text-2xs"
+                >
+                  <div>
+                    <span class="font-bold text-slate-800">{{ proc.name }}</span>
+                    <span v-if="proc.notes" class="text-slate-500 italic ml-2">({{ proc.notes }})</span>
+                  </div>
+                  <span class="font-bold text-teal-800">+${{ Number(proc.price).toFixed(2) }} USD</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -355,13 +381,86 @@
           </div>
         </div>
 
-        <!-- 4. Emisión de Receta Médica con Código QR -->
+        <!-- 4. Procedimientos Médicos Especializados Realizados en Consulta -->
+        <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+            <div>
+              <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center">
+                <q-icon name="healing" size="18px" class="mr-2 text-teal-600" />
+                4. Procedimientos Médicos Especializados
+              </h2>
+              <p class="text-xs text-slate-400 mt-0.5">
+                Procedimientos adicionales realizados en la atención. Se suman y registran automáticamente en el cobro de caja.
+              </p>
+            </div>
+            <q-btn
+              color="teal-8"
+              icon="add"
+              label="Agregar Procedimiento Realizado"
+              no-caps
+              dense
+              class="text-xs px-3 py-1 font-bold shadow-xs"
+              @click="openAddProcedureModal"
+            />
+          </div>
+
+          <!-- Si no hay procedimientos agregados -->
+          <div
+            v-if="!appointment.procedures || appointment.procedures.length === 0"
+            class="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center text-xs text-slate-500 space-y-1"
+          >
+            <div>No se han registrado procedimientos complementarios para esta cita.</div>
+            <div class="text-2xs text-slate-400">
+              Aplica únicamente la consulta base de <strong>${{ Number(appointment.consultation_fee || 35).toFixed(2) }} USD</strong>. Si realizaste una ecografía, citología o procedimiento especial, agrégalo arriba.
+            </div>
+          </div>
+
+          <!-- Lista de procedimientos agregados -->
+          <div v-else class="space-y-2.5">
+            <div
+              v-for="(proc, pIdx) in appointment.procedures"
+              :key="proc.id || pIdx"
+              class="p-3.5 bg-teal-50/50 border border-teal-200/80 rounded-xl flex items-center justify-between text-xs"
+            >
+              <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center font-bold">
+                  <q-icon name="medical_services" size="16px" />
+                </div>
+                <div>
+                  <div class="font-bold text-slate-900">{{ proc.name }}</div>
+                  <div v-if="proc.notes" class="text-2xs text-slate-500 italic">{{ proc.notes }}</div>
+                </div>
+              </div>
+
+              <div class="text-right">
+                <div class="font-black text-teal-900 text-sm">
+                  +${{ Number(proc.price).toFixed(2) }} {{ proc.currency || 'USD' }}
+                </div>
+                <div class="text-3xs font-semibold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded inline-block mt-0.5">
+                  Liquidado en Caja
+                </div>
+              </div>
+            </div>
+
+            <!-- Resumen Total Consulta + Procedimientos -->
+            <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs bg-slate-50 p-3 rounded-xl">
+              <span class="text-slate-600 font-medium">
+                Honorarios totales a cobrar en caja (Consulta Base ${{ Number(appointment.consultation_fee || 35).toFixed(2) }} + Procedimientos):
+              </span>
+              <span class="text-base font-black text-slate-900">
+                ${{ Number(appointment.payment_amount || 0).toFixed(2) }} {{ appointment.currency || 'USD' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Emisión de Receta Médica con Código QR -->
         <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 space-y-5">
           <div class="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
               <h2 class="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center">
                 <q-icon name="receipt_long" size="18px" class="mr-2 text-teal-600" />
-                4. Receta Médica Digital con Código QR (SHA-256)
+                5. Receta Médica Digital con Código QR (SHA-256)
               </h2>
               <p class="text-xs text-slate-400 mt-0.5">Permite a las farmacias validar la autenticidad sin acceder a datos íntimos.</p>
             </div>
@@ -845,11 +944,102 @@
         </div>
       </q-card>
     </q-dialog>
+
+    <!-- Modal para Agregar Procedimiento Intra-Consulta -->
+    <q-dialog v-model="showAddProcModal">
+      <q-card style="min-width: 440px; max-width: 520px; border-radius: 16px;">
+        <q-card-section class="bg-teal-700 text-white p-4 flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <q-icon name="healing" size="22px" />
+            <h3 class="font-bold text-sm">Registrar Procedimiento Realizado</h3>
+          </div>
+          <q-btn flat round dense icon="close" text-color="white" v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="p-5 space-y-4">
+          <div class="p-3 bg-teal-50 border border-teal-200 rounded-xl text-xs text-teal-900 space-y-1">
+            <div class="font-bold flex items-center gap-1.5">
+              <q-icon name="point_of_sale" size="16px" color="teal" />
+              Impacto Inmediato en Arqueo de Caja:
+            </div>
+            <p class="text-2xs text-teal-800 m-0 leading-relaxed">
+              Al agregar este procedimiento, el importe a liquidar del paciente en caja se actualizará automáticamente con el desglose correspondiente.
+            </p>
+          </div>
+
+          <!-- Selector del Catálogo si existe -->
+          <div v-if="availableProcedures.length > 0">
+            <label class="block text-xs font-bold text-slate-700 mb-1">Elegir del Catálogo de la Sede</label>
+            <q-select
+              v-model="selectedCatalogProc"
+              :options="availableProcedures"
+              option-label="label"
+              outlined
+              dense
+              clearable
+              placeholder="Seleccionar procedimiento..."
+              @update:model-value="onSelectCatalogProc"
+            />
+          </div>
+
+          <div class="space-y-3 pt-1">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Nombre del Procedimiento *</label>
+              <q-input
+                v-model="newProcForm.name"
+                outlined
+                dense
+                placeholder="Ej. Ecografía Pélvica / Citología Especializada"
+                required
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Monto a Facturar en Caja (USD) *</label>
+              <q-input
+                v-model.number="newProcForm.price"
+                type="number"
+                step="0.01"
+                min="0"
+                outlined
+                dense
+                prefix="$"
+                suffix="USD"
+                required
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Observaciones / Hallazgo Rápido (Opcional)</label>
+              <q-input
+                v-model="newProcForm.notes"
+                outlined
+                dense
+                placeholder="Ej. Realizado con transductor endocavitario, sin dolor."
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-end space-x-2 pt-3 border-t border-slate-100">
+            <q-btn flat label="Cancelar" no-caps v-close-popup />
+            <q-btn
+              color="teal-8"
+              icon="add_circle"
+              label="Agregar y Cargar a Caja"
+              no-caps
+              class="font-semibold"
+              :loading="savingProcedure"
+              @click="submitAddProcedure"
+            />
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from 'boot/axios'
 import { Notify } from 'quasar'
@@ -863,6 +1053,19 @@ const loadingAppointment = ref(true)
 const submitting = ref(false)
 const showSuccessModal = ref(false)
 const createdRecord = ref(null)
+
+// Procedimientos y servicios en consulta
+const showAddProcModal = ref(false)
+const availableProcedures = ref([])
+const selectedCatalogProc = ref(null)
+const savingProcedure = ref(false)
+const newProcForm = reactive({
+  procedure_id: null,
+  name: '',
+  price: 0,
+  currency: 'USD',
+  notes: ''
+})
 
 // Estados de Historial Clínico y Farmacovigilancia
 const patientHistory = ref([])
@@ -1044,6 +1247,9 @@ async function fetchAppointment () {
       if (match.status === 'COMPLETED') {
         fetchAppointmentRecord(match.id)
       }
+      if (match.clinic_id) {
+        fetchAvailableProcedures(match.clinic_id, match.doctor_id)
+      }
     } else {
       Notify.create({ type: 'warning', message: 'No se encontró la cita especificada.' })
     }
@@ -1120,6 +1326,75 @@ async function downloadPdf (prescriptionId) {
 function openQrPublic (hash) {
   const routeData = router.resolve({ path: `/verify-prescription/${hash}` })
   window.open(routeData.href, '_blank')
+}
+
+async function fetchAvailableProcedures (clinicId, doctorId) {
+  if (!clinicId) return
+  try {
+    const params = {}
+    if (doctorId) params.doctor_id = doctorId
+    const res = await api.get(`/clinics/${clinicId}/procedures`, { params })
+    availableProcedures.value = (res.data || []).map(p => ({
+      ...p,
+      label: `${p.name} - $${Number(p.price).toFixed(2)} USD`
+    }))
+  } catch (err) {
+    console.error('Error cargando catálogo de procedimientos:', err)
+  }
+}
+
+function openAddProcedureModal () {
+  selectedCatalogProc.value = null
+  newProcForm.procedure_id = null
+  newProcForm.name = ''
+  newProcForm.price = 0
+  newProcForm.currency = 'USD'
+  newProcForm.notes = ''
+  showAddProcModal.value = true
+}
+
+function onSelectCatalogProc (proc) {
+  if (!proc) {
+    newProcForm.procedure_id = null
+    return
+  }
+  newProcForm.procedure_id = proc.id
+  newProcForm.name = proc.name
+  newProcForm.price = Number(proc.price)
+  newProcForm.currency = proc.currency || 'USD'
+}
+
+async function submitAddProcedure () {
+  if (!newProcForm.name || newProcForm.price == null || Number(newProcForm.price) < 0) {
+    Notify.create({ type: 'warning', message: 'Indica el nombre y un precio válido para el procedimiento.' })
+    return
+  }
+  savingProcedure.value = true
+  try {
+    const payload = {
+      procedure_id: newProcForm.procedure_id || null,
+      name: newProcForm.name,
+      price: Number(newProcForm.price),
+      currency: newProcForm.currency || 'USD',
+      notes: newProcForm.notes || null
+    }
+    const res = await api.post(`/appointments/${appointment.value.id}/procedures`, payload)
+    appointment.value = res.data
+    Notify.create({
+      type: 'positive',
+      message: `Procedimiento "${newProcForm.name}" agregado exitosamente. Monto en caja actualizado.`,
+      icon: 'verified'
+    })
+    showAddProcModal.value = false
+  } catch (err) {
+    console.error('Error al agregar procedimiento:', err)
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'No se pudo registrar el procedimiento.'
+    })
+  } finally {
+    savingProcedure.value = false
+  }
 }
 
 onMounted(() => {

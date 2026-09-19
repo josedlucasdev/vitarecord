@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from pydantic import BaseModel, EmailStr, Field, computed_field
 
 
@@ -31,6 +32,9 @@ class ClinicUserPublic(BaseModel):
     specialty: str | None = None
     license_number: str | None = None
     created_at: datetime | None = None
+    contract_type: str | None = None
+    consultation_fee: Decimal | None = None
+    currency: str | None = "USD"
 
     @computed_field
     @property
@@ -38,4 +42,5 @@ class ClinicUserPublic(BaseModel):
         return self.role in TENANT_ROLES
 
     model_config = {"from_attributes": True}
+
 

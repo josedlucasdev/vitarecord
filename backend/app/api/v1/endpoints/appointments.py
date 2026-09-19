@@ -14,7 +14,9 @@ from app.schemas.appointment import (
     AppointmentPublic,
     PublicAppointmentCreate,
 )
+from app.schemas.procedure import AppointmentProcedureCreate
 from app.services.appointment_service import AppointmentService
+
 
 router = APIRouter()
 
@@ -141,3 +143,16 @@ async def cancel_appointment(
     """Cancelación oportuna de cita: libera el slot y actualiza el pago a VOID."""
     service = AppointmentService(db)
     return await service.cancel_appointment(appointment_id, payload.cancellation_reason, current_user)
+
+
+@router.post("/{appointment_id}/procedures", response_model=AppointmentPublic)
+async def add_appointment_procedure(
+    appointment_id: str,
+    payload: AppointmentProcedureCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Agrega un procedimiento clínico realizado a una cita (en consulta médica) y recalcula la caja."""
+    service = AppointmentService(db)
+    return await service.add_procedure_to_appointment(appointment_id, payload, current_user)
+

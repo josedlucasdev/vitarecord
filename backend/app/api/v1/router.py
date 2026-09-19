@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     medical_records,
     notifications,
     payments,
+    procedures,
     rooms,
     webhooks,
 )
@@ -28,8 +29,10 @@ api_router.include_router(doctor_verification.router, tags=["doctor-verification
 api_router.include_router(rooms.router, tags=["rooms"])
 api_router.include_router(availability.router, tags=["availability"])
 api_router.include_router(appointments.router, prefix="/appointments", tags=["appointments"])
+api_router.include_router(procedures.router, tags=["procedures"])
 api_router.include_router(dependents.router, tags=["dependents"])
 api_router.include_router(payments.router, tags=["payments"])
+
 api_router.include_router(emergencies.router, prefix="/emergencies", tags=["emergencies"])
 api_router.include_router(medical_records.router, prefix="/medical-records", tags=["medical-records"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])

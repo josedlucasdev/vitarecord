@@ -202,6 +202,16 @@
               <span class="mx-2">•</span>
               Fecha Cita: <span class="font-semibold text-slate-700">{{ formatDate(app.start_time) }} {{ formatTime(app.start_time) }}</span>
             </div>
+            <!-- Badge de Procedimientos extras si existen -->
+            <div v-if="app.procedures && app.procedures.length > 0" class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+              <q-badge color="teal-1" text-color="teal-9" class="text-2xs font-semibold py-0.5 px-2">
+                <q-icon name="healing" size="12px" class="mr-1" />
+                {{ app.procedures.length }} proc. adicional{{ app.procedures.length > 1 ? 'es' : '' }}
+              </q-badge>
+              <span class="text-2xs text-slate-400 font-mono">
+                (Consulta: ${{ Number(app.consultation_fee || 0).toFixed(2) }} + Proc: ${{ Number((app.payment_amount || 0) - (app.consultation_fee || 0)).toFixed(2) }})
+              </span>
+            </div>
           </div>
 
           <div class="flex items-center gap-3">
@@ -243,6 +253,48 @@
             <div><strong>Paciente:</strong> {{ currentApp?.patient_name }}</div>
             <div><strong>Especialista:</strong> {{ currentApp?.doctor_name }}</div>
             <div><strong>Fecha:</strong> {{ formatDate(currentApp?.start_time) }} {{ formatTime(currentApp?.start_time) }}</div>
+          </div>
+
+          <!-- Desglose de Liquidación Contable (Consulta + Procedimientos) -->
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+            <div class="font-bold text-slate-700 flex items-center justify-between border-b border-slate-200 pb-1.5">
+              <span class="flex items-center gap-1">
+                <q-icon name="receipt_long" size="16px" color="teal" />
+                Desglose Itemizado de Cobro
+              </span>
+              <span class="text-2xs text-slate-400 font-normal">Arqueo por concepto</span>
+            </div>
+
+            <!-- Fila Consulta Médica Base -->
+            <div class="flex items-center justify-between text-slate-600">
+              <span>Consulta Médica Especializada:</span>
+              <span class="font-semibold text-slate-800 font-mono">
+                ${{ Number(currentApp?.consultation_fee || (currentApp?.payment_amount && (!currentApp?.procedures || currentApp.procedures.length === 0) ? currentApp.payment_amount : 35)).toFixed(2) }} USD
+              </span>
+            </div>
+
+            <!-- Filas Procedimientos Adicionales -->
+            <template v-if="currentApp?.procedures && currentApp.procedures.length > 0">
+              <div
+                v-for="proc in currentApp.procedures"
+                :key="proc.id"
+                class="flex items-center justify-between text-slate-600 pl-2 border-l-2 border-teal-500 py-0.5"
+              >
+                <div class="truncate max-w-[230px]">
+                  <span class="font-medium text-slate-800">{{ proc.name }}</span>
+                  <span v-if="proc.notes" class="text-3xs text-slate-400 block italic">({{ proc.notes }})</span>
+                </div>
+                <span class="font-semibold text-teal-800 font-mono shrink-0">+${{ Number(proc.price).toFixed(2) }} USD</span>
+              </div>
+            </template>
+
+            <!-- Total General -->
+            <div class="flex items-center justify-between pt-2 border-t border-slate-200 font-bold text-slate-900">
+              <span>Total a Liquidar:</span>
+              <span class="text-base font-black text-teal-900 font-mono">
+                ${{ Number(currentApp?.payment_amount || payForm.amount).toFixed(2) }} USD
+              </span>
+            </div>
           </div>
 
           <form class="space-y-4" @submit.prevent="submitPayment">

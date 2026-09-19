@@ -213,6 +213,26 @@
             <span class="text-slate-500">Matrícula:</span>
             <span class="font-mono text-slate-700">{{ u.license_number }}</span>
           </div>
+
+          <!-- Doctor Contract & Pricing details -->
+          <div v-if="u.role === 'DOCTOR'" class="pt-2 border-t border-slate-100 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">Modalidad:</span>
+              <span
+                class="px-2 py-0.5 rounded-full text-2xs font-semibold flex items-center gap-1"
+                :class="u.contract_type === 'INDEPENDENT' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-800 border border-blue-200'"
+              >
+                <q-icon :name="u.contract_type === 'INDEPENDENT' ? 'storefront' : 'badge'" size="12px" />
+                {{ u.contract_type === 'INDEPENDENT' ? 'Autónomo (Alquiler)' : 'Contratado' }}
+              </span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500">Tarifa Consulta:</span>
+              <span class="font-bold text-slate-800">
+                ${{ Number(u.consultation_fee || 35).toFixed(2) }} {{ u.currency || 'USD' }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <!-- Footer Actions -->
@@ -270,20 +290,37 @@
 
           <!-- Acciones para Usuario Global (Médico / Paciente) -->
           <template v-else>
-            <!-- Desvincular de la Sede -->
-            <q-btn
-              flat
-              dense
-              color="deep-orange-9"
-              icon="link_off"
-              label="Desvincular"
-              no-caps
-              class="text-xs font-semibold"
-              :loading="toggleLoadingId === u.id"
-              @click="confirmDisaffiliate(u)"
-            >
-              <q-tooltip>Desvincular de esta sede (su cuenta general permanece activa)</q-tooltip>
-            </q-btn>
+            <div class="flex items-center gap-1">
+              <!-- Configurar Contrato / Honorarios (Solo Médicos) -->
+              <q-btn
+                v-if="u.role === 'DOCTOR' && can('staff:manage')"
+                flat
+                dense
+                color="teal-8"
+                icon="tune"
+                label="Contrato"
+                no-caps
+                class="text-xs font-semibold"
+                @click="openDoctorContractDialog(u)"
+              >
+                <q-tooltip>Modificar modalidad (Contratado vs Autónomo) y tarifa de consulta</q-tooltip>
+              </q-btn>
+
+              <!-- Desvincular de la Sede -->
+              <q-btn
+                flat
+                dense
+                color="deep-orange-9"
+                icon="link_off"
+                label="Desvincular"
+                no-caps
+                class="text-xs font-semibold"
+                :loading="toggleLoadingId === u.id"
+                @click="confirmDisaffiliate(u)"
+              >
+                <q-tooltip>Desvincular de esta sede (su cuenta general permanece activa)</q-tooltip>
+              </q-btn>
+            </div>
           </template>
         </div>
       </div>
@@ -636,6 +673,90 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <!-- Dialog para Configurar Contrato y Honorarios de Médico -->
+    <q-dialog v-model="showContractDialog">
+      <q-card style="min-width: 440px; max-width: 520px; border-radius: 16px;">
+        <q-card-section class="bg-teal-700 text-white p-4 flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <q-icon name="tune" size="22px" />
+            <h3 class="font-bold text-sm">Configuración de Contrato y Honorarios</h3>
+          </div>
+          <q-btn flat round dense icon="close" text-color="white" v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="p-5 space-y-4">
+          <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1">
+            <div class="font-bold text-slate-900">{{ contractDoctorTarget?.full_name || contractDoctorTarget?.email }}</div>
+            <div class="text-slate-500">{{ contractDoctorTarget?.specialty || 'Especialista Médico' }}</div>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1.5">Modalidad de Vinculación / Contrato *</label>
+              <div class="space-y-2">
+                <label
+                  class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all"
+                  :class="contractForm.contract_type === 'EMPLOYED' ? 'border-teal-500 bg-teal-50/50' : 'border-slate-200 hover:bg-slate-50'"
+                >
+                  <q-radio v-model="contractForm.contract_type" val="EMPLOYED" dense />
+                  <div class="text-xs">
+                    <span class="font-bold text-slate-900 block">Médico Contratado / Institucional</span>
+                    <span class="text-slate-500 text-2xs leading-tight block mt-0.5">
+                      La clínica contrata y remunera al profesional. La clínica define el precio de la consulta y el catálogo de procedimientos institucionales.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  class="flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all"
+                  :class="contractForm.contract_type === 'INDEPENDENT' ? 'border-amber-500 bg-amber-50/50' : 'border-slate-200 hover:bg-slate-50'"
+                >
+                  <q-radio v-model="contractForm.contract_type" val="INDEPENDENT" dense />
+                  <div class="text-xs">
+                    <span class="font-bold text-slate-900 block">Médico Autónomo / Alquiler de Consultorio</span>
+                    <span class="text-slate-500 text-2xs leading-tight block mt-0.5">
+                      La clínica alquila el espacio físico. El médico define libremente el precio de su consulta y sus procedimientos médicos propios.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">
+                Tarifa Base de Consulta en esta Sede (USD) *
+              </label>
+              <q-input
+                v-model.number="contractForm.consultation_fee"
+                type="number"
+                step="0.01"
+                min="0"
+                outlined
+                dense
+                prefix="$"
+                suffix="USD"
+              />
+              <p class="text-2xs text-slate-400 mt-1">
+                {{ contractForm.contract_type === 'INDEPENDENT' ? 'El médico también podrá ajustar este monto directamente desde su perfil.' : 'Fijado por la administración de la clínica.' }}
+              </p>
+            </div>
+          </div>
+
+          <div class="flex justify-end space-x-3 pt-3 border-t border-slate-100">
+            <q-btn flat label="Cancelar" no-caps v-close-popup />
+            <q-btn
+              color="primary"
+              label="Guardar Configuración"
+              no-caps
+              class="font-semibold shadow-sm"
+              :loading="savingContract"
+              @click="submitDoctorContract"
+            />
+          </div>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -672,6 +793,15 @@ const showRoleDialog = ref(false)
 const roleTargetUser = ref(null)
 const newRoleSelection = ref('RECEPTIONIST')
 const roleUpdating = ref(false)
+
+const showContractDialog = ref(false)
+const contractDoctorTarget = ref(null)
+const savingContract = ref(false)
+const contractForm = reactive({
+  contract_type: 'EMPLOYED',
+  consultation_fee: 35.00,
+  currency: 'USD'
+})
 
 const roleTabs = [
   { label: 'Todos', value: 'ALL' },
@@ -1107,6 +1237,49 @@ function confirmDisaffiliate (targetUser) {
       toggleLoadingId.value = null
     }
   })
+}
+
+function openDoctorContractDialog (doctor) {
+  contractDoctorTarget.value = doctor
+  contractForm.contract_type = doctor.contract_type || 'EMPLOYED'
+  contractForm.consultation_fee = doctor.consultation_fee != null ? Number(doctor.consultation_fee) : 35.00
+  contractForm.currency = doctor.currency || 'USD'
+  showContractDialog.value = true
+}
+
+async function submitDoctorContract () {
+  if (!contractDoctorTarget.value) return
+  savingContract.value = true
+  const clinicId = activeClinicId.value || user.value?.clinicId || DEFAULT_CLINIC_ID
+
+  try {
+    const payload = {
+      contract_type: contractForm.contract_type,
+      consultation_fee: contractForm.consultation_fee,
+      currency: contractForm.currency || 'USD'
+    }
+    const res = await api.put(`/clinics/${clinicId}/doctors/${contractDoctorTarget.value.id}/contract`, payload)
+    Notify.create({
+      type: 'positive',
+      message: res.data?.message || 'Contrato y tarifa actualizados exitosamente.',
+      position: 'bottom-right',
+      icon: 'verified'
+    })
+    contractDoctorTarget.value.contract_type = contractForm.contract_type
+    contractDoctorTarget.value.consultation_fee = contractForm.consultation_fee
+    contractDoctorTarget.value.currency = contractForm.currency
+    showContractDialog.value = false
+    await fetchUsers()
+  } catch (err) {
+    console.error('Error actualizando contrato:', err)
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'No se pudo actualizar la modalidad contractual.',
+      position: 'bottom-right'
+    })
+  } finally {
+    savingContract.value = false
+  }
 }
 
 onMounted(async () => {

@@ -68,24 +68,30 @@ async def init_db_and_seed() -> None:
             except Exception:
                 pass
 
-        try:
-            await conn.exec_driver_sql("ALTER TABLE notification_logs MODIFY COLUMN external_message_id VARCHAR(500) NULL")
-        except Exception:
-            pass
-
-
+        # Asegurar columnas de tipo de contrato y honorarios en doctor_clinic_affiliations
+        for col_def in [
+            "ADD COLUMN contract_type VARCHAR(32) NOT NULL DEFAULT 'INDEPENDENT'",
+            "ADD COLUMN consultation_fee DECIMAL(10,2) NOT NULL DEFAULT 30.00",
+            "ADD COLUMN currency VARCHAR(8) NOT NULL DEFAULT 'USD'",
+        ]:
+            try:
+                await conn.exec_driver_sql(f"ALTER TABLE doctor_clinic_affiliations {col_def}")
+            except Exception:
+                pass  # Columna ya existe
 
     async with AsyncSessionLocal() as db:
         # Verificar si ya existe el usuario superadmin
         stmt = select(User).where(User.email == "admin@intimasalud.com")
         existing_admin = (await db.execute(stmt)).scalar_one_or_none()
         if existing_admin:
-            logger.info("Base de datos ya cuenta con datos semilla. Enriqueciendo perfiles médicos y consultorios...")
+            logger.info("Base de datos ya cuenta con datos semilla. Enriqueciendo perfiles médicos, consultorios y procedimientos...")
             await enrich_doctors_profiles(db)
             await enrich_clinic_rooms(db)
+            await enrich_procedures(db)
             return
 
         logger.info("Poblando base de datos con usuarios y clinica de prueba...")
+
 
         # 1. Cinco Clínicas / Sedes Principales
         clinics_data = [
@@ -414,4 +420,69 @@ async def enrich_clinic_rooms(db: AsyncSession) -> None:
     if modified:
         await db.commit()
         logger.info("Consultorios físicos enriquecidos con especialidades y estado exitosamente.")
+
+
+async def enrich_procedures(db: AsyncSession) -> None:
+    """Asegura la existencia de catálogo de procedimientos y actualiza afiliaciones existentes."""
+    from decimal import Decimal
+    from app.models.clinic import Clinic
+    from app.models.affiliation import DoctorClinicAffiliation
+    from app.models.procedure import MedicalProcedure
+
+    # 1. Asegurar valores por defecto en DoctorClinicAffiliation
+    aff_res = await db.execute(select(DoctorClinicAffiliation))
+    affiliations = list(aff_res.scalars().all())
+    aff_modified = False
+    for aff in affiliations:
+        if not getattr(aff, "contract_type", None):
+            aff.contract_type = "INDEPENDENT"
+            aff_modified = True
+        if getattr(aff, "consultation_fee", None) is None:
+            aff.consultation_fee = Decimal("30.00")
+            aff_modified = True
+        if not getattr(aff, "currency", None):
+            aff.currency = "USD"
+            aff_modified = True
+    if aff_modified:
+        await db.commit()
+
+    # 2. Catálogo institucional de procedimientos para cada clínica
+    cl_res = await db.execute(select(Clinic))
+    clinics = list(cl_res.scalars().all())
+    if not clinics:
+        return
+
+    sample_procedures = [
+        ("Ecografía Pélvica / Transvaginal", "Evaluación ginecológica y pélvica de alta resolución", Decimal("35.00"), 20, "Ecografía"),
+        ("Colposcopia y Vulvoscopia", "Evaluación óptica amplificada del cuello uterino", Decimal("40.00"), 25, "Diagnóstico"),
+        ("Citología Cervical (Papanicolaou)", "Toma de muestra celular para despistaje oncológico", Decimal("15.00"), 10, "Laboratorio"),
+        ("Biopsia de Cuello Uterino", "Toma de tejido cervical dirigida para estudio histopatológico", Decimal("50.00"), 30, "Procedimiento Quirúrgico Menor"),
+        ("Cauterización de Lesión Cervical", "Tratamiento de ectopia o lesiones benignas", Decimal("60.00"), 30, "Procedimiento Quirúrgico Menor"),
+        ("Inserción / Retiro de DIU", "Colocación o extracción de dispositivo intrauterino", Decimal("45.00"), 20, "Planificación Familiar"),
+    ]
+
+    added = False
+    for cl in clinics:
+        p_res = await db.execute(select(MedicalProcedure).where(MedicalProcedure.clinic_id == cl.id))
+        existing_procs = list(p_res.scalars().all())
+        if not existing_procs:
+            for name, desc, price, dur, cat in sample_procedures:
+                proc = MedicalProcedure(
+                    clinic_id=cl.id,
+                    doctor_id=None,  # Catálogo institucional regulado por la clínica
+                    name=name,
+                    description=desc,
+                    price=price,
+                    currency="USD",
+                    duration_minutes=dur,
+                    category=cat,
+                    is_active=True,
+                )
+                db.add(proc)
+                added = True
+
+    if added:
+        await db.commit()
+        logger.info("Catálogo de procedimientos clínicos inicializado exitosamente.")
+
 

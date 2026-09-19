@@ -4,11 +4,14 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import select
 from app.core.config import settings
 from app.core.redis import get_redis
 from app.core.security import create_patient_invitation_token
+from app.models.affiliation import DoctorClinicAffiliation
 from app.models.appointment import Appointment
 from app.models.payment_record import PaymentRecord
+from app.models.procedure import AppointmentProcedure, MedicalProcedure
 from app.models.user import User
 from app.repositories.appointment_repository import AppointmentRepository
 from app.repositories.clinic_repository import ClinicRepository
@@ -21,8 +24,13 @@ from app.schemas.appointment import (
     AppointmentPublic,
     PublicAppointmentCreate,
 )
+from app.schemas.procedure import (
+    AppointmentProcedureCreate,
+    AppointmentProcedurePublic,
+)
 from app.services.availability_service import is_room_open_at, is_specialty_compatible
 from app.services.email_service import build_branded_email_html, send_email
+
 
 logger = logging.getLogger("appointment_service")
 
@@ -200,17 +208,45 @@ class AppointmentService:
         )
         await self.appointments.create(appointment)
 
-        # 7. Registro contable inicial (UNPAID)
+        # 7. Obtener tarifa de consulta del médico en la sede y registrar procedimientos
+        aff_stmt = select(DoctorClinicAffiliation).where(
+            DoctorClinicAffiliation.doctor_id == payload.doctor_id,
+            DoctorClinicAffiliation.clinic_id == payload.clinic_id,
+            DoctorClinicAffiliation.status == "ACTIVE",
+        )
+        aff = (await self.db.execute(aff_stmt)).scalar_one_or_none()
+        base_fee = aff.consultation_fee if (aff and aff.consultation_fee is not None) else Decimal("30.00")
+        curr = aff.currency if (aff and aff.currency) else (payload.currency or "USD")
+
+        procedures_total = Decimal("0.00")
+        if payload.procedure_ids:
+            p_stmt = select(MedicalProcedure).where(MedicalProcedure.id.in_(payload.procedure_ids))
+            selected_procs = list((await self.db.execute(p_stmt)).scalars().all())
+            for sp in selected_procs:
+                ap = AppointmentProcedure(
+                    appointment_id=appointment.id,
+                    procedure_id=sp.id,
+                    name=sp.name,
+                    price=sp.price,
+                    currency=sp.currency,
+                )
+                self.db.add(ap)
+                procedures_total += sp.price
+
+        total_amount = base_fee + procedures_total
+
+        # Registro contable inicial (UNPAID)
         payment = PaymentRecord(
             appointment_id=appointment.id,
             clinic_id=payload.clinic_id,
-            amount=payload.estimated_amount or Decimal("30.00"),
-            currency=payload.currency or "USD",
+            amount=total_amount,
+            currency=curr,
             status="UNPAID",
         )
         await self.payments.create(payment)
 
         await self.db.commit()
+
 
         # 8. Invalidar caché en Redis para el médico y toda la clínica
         await self._invalidate_redis_slots(payload.clinic_id, payload.doctor_id, payload.start_time)
@@ -511,17 +547,45 @@ class AppointmentService:
         )
         await self.appointments.create(appointment)
 
-        # 7. Registro contable inicial (UNPAID)
+        # 7. Obtener tarifa de consulta del médico en la sede y registrar procedimientos
+        aff_stmt = select(DoctorClinicAffiliation).where(
+            DoctorClinicAffiliation.doctor_id == payload.doctor_id,
+            DoctorClinicAffiliation.clinic_id == payload.clinic_id,
+            DoctorClinicAffiliation.status == "ACTIVE",
+        )
+        aff = (await self.db.execute(aff_stmt)).scalar_one_or_none()
+        base_fee = aff.consultation_fee if (aff and aff.consultation_fee is not None) else Decimal("30.00")
+        curr = aff.currency if (aff and aff.currency) else (payload.currency or "USD")
+
+        procedures_total = Decimal("0.00")
+        if payload.procedure_ids:
+            p_stmt = select(MedicalProcedure).where(MedicalProcedure.id.in_(payload.procedure_ids))
+            selected_procs = list((await self.db.execute(p_stmt)).scalars().all())
+            for sp in selected_procs:
+                ap = AppointmentProcedure(
+                    appointment_id=appointment.id,
+                    procedure_id=sp.id,
+                    name=sp.name,
+                    price=sp.price,
+                    currency=sp.currency,
+                )
+                self.db.add(ap)
+                procedures_total += sp.price
+
+        total_amount = base_fee + procedures_total
+
+        # Registro contable inicial (UNPAID)
         payment = PaymentRecord(
             appointment_id=appointment.id,
             clinic_id=payload.clinic_id,
-            amount=payload.estimated_amount or Decimal("30.00"),
-            currency=payload.currency or "USD",
+            amount=total_amount,
+            currency=curr,
             status="UNPAID",
         )
         await self.payments.create(payment)
 
         await self.db.commit()
+
 
         # 8. Invalidar caché en Redis para el médico y toda la clínica
         await self._invalidate_redis_slots(payload.clinic_id, payload.doctor_id, payload.start_time)
@@ -710,8 +774,92 @@ class AppointmentService:
         fresh = await self.appointments.get_by_id(appointment_id)
         return self._to_public(fresh)
 
+    async def add_procedure_to_appointment(
+        self,
+        appointment_id: str,
+        payload: AppointmentProcedureCreate,
+        current_user: User,
+    ) -> AppointmentPublic:
+        """Agrega un procedimiento realizado durante la consulta médica y actualiza la caja automáticamente."""
+        app = await self.appointments.get_by_id(appointment_id)
+        if not app:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+
+        if current_user.role == "DOCTOR" and app.doctor_id != current_user.id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Solo el médico asignado a esta cita puede registrar procedimientos adicionales.",
+            )
+        elif current_user.role not in ("DOCTOR", "CLINIC_ADMIN", "RECEPTIONIST", "SUPERADMIN"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes permisos para agregar procedimientos.")
+
+        proc_name = payload.name
+        proc_price = payload.price
+        proc_currency = payload.currency or "USD"
+
+        if payload.procedure_id:
+            mp = await self.db.get(MedicalProcedure, payload.procedure_id)
+            if mp:
+                proc_name = mp.name
+                if proc_price is None:
+                    proc_price = mp.price
+                proc_currency = mp.currency
+
+        if not proc_name:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Debe especificar el nombre o ID del procedimiento.")
+        if proc_price is None:
+            proc_price = Decimal("0.00")
+
+        ap = AppointmentProcedure(
+            appointment_id=app.id,
+            procedure_id=payload.procedure_id,
+            name=proc_name,
+            price=proc_price,
+            currency=proc_currency,
+            notes=payload.notes,
+        )
+        self.db.add(ap)
+        if app.procedures is not None:
+            app.procedures.append(ap)
+
+        # Actualizar automáticamente el monto en el registro de cobro (PaymentRecord)
+        payment = app.payment_record
+        if payment:
+            payment.amount = (payment.amount or Decimal("0.00")) + proc_price
+        else:
+            payment = PaymentRecord(
+                appointment_id=app.id,
+                clinic_id=app.clinic_id,
+                amount=proc_price,
+                currency=proc_currency,
+                status="UNPAID",
+            )
+            self.db.add(payment)
+
+        await self.db.commit()
+        self.db.expire_all()
+        fresh = await self.appointments.get_by_id(appointment_id)
+        return self._to_public(fresh)
+
+
     def _to_public(self, app: Appointment) -> AppointmentPublic:
         pay = app.payment_record
+        procs = [
+            AppointmentProcedurePublic(
+                id=p.id,
+                appointment_id=p.appointment_id,
+                procedure_id=p.procedure_id,
+                name=p.name,
+                price=p.price,
+                currency=p.currency,
+                notes=p.notes,
+            )
+            for p in (app.procedures or [])
+        ]
+        procs_sum = sum((p.price for p in procs), Decimal("0.00"))
+        total_amount = pay.amount if pay else Decimal("30.00")
+        base_consultation_fee = max(Decimal("0.00"), total_amount - procs_sum)
+
         return AppointmentPublic(
             id=app.id,
             clinic_id=app.clinic_id,
@@ -732,8 +880,11 @@ class AppointmentService:
             clinic_name=app.clinic.name if app.clinic else None,
             room_name=app.room.name if app.room else None,
             payment_status=pay.status if pay else "UNPAID",
-            payment_amount=pay.amount if pay else Decimal("30.00"),
+            payment_amount=total_amount,
             payment_method=pay.payment_method if pay else None,
             currency=pay.currency if pay else "USD",
+            consultation_fee=base_consultation_fee,
+            procedures=procs,
             created_at=app.created_at,
         )
+

@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, time, timezone
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -35,7 +36,9 @@ from app.schemas.clinic_user import (
     ClinicUserPublic,
     ClinicUserRoleUpdate,
 )
+from app.schemas.procedure import ClinicDoctorContractUpdate
 from app.services.email_service import build_branded_email_html, send_email
+
 
 router = APIRouter()
 
@@ -395,7 +398,7 @@ async def list_clinic_doctors(
     from app.models.affiliation import DoctorClinicAffiliation
 
     stmt = (
-        select(User)
+        select(User, DoctorClinicAffiliation)
         .join(DoctorClinicAffiliation, DoctorClinicAffiliation.doctor_id == User.id)
         .where(
             DoctorClinicAffiliation.clinic_id == clinic_id,
@@ -409,10 +412,25 @@ async def list_clinic_doctors(
         )
     )
     result = await db.execute(stmt)
-    doctors = list(result.scalars().all())
+    rows = result.all()
+
+    doctors_out = []
+    for doc, aff in rows:
+        doctors_out.append(
+            ClinicDoctorPublic(
+                id=doc.id,
+                full_name=doc.full_name,
+                email=doc.email,
+                specialty=doc.specialty,
+                is_available_for_emergencies=doc.is_available_for_emergencies,
+                contract_type=aff.contract_type if aff else "INDEPENDENT",
+                consultation_fee=aff.consultation_fee if aff and aff.consultation_fee is not None else Decimal("30.00"),
+                currency=aff.currency if aff else "USD",
+            )
+        )
 
     # Fallback si el usuario tiene clinic_id directo
-    if not doctors:
+    if not doctors_out:
         stmt2 = select(User).where(
             User.clinic_id == clinic_id,
             User.role == "DOCTOR",
@@ -424,8 +442,22 @@ async def list_clinic_doctors(
         )
         result2 = await db.execute(stmt2)
         doctors = list(result2.scalars().all())
+        for doc in doctors:
+            doctors_out.append(
+                ClinicDoctorPublic(
+                    id=doc.id,
+                    full_name=doc.full_name,
+                    email=doc.email,
+                    specialty=doc.specialty,
+                    is_available_for_emergencies=doc.is_available_for_emergencies,
+                    contract_type="INDEPENDENT",
+                    consultation_fee=Decimal("30.00"),
+                    currency="USD",
+                )
+            )
 
-    return doctors
+    return doctors_out
+
 
 
 class DoctorAffiliateRequest(BaseModel):
@@ -661,7 +693,7 @@ async def list_clinic_users(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada.")
 
     stmt = (
-        select(User)
+        select(User, DoctorClinicAffiliation)
         .outerjoin(
             DoctorClinicAffiliation,
             (DoctorClinicAffiliation.doctor_id == User.id)
@@ -681,7 +713,6 @@ async def list_clinic_users(
                 PatientClinicAffiliation.id.isnot(None),
             )
         )
-        .distinct()
     )
 
     if role:
@@ -693,7 +724,73 @@ async def list_clinic_users(
 
     stmt = stmt.order_by(User.created_at.desc())
     result = await db.execute(stmt)
-    return list(result.scalars().all())
+    rows = result.all()
+
+    output = []
+    seen = set()
+    for user_obj, aff in rows:
+        if user_obj.id in seen:
+            continue
+        seen.add(user_obj.id)
+        c_type = aff.contract_type if aff else ("EMPLOYED" if user_obj.role == "DOCTOR" else None)
+        fee = aff.consultation_fee if aff and aff.consultation_fee is not None else (Decimal("30.00") if user_obj.role == "DOCTOR" else None)
+        curr = aff.currency if aff else "USD"
+        output.append(
+            ClinicUserPublic(
+                id=user_obj.id,
+                email=user_obj.email,
+                full_name=user_obj.full_name,
+                phone=user_obj.phone,
+                role=user_obj.role,
+                status=user_obj.status,
+                clinic_id=user_obj.clinic_id,
+                specialty=user_obj.specialty,
+                license_number=user_obj.license_number,
+                created_at=user_obj.created_at,
+                contract_type=c_type,
+                consultation_fee=fee,
+                currency=curr,
+            )
+        )
+    return output
+
+
+@router.put("/{clinic_id}/doctors/{doctor_id}/contract")
+async def update_clinic_doctor_contract(
+    clinic_id: str,
+    doctor_id: str,
+    payload: ClinicDoctorContractUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_permission(Permission.STAFF_MANAGE))],
+):
+    """Permite a la administración de la clínica configurar si un médico es CONTRATADO ('EMPLOYED') o AUTÓNOMO ('INDEPENDENT') y su tarifa."""
+    if current_user.role != "SUPERADMIN" and current_user.clinic_id != clinic_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No tienes permisos para modificar contratos en otra clínica.")
+
+    stmt = select(DoctorClinicAffiliation).where(
+        DoctorClinicAffiliation.doctor_id == doctor_id,
+        DoctorClinicAffiliation.clinic_id == clinic_id,
+        DoctorClinicAffiliation.status == "ACTIVE",
+    )
+    aff = (await db.execute(stmt)).scalar_one_or_none()
+    if not aff:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "El médico no cuenta con una vinculación activa en esta clínica.")
+
+    aff.contract_type = payload.contract_type
+    aff.consultation_fee = payload.consultation_fee
+    aff.currency = payload.currency
+    await db.commit()
+    await db.refresh(aff)
+
+    return {
+        "message": "Modalidad contractual y honorarios actualizados exitosamente.",
+        "doctor_id": doctor_id,
+        "clinic_id": clinic_id,
+        "contract_type": aff.contract_type,
+        "consultation_fee": aff.consultation_fee,
+        "currency": aff.currency,
+    }
+
 
 
 @router.post("/{clinic_id}/users", response_model=ClinicUserPublic, status_code=status.HTTP_201_CREATED)

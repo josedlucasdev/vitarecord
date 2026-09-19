@@ -2,6 +2,8 @@ import datetime
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.schemas.procedure import AppointmentProcedurePublic
+
 
 class PatientIntakeData(BaseModel):
     """Datos de triage clinico, medidas biometricas y antecedentes reportados por el paciente."""
@@ -55,6 +57,7 @@ class PublicAppointmentCreate(BaseModel):
 
     estimated_amount: Decimal = Field(default=Decimal("30.00"), ge=0)
     currency: str = Field(default="USD", max_length=8)
+    procedure_ids: list[str] = Field(default_factory=list)
 
 
 class AppointmentCreate(BaseModel):
@@ -69,6 +72,7 @@ class AppointmentCreate(BaseModel):
     intake_data: dict | None = None
     estimated_amount: Decimal = Field(default=Decimal("30.00"), ge=0)
     currency: str = Field(default="USD", max_length=8)
+    procedure_ids: list[str] = Field(default_factory=list)
 
 
 class AppointmentCancelRequest(BaseModel):
@@ -102,5 +106,8 @@ class AppointmentPublic(BaseModel):
     payment_amount: Decimal | None = None
     payment_method: str | None = None
     currency: str | None = None
+    consultation_fee: Decimal | None = None
+    procedures: list["AppointmentProcedurePublic"] = Field(default_factory=list)
 
     created_at: datetime.datetime
+

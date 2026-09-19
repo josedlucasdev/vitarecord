@@ -149,14 +149,14 @@
         <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
           
           <!-- Cabecera Personalizada del Calendario -->
-          <div class="p-3.5 sm:p-4 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+          <div class="p-3.5 sm:p-4 bg-white border-b [border-bottom-style:dashed] border-slate-200/80 flex items-center justify-between">
             <div class="flex items-center gap-2">
               <div class="w-7 h-7 rounded-lg bg-teal-100 text-[#24796a] flex items-center justify-center">
                 <q-icon name="calendar_month" size="16px" />
               </div>
-              <div>
-                <h2 class="text-xs sm:text-sm font-bold text-slate-800 leading-tight">Calendario Mensual</h2>
-                <p class="text-3xs sm:text-2xs text-slate-500">Toca un día para filtrar</p>
+              <div class="flex flex-col justify-center">
+                <div class="text-xs sm:text-sm font-bold text-slate-900 leading-none m-0 p-0">Calendario Mensual</div>
+                <div class="text-3xs sm:text-2xs text-slate-500 leading-none m-0 p-0 mt-0.5">Toca un día para filtrar</div>
               </div>
             </div>
 
@@ -235,36 +235,6 @@
 
       <!-- Columna Derecha: Barra de Herramientas, Filtros y Lista de Citas (8 columnas en lg, 7 en md) -->
       <div class="md:col-span-7 lg:col-span-8 space-y-4">
-        
-        <!-- Pestañas de Navegación Rápida (con scroll horizontal fluido en móvil) -->
-        <div class="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          
-          <div class="flex items-center gap-1.5 bg-slate-100/90 p-1 rounded-xl overflow-x-auto no-scrollbar scroll-smooth">
-            <button
-              v-for="tab in tabs"
-              :key="tab.id"
-              @click="selectTab(tab.id)"
-              type="button"
-              class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 shrink-0 whitespace-nowrap touch-manipulation active:scale-95"
-              :class="activeTab === tab.id && !selectedCalendarDate 
-                ? 'bg-white text-teal-900 shadow-sm font-black' 
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'"
-            >
-              <span>{{ tab.label }}</span>
-              <span
-                class="px-1.5 py-0.2 rounded-full text-3xs font-bold"
-                :class="activeTab === tab.id && !selectedCalendarDate ? 'bg-teal-100 text-teal-800' : 'bg-slate-200 text-slate-600'"
-              >
-                {{ getTabCount(tab.id) }}
-              </span>
-            </button>
-          </div>
-
-          <!-- Contador Rápido -->
-          <div class="text-xs text-slate-500 sm:text-right px-1">
-            <span class="font-bold text-slate-800">{{ filteredAppointments.length }}</span> citas visibles
-          </div>
-        </div>
 
         <!-- Filtros Integrados: Buscador + Selector de Estado (Apilado limpio en móvil) -->
         <div class="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-sm grid grid-cols-1 sm:grid-cols-12 gap-2.5 sm:gap-3">
@@ -377,7 +347,7 @@
             class="bg-white rounded-2xl border border-slate-200/90 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col md:flex-row items-stretch"
           >
             <!-- Franja Izquierda: Hora y Duración (En móvil se muestra como barra superior) -->
-            <div class="bg-slate-50/90 px-4 py-2.5 md:py-4 md:w-36 flex md:flex-col items-center justify-between md:justify-center text-center border-b md:border-b-0 md:border-r border-slate-200/70 shrink-0">
+            <div class="bg-slate-50/90 px-4 py-2.5 md:py-4 md:w-36 flex md:flex-col items-center justify-between md:justify-center text-center border-b md:border-b-0 md:border-r md:[border-right-style:dashed] border-slate-200/70 shrink-0 bg-white">
               <div class="flex md:flex-col items-center md:items-center gap-2 md:gap-0">
                 <span class="text-xs font-extrabold text-slate-900 leading-tight">
                   {{ formatTime(app.start_time) }}
@@ -479,7 +449,7 @@
             </div>
 
             <!-- Columna Derecha: Acciones Médicas (Touch-friendly para móvil y tablet) -->
-            <div class="p-3 sm:p-4 bg-slate-50/60 md:w-52 flex flex-col sm:flex-row md:flex-col justify-center items-center gap-2 shrink-0 border-t md:border-t-0 md:border-l border-slate-200/70">
+            <div class="p-3 sm:p-4 bg-white md:w-52 flex flex-col sm:flex-row md:flex-col justify-center items-center gap-2 shrink-0 border-t md:border-t-0 md:border-l border-slate-200/70">
               
               <!-- Botón Ficha de Triage si existen datos -->
               <q-btn
@@ -558,12 +528,12 @@
                 <q-btn
                   flat
                   dense
-                  size="xs"
-                  color="slate-400"
+                  size="md"
+                  color="slate-600"
                   icon="more_horiz"
                   label="Más opciones"
                   no-caps
-                  class="text-3xs"
+                  class="text-xs font-medium"
                 >
                   <q-menu auto-close>
                     <q-list dense style="min-width: 140px">

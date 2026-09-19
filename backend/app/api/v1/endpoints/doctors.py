@@ -1,6 +1,7 @@
 """Endpoints de consulta de médicos y sus clínicas afiliadas (plan/plan.md sección 2.B.2)."""
 
 from datetime import datetime, timezone
+from decimal import Decimal
 import logging
 from pathlib import Path
 from typing import Annotated
@@ -24,7 +25,12 @@ from app.schemas.clinic import (
     DoctorPublicWithClinics,
     WorkExperience,
 )
+from app.schemas.procedure import (
+    DoctorAffiliationPricingPublic,
+    DoctorAffiliationPricingUpdate,
+)
 from app.services.email_service import build_branded_email_html, send_email
+
 
 logger = logging.getLogger("doctors")
 router = APIRouter()
@@ -563,4 +569,89 @@ async def disaffiliate_from_clinic(
         "clinic_id": clinic.id,
         "clinic_name": clinic.name,
     }
+
+
+@router.get("/me/affiliations", response_model=list[DoctorAffiliationPricingPublic])
+async def get_my_affiliations(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Lista las sedes donde atiende el médico con su tipo de contrato y tarifa de consulta."""
+    if current_user.role != "DOCTOR":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo facultativos médicos pueden consultar sus tarifas.")
+
+    stmt = (
+        select(DoctorClinicAffiliation, Clinic)
+        .join(Clinic, Clinic.id == DoctorClinicAffiliation.clinic_id)
+        .where(
+            DoctorClinicAffiliation.doctor_id == current_user.id,
+            DoctorClinicAffiliation.status == "ACTIVE",
+            Clinic.is_active == True,
+        )
+    )
+    rows = (await db.execute(stmt)).all()
+
+    output = []
+    for aff, cl in rows:
+        c_type = aff.contract_type or "INDEPENDENT"
+        fee = aff.consultation_fee if aff.consultation_fee is not None else Decimal("30.00")
+        output.append(
+            DoctorAffiliationPricingPublic(
+                clinic_id=cl.id,
+                clinic_name=cl.name,
+                contract_type=c_type,
+                consultation_fee=fee,
+                currency=aff.currency or "USD",
+                can_edit_fee=(c_type == "INDEPENDENT"),
+            )
+        )
+    return output
+
+
+@router.put("/me/affiliations/{clinic_id}/fee", response_model=DoctorAffiliationPricingPublic)
+async def update_my_affiliation_fee(
+    clinic_id: str,
+    payload: DoctorAffiliationPricingUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Permite al médico autónomo / alquiler actualizar el costo de su consulta en una sede específica."""
+    if current_user.role != "DOCTOR":
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo facultativos médicos pueden editar sus tarifas.")
+
+    stmt = (
+        select(DoctorClinicAffiliation, Clinic)
+        .join(Clinic, Clinic.id == DoctorClinicAffiliation.clinic_id)
+        .where(
+            DoctorClinicAffiliation.doctor_id == current_user.id,
+            DoctorClinicAffiliation.clinic_id == clinic_id,
+            DoctorClinicAffiliation.status == "ACTIVE",
+        )
+    )
+    row = (await db.execute(stmt)).first()
+    if not row:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No se encontró vinculación activa con la sede especificada.")
+
+    aff, cl = row
+    if aff.contract_type == "EMPLOYED":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "En esta sede estás registrado bajo relación de contrato/dependencia institucional; "
+            "la tarifa de consulta es administrada por la dirección de la clínica.",
+        )
+
+    aff.consultation_fee = payload.consultation_fee
+    aff.currency = payload.currency
+    await db.commit()
+    await db.refresh(aff)
+
+    return DoctorAffiliationPricingPublic(
+        clinic_id=cl.id,
+        clinic_name=cl.name,
+        contract_type=aff.contract_type,
+        consultation_fee=aff.consultation_fee,
+        currency=aff.currency,
+        can_edit_fee=True,
+    )
+
 

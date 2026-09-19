@@ -196,49 +196,107 @@
               <div
                 v-for="clinic in profile.clinics"
                 :key="clinic.id"
-                class="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                class="p-4 rounded-xl border border-slate-200 bg-slate-50/60 flex flex-col gap-3"
               >
-                <div class="flex items-start gap-3">
-                  <div class="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold shrink-0 mt-0.5">
-                    <q-icon name="local_hospital" size="20px" />
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-teal-100 text-teal-800 flex items-center justify-center font-bold shrink-0 mt-0.5">
+                      <q-icon name="local_hospital" size="20px" />
+                    </div>
+                    <div>
+                      <div class="font-bold text-sm text-slate-900 flex flex-wrap items-center gap-2">
+                        <span>{{ clinic.name }}</span>
+                        <!-- Badge de tipo de contrato -->
+                        <span
+                          v-if="getAffiliation(clinic.id)?.contract_type === 'EMPLOYED'"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-3xs font-extrabold bg-blue-100 text-blue-800"
+                        >
+                          <q-icon name="badge" size="10px" />
+                          CONTRATADO / INSTITUCIONAL
+                        </span>
+                        <span
+                          v-else
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-3xs font-extrabold bg-emerald-100 text-emerald-800"
+                        >
+                          <q-icon name="storefront" size="10px" />
+                          MÉDICO AUTÓNOMO / ALQUILER
+                        </span>
+                      </div>
+                      <div class="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
+                        <span v-if="clinic.timezone" class="flex items-center gap-1">
+                          <q-icon name="schedule" size="12px" color="slate-400" />
+                          {{ clinic.timezone }}
+                        </span>
+                        <span v-if="clinic.country_code" class="flex items-center gap-1 font-mono text-3xs uppercase">
+                          <q-icon name="flag" size="12px" color="slate-400" />
+                          {{ clinic.country_code }}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div class="font-bold text-sm text-slate-900 flex items-center gap-2">
-                      <span>{{ clinic.name }}</span>
-                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-3xs font-extrabold bg-emerald-100 text-emerald-800">
-                        <q-icon name="check_circle" size="10px" color="positive" />
-                        AFILIACIÓN ACTIVA
-                      </span>
-                    </div>
-                    <div class="text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
-                      <span v-if="clinic.timezone" class="flex items-center gap-1">
-                        <q-icon name="schedule" size="12px" color="slate-400" />
-                        {{ clinic.timezone }}
-                      </span>
-                      <span v-if="clinic.country_code" class="flex items-center gap-1 font-mono text-3xs uppercase">
-                        <q-icon name="flag" size="12px" color="slate-400" />
-                        {{ clinic.country_code }}
-                      </span>
-                    </div>
+
+                  <div class="sm:self-center">
+                    <q-btn
+                      outline
+                      dense
+                      color="negative"
+                      icon="link_off"
+                      label="Desvincularme"
+                      no-caps
+                      class="text-xs font-semibold px-3 py-1 bg-white hover:bg-rose-50"
+                      @click="confirmDisaffiliation(clinic)"
+                    >
+                      <q-tooltip>Dejar de atender en esta sede y notificar a la administración</q-tooltip>
+                    </q-btn>
                   </div>
                 </div>
 
-                <div class="sm:self-center">
-                  <q-btn
-                    outline
-                    dense
-                    color="negative"
-                    icon="link_off"
-                    label="Desvincularme"
-                    no-caps
-                    class="text-xs font-semibold px-3 py-1 bg-white hover:bg-rose-50"
-                    @click="confirmDisaffiliation(clinic)"
-                  >
-                    <q-tooltip>Dejar de atender en esta sede y notificar a la administración</q-tooltip>
-                  </q-btn>
+                <!-- Bloque de Honorarios y Procedimientos para esta Sede -->
+                <div class="pt-3 border-t border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">
+                  <div>
+                    <div class="text-2xs uppercase tracking-wider text-slate-400 font-bold">Honorario de Consulta en esta Sede</div>
+                    <div class="flex items-center gap-2 mt-0.5">
+                      <span class="text-base font-black text-teal-900">
+                        ${{ Number(getAffiliation(clinic.id)?.consultation_fee || 30.00).toFixed(2) }} USD
+                      </span>
+                      <span v-if="getAffiliation(clinic.id)?.contract_type === 'EMPLOYED'" class="text-3xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-medium border border-blue-100">
+                        Fijado por la clínica
+                      </span>
+                      <span v-else class="text-3xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-medium border border-emerald-100">
+                        Configurado por ti
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-2">
+                    <q-btn
+                      v-if="getAffiliation(clinic.id)?.can_edit_fee"
+                      unelevated
+                      dense
+                      size="sm"
+                      color="teal-8"
+                      icon="edit"
+                      label="Modificar Tarifa"
+                      no-caps
+                      class="px-3 py-1 font-semibold"
+                      @click="openEditFeeModal(getAffiliation(clinic.id), clinic)"
+                    />
+                    <q-btn
+                      unelevated
+                      dense
+                      size="sm"
+                      :color="getAffiliation(clinic.id)?.contract_type === 'INDEPENDENT' ? 'primary' : 'slate-700'"
+                      icon="format_list_bulleted"
+                      :label="getAffiliation(clinic.id)?.contract_type === 'INDEPENDENT' ? 'Mis Procedimientos' : 'Ver Procedimientos Sede'"
+                      no-caps
+                      class="px-3 py-1 font-semibold"
+                      @click="openProceduresModal(getAffiliation(clinic.id), clinic)"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
+
 
             <div v-else class="text-xs text-slate-400 p-6 text-center border-2 border-dashed border-slate-200 rounded-xl space-y-1">
               <q-icon name="domain_disabled" size="32px" color="slate-300" class="mb-1" />
@@ -665,8 +723,223 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <!-- Modal Modificar Tarifa de Consulta (Médico Autónomo) -->
+    <q-dialog v-model="showEditFeeModal">
+      <q-card class="w-full max-w-sm rounded-2xl p-4">
+        <q-card-section>
+          <div class="text-base font-bold text-slate-900">Tarifa de Consulta Médica</div>
+          <div class="text-xs text-slate-500">
+            Sede: <strong>{{ editingAffiliation?.clinic_name }}</strong>
+          </div>
+          <p class="text-2xs text-slate-400 mt-1">
+            Como médico autónomo, puedes definir libremente el precio de tu consulta en esta sede.
+          </p>
+        </q-card-section>
+
+        <q-card-section class="space-y-3">
+          <q-input
+            v-model.number="editingFee"
+            type="number"
+            step="0.5"
+            prefix="$"
+            suffix="USD"
+            label="Precio de Consulta *"
+            outlined
+            dense
+            :rules="[val => val >= 0 || 'El precio debe ser mayor o igual a 0']"
+          />
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancelar" color="slate-600" no-caps @click="showEditFeeModal = false" />
+          <q-btn
+            unelevated
+            color="teal-8"
+            label="Guardar Tarifa"
+            no-caps
+            class="font-bold"
+            :loading="savingFee"
+            @click="saveAffiliationFee"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Modal Catálogo de Procedimientos de la Sede -->
+    <q-dialog v-model="showProceduresModal">
+      <q-card class="w-full max-w-2xl rounded-2xl p-5">
+        <q-card-section class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">
+              Procedimientos Clínicos — {{ currentProceduresClinic?.name }}
+            </h3>
+            <p class="text-xs text-slate-500">
+              <span v-if="currentProceduresClinic?.affiliation?.contract_type === 'INDEPENDENT'" class="text-emerald-700 font-semibold">
+                Catálogo personalizado (Médico Autónomo)
+              </span>
+              <span v-else class="text-blue-700 font-semibold">
+                Catálogo Institucional regulado por la clínica
+              </span>
+            </p>
+          </div>
+
+          <q-btn
+            v-if="currentProceduresClinic?.affiliation?.contract_type === 'INDEPENDENT'"
+            unelevated
+            size="sm"
+            color="teal-8"
+            icon="add"
+            label="Nuevo Procedimiento"
+            no-caps
+            class="font-bold"
+            @click="openCreateProc"
+          />
+        </q-card-section>
+
+        <q-card-section class="max-h-[60vh] overflow-y-auto space-y-3 pt-4">
+          <div v-if="loadingProcedures" class="text-center py-8">
+            <q-spinner color="teal" size="36px" />
+            <p class="text-xs text-slate-500 mt-2">Cargando procedimientos...</p>
+          </div>
+
+          <div v-else-if="proceduresList.length === 0" class="text-center py-8 border-2 border-dashed border-slate-200 rounded-xl">
+            <q-icon name="medical_services" size="32px" color="slate-300" />
+            <div class="text-xs text-slate-500 font-medium mt-1">No hay procedimientos registrados en esta sede.</div>
+            <p v-if="currentProceduresClinic?.affiliation?.contract_type === 'INDEPENDENT'" class="text-2xs text-slate-400 mt-0.5">
+              Haz clic en "Nuevo Procedimiento" para fijar tus estudios y precios.
+            </p>
+          </div>
+
+          <div v-else class="grid grid-cols-1 gap-2.5">
+            <div
+              v-for="p in proceduresList"
+              :key="p.id"
+              class="p-3 rounded-xl border border-slate-200 bg-slate-50/70 flex items-center justify-between gap-3"
+            >
+              <div>
+                <div class="font-bold text-xs text-slate-900">{{ p.name }}</div>
+                <div v-if="p.description" class="text-2xs text-slate-500">{{ p.description }}</div>
+                <div class="flex items-center gap-2 mt-1">
+                  <span v-if="p.category" class="text-3xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-semibold">
+                    {{ p.category }}
+                  </span>
+                  <span class="text-3xs text-slate-400 flex items-center">
+                    <q-icon name="schedule" size="10px" class="mr-0.5" /> {{ p.duration_minutes }} min
+                  </span>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3">
+                <div class="text-right">
+                  <div class="text-sm font-black text-teal-800">${{ Number(p.price).toFixed(2) }}</div>
+                  <div class="text-3xs text-slate-400">USD</div>
+                </div>
+
+                <div v-if="currentProceduresClinic?.affiliation?.contract_type === 'INDEPENDENT'" class="flex items-center gap-1">
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    size="sm"
+                    color="primary"
+                    icon="edit"
+                    @click="openEditProc(p)"
+                  />
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    size="sm"
+                    color="negative"
+                    icon="delete"
+                    @click="deleteProcedure(p.id)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cerrar" color="slate-600" no-caps @click="showProceduresModal = false" />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
+    <!-- Modal Crear / Editar Procedimiento Propio -->
+    <q-dialog v-model="showCreateProcModal">
+      <q-card class="w-full max-w-md rounded-2xl p-4">
+        <q-card-section>
+          <div class="text-base font-bold text-slate-900">
+            {{ procForm.id ? 'Editar Procedimiento' : 'Nuevo Procedimiento Clínico' }}
+          </div>
+          <div class="text-xs text-slate-500">
+            Sede: {{ currentProceduresClinic?.name }}
+          </div>
+        </q-card-section>
+
+        <q-card-section class="space-y-3">
+          <q-input
+            v-model="procForm.name"
+            label="Nombre del Procedimiento *"
+            placeholder="Ej. Colposcopia diagnóstica"
+            outlined
+            dense
+          />
+          <q-input
+            v-model="procForm.description"
+            label="Descripción breve"
+            placeholder="Ej. Evaluación ampliada con reactivos"
+            outlined
+            dense
+          />
+          <div class="grid grid-cols-2 gap-2">
+            <q-input
+              v-model.number="procForm.price"
+              type="number"
+              step="0.5"
+              prefix="$"
+              suffix="USD"
+              label="Precio *"
+              outlined
+              dense
+            />
+            <q-input
+              v-model.number="procForm.duration_minutes"
+              type="number"
+              suffix="min"
+              label="Duración"
+              outlined
+              dense
+            />
+          </div>
+          <q-select
+            v-model="procForm.category"
+            :options="['Ecografía', 'Diagnóstico', 'Laboratorio / Toma de Muestra', 'Procedimiento Quirúrgico Menor', 'Planificación Familiar', 'Otro']"
+            label="Categoría"
+            outlined
+            dense
+          />
+        </q-card-section>
+
+        <q-card-actions align="right">
+          <q-btn flat label="Cancelar" color="slate-600" no-caps @click="showCreateProcModal = false" />
+          <q-btn
+            unelevated
+            color="teal-8"
+            :label="procForm.id ? 'Guardar Cambios' : 'Crear Procedimiento'"
+            no-caps
+            class="font-bold"
+            :loading="savingProc"
+            @click="saveProcedure"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
+
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -690,6 +963,152 @@ const profile = reactive({
   clinics: []
 })
 
+// Afiliaciones y Honorarios
+const myAffiliations = ref([])
+const loadingAffiliations = ref(false)
+
+function getAffiliation (clinicId) {
+  return myAffiliations.value.find(a => a.clinic_id === clinicId)
+}
+
+async function loadMyAffiliations () {
+  loadingAffiliations.value = true
+  try {
+    const { data } = await api.get('/doctors/me/affiliations')
+    myAffiliations.value = data || []
+  } catch (err) {
+    console.warn('Error cargando afiliaciones del médico:', err)
+  } finally {
+    loadingAffiliations.value = false
+  }
+}
+
+// Edición de Honorarios
+const showEditFeeModal = ref(false)
+const editingAffiliation = ref(null)
+const editingFee = ref(30.00)
+const savingFee = ref(false)
+
+function openEditFeeModal (aff, clinic) {
+  editingAffiliation.value = { ...aff, clinic_name: clinic?.name || aff?.clinic_name }
+  editingFee.value = parseFloat(aff?.consultation_fee || 30.00)
+  showEditFeeModal.value = true
+}
+
+async function saveAffiliationFee () {
+  if (!editingAffiliation.value) return
+  savingFee.value = true
+  try {
+    const clinicId = editingAffiliation.value.clinic_id
+    await api.put(`/doctors/me/affiliations/${clinicId}/fee`, {
+      consultation_fee: editingFee.value,
+      currency: 'USD'
+    })
+    Notify.create({ type: 'positive', message: 'Honorario de consulta actualizado exitosamente.' })
+    showEditFeeModal.value = false
+    await loadMyAffiliations()
+  } catch (err) {
+    Notify.create({ type: 'negative', message: err.response?.data?.detail || 'Error al actualizar honorario.' })
+  } finally {
+    savingFee.value = false
+  }
+}
+
+// Catálogo de Procedimientos
+const showProceduresModal = ref(false)
+const currentProceduresClinic = ref(null)
+const proceduresList = ref([])
+const loadingProcedures = ref(false)
+
+const showCreateProcModal = ref(false)
+const savingProc = ref(false)
+const procForm = reactive({
+  id: null,
+  name: '',
+  description: '',
+  price: 30.00,
+  duration_minutes: 15,
+  category: 'Procedimiento Clínico',
+  currency: 'USD'
+})
+
+async function openProceduresModal (aff, clinic) {
+  currentProceduresClinic.value = { ...clinic, affiliation: aff }
+  showProceduresModal.value = true
+  await fetchClinicProcedures(clinic.id)
+}
+
+async function fetchClinicProcedures (clinicId) {
+  loadingProcedures.value = true
+  try {
+    const { data } = await api.get(`/clinics/${clinicId}/procedures`, {
+      params: { doctor_id: profile.id || undefined }
+    })
+    proceduresList.value = data || []
+  } catch (err) {
+    Notify.create({ type: 'negative', message: 'Error al consultar procedimientos.' })
+  } finally {
+    loadingProcedures.value = false
+  }
+}
+
+function openCreateProc () {
+  procForm.id = null
+  procForm.name = ''
+  procForm.description = ''
+  procForm.price = 30.00
+  procForm.duration_minutes = 15
+  procForm.category = 'Procedimiento Clínico'
+  procForm.currency = 'USD'
+  showCreateProcModal.value = true
+}
+
+function openEditProc (proc) {
+  procForm.id = proc.id
+  procForm.name = proc.name
+  procForm.description = proc.description || ''
+  procForm.price = parseFloat(proc.price || 0)
+  procForm.duration_minutes = proc.duration_minutes || 15
+  procForm.category = proc.category || 'Procedimiento Clínico'
+  procForm.currency = proc.currency || 'USD'
+  showCreateProcModal.value = true
+}
+
+async function saveProcedure () {
+  if (!procForm.name || procForm.price == null) {
+    Notify.create({ type: 'warning', message: 'Nombre y precio son obligatorios.' })
+    return
+  }
+  savingProc.value = true
+  try {
+    const clinicId = currentProceduresClinic.value.id
+    if (procForm.id) {
+      await api.put(`/clinics/${clinicId}/procedures/${procForm.id}`, procForm)
+      Notify.create({ type: 'positive', message: 'Procedimiento actualizado exitosamente.' })
+    } else {
+      await api.post(`/clinics/${clinicId}/procedures`, procForm)
+      Notify.create({ type: 'positive', message: 'Procedimiento creado exitosamente.' })
+    }
+    showCreateProcModal.value = false
+    await fetchClinicProcedures(clinicId)
+  } catch (err) {
+    Notify.create({ type: 'negative', message: err.response?.data?.detail || 'Error al guardar procedimiento.' })
+  } finally {
+    savingProc.value = false
+  }
+}
+
+async function deleteProcedure (procId) {
+  try {
+    const clinicId = currentProceduresClinic.value.id
+    await api.delete(`/clinics/${clinicId}/procedures/${procId}`)
+    Notify.create({ type: 'positive', message: 'Procedimiento eliminado del catálogo.' })
+    await fetchClinicProcedures(clinicId)
+  } catch (err) {
+    Notify.create({ type: 'negative', message: 'Error al eliminar procedimiento.' })
+  }
+}
+
 // Gestión de Sedes y Desvinculación
 const showDisaffiliateModal = ref(false)
 const clinicToDisaffiliate = ref(null)
@@ -699,6 +1118,7 @@ function confirmDisaffiliation (clinic) {
   clinicToDisaffiliate.value = clinic
   showDisaffiliateModal.value = true
 }
+
 
 async function executeDisaffiliation () {
   if (!clinicToDisaffiliate.value) return
@@ -931,6 +1351,7 @@ async function loadMyProfile () {
     profile.academic_degrees = data.academic_degrees ? [...data.academic_degrees] : []
     profile.work_experience = data.work_experience ? [...data.work_experience] : []
     profile.clinics = data.clinics ? [...data.clinics] : []
+    await loadMyAffiliations()
   } catch (err) {
     Notify.create({ type: 'negative', message: 'Error al cargar tu perfil profesional.' })
   } finally {
@@ -965,7 +1386,8 @@ async function saveProfile () {
   }
 }
 
-onMounted(() => {
-  loadMyProfile()
+onMounted(async () => {
+  await Promise.all([loadMyProfile(), loadMyAffiliations()])
 })
 </script>
+

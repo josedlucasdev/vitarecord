@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from pydantic import BaseModel
 
 
@@ -18,6 +19,7 @@ class ClinicUpdateRequest(BaseModel):
     country_code: str | None = None
     phone: str | None = None
     address: str | None = None
+    is_active: bool | None = None
 
 
 class ClinicPublic(BaseModel):
@@ -40,6 +42,9 @@ class ClinicDoctorPublic(BaseModel):
     email: str
     specialty: str | None = None
     is_available_for_emergencies: bool = False
+    contract_type: str | None = "INDEPENDENT"
+    consultation_fee: Decimal | None = None
+    currency: str | None = "USD"
 
     model_config = {"from_attributes": True}
 

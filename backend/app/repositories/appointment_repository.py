@@ -94,6 +94,7 @@ class AppointmentRepository:
                 selectinload(Appointment.room),
                 selectinload(Appointment.dependent),
                 selectinload(Appointment.payment_record),
+                selectinload(Appointment.procedures),
             )
         )
         res = await self.db.execute(stmt)
@@ -130,9 +131,11 @@ class AppointmentRepository:
                 selectinload(Appointment.room),
                 selectinload(Appointment.dependent),
                 selectinload(Appointment.payment_record),
+                selectinload(Appointment.procedures),
             )
             .order_by(Appointment.start_time.asc())
         )
+
 
         if clinic_id:
             stmt = stmt.where(Appointment.clinic_id == clinic_id)

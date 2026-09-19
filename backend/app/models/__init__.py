@@ -12,6 +12,7 @@ from app.models.patient_consent_grant import PatientConsentGrant
 from app.models.patient_dependent import PatientDependent
 from app.models.payment_record import PaymentRecord
 from app.models.prescription import Prescription
+from app.models.procedure import AppointmentProcedure, MedicalProcedure
 from app.models.schedule import DoctorWeeklySchedule
 from app.models.user import DoctorScheduleLock, RefreshToken, User
 from app.models.user_device_token import UserDeviceToken
@@ -30,6 +31,8 @@ __all__ = [
     "PatientDependent",
     "Appointment",
     "PaymentRecord",
+    "MedicalProcedure",
+    "AppointmentProcedure",
     "PatientConsentGrant",
     "AuditLog",
     "DoctorWeeklySchedule",
