@@ -193,22 +193,22 @@
           </div>
 
           <!-- Pie del Calendario con Leyenda y Botón Ir a Hoy -->
-          <div class="px-3.5 sm:px-4 py-2.5 sm:py-3 bg-slate-50/70 border-t border-slate-100 text-xs text-slate-600 flex items-center justify-between">
-            <div class="flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-[#24796a] inline-block"></span>
-              <span class="text-3xs sm:text-2xs font-medium text-slate-600">Días con citas</span>
+          <div class="px-3.5 sm:px-4 py-2.5 sm:py-3 bg-slate-50/70 border-t border-slate-100 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-[#24796a] inline-block"></span>
+              <span class="text-sm font-bold text-slate-800">Días con citas</span>
             </div>
             <div class="flex items-center gap-1.5">
               <q-btn
                 flat
                 dense
-                size="xs"
+                size="md"
                 color="teal-8"
                 label="Ir a Hoy"
                 icon="today"
                 no-caps
                 @click="jumpToToday"
-                class="font-bold text-2xs bg-teal-50 px-2 py-0.5 rounded-md text-[#24796a]"
+                class="font-extrabold text-sm bg-teal-50 px-3 py-1 rounded-lg text-[#24796a]"
               />
             </div>
           </div>
