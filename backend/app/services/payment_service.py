@@ -2,6 +2,7 @@ import datetime
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.payment_record import PaymentRecord
 from app.models.user import User
 from app.repositories.appointment_repository import AppointmentRepository
 from app.repositories.payment_repository import PaymentRepository
@@ -30,10 +31,14 @@ class PaymentService:
 
         pay_record = await self.payments.get_by_appointment_id(appointment_id)
         if not pay_record:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                "Registro contable de la cita no encontrado.",
+            pay_record = PaymentRecord(
+                appointment_id=app.id,
+                clinic_id=clinic_id,
+                amount=payload.amount,
+                currency="USD",
+                status="UNPAID",
             )
+            await self.payments.create(pay_record)
 
         if pay_record.status == "PAID":
             raise HTTPException(
@@ -53,6 +58,7 @@ class PaymentService:
             reference=payload.reference,
             notes=payload.notes,
             recorded_by_user_id=current_user.id,
+            amount=payload.amount,
         )
         await self.db.commit()
 

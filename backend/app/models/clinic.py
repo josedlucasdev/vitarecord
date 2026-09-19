@@ -17,6 +17,8 @@ class Clinic(Base, TimestampMixin):
     # Determina la normativa de proteccion de datos y retencion aplicable
     # (plan/plan.md seccion 2.B.11) - nunca se asume HIPAA/GDPR por defecto.
     country_code: Mapped[str] = mapped_column(String(2), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 

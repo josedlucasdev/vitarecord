@@ -40,6 +40,15 @@ class AuthService:
         if user.status not in ("ACTIVE", "PENDING_VERIFICATION"):
             raise HTTPException(status.HTTP_403_FORBIDDEN, f"Cuenta en estado {user.status}, no puede iniciar sesion")
 
+        if user.clinic_id and user.role in ("CLINIC_ADMIN", "RECEPTIONIST"):
+            from app.repositories.clinic_repository import ClinicRepository
+            clinic = await ClinicRepository(self.db).get_by_id(user.clinic_id)
+            if not clinic or not clinic.is_active:
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    "La sede clínica asociada se encuentra inactiva o suspendida. Comuníquese con el Super Administrador.",
+                )
+
         if user.mfa_enabled:
             if not mfa_code or not user.mfa_secret or not verify_totp(user.mfa_secret, mfa_code):
                 raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Codigo MFA invalido o ausente")

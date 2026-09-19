@@ -7,6 +7,17 @@ class ClinicCreateRequest(BaseModel):
     slug: str
     timezone: str = "America/Caracas"
     country_code: str = "VE"
+    phone: str | None = None
+    address: str | None = None
+
+
+class ClinicUpdateRequest(BaseModel):
+    name: str | None = None
+    slug: str | None = None
+    timezone: str | None = None
+    country_code: str | None = None
+    phone: str | None = None
+    address: str | None = None
 
 
 class ClinicPublic(BaseModel):
@@ -15,6 +26,8 @@ class ClinicPublic(BaseModel):
     slug: str
     timezone: str
     country_code: str
+    phone: str | None = None
+    address: str | None = None
     is_active: bool
     created_at: datetime | None = None
 

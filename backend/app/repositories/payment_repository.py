@@ -1,6 +1,6 @@
 import datetime
 from decimal import Decimal
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.appointment import Appointment
@@ -29,12 +29,15 @@ class PaymentRepository:
         reference: str | None = None,
         notes: str | None = None,
         recorded_by_user_id: str | None = None,
+        amount: Decimal | None = None,
     ) -> PaymentRecord | None:
         stmt = select(PaymentRecord).where(PaymentRecord.id == payment_id)
         res = await self.db.execute(stmt)
         record = res.scalar_one_or_none()
         if record:
             record.status = status
+            if amount is not None:
+                record.amount = amount
             if payment_method:
                 record.payment_method = payment_method
             if reference:
@@ -55,11 +58,14 @@ class PaymentRepository:
 
         stmt = (
             select(PaymentRecord)
-            .join(Appointment, PaymentRecord.appointment_id == Appointment.id)
+            .outerjoin(Appointment, PaymentRecord.appointment_id == Appointment.id)
             .where(
                 PaymentRecord.clinic_id == clinic_id,
-                Appointment.start_time >= start_of_day,
-                Appointment.start_time <= end_of_day,
+                or_(
+                    and_(PaymentRecord.paid_at >= start_of_day, PaymentRecord.paid_at <= end_of_day),
+                    and_(PaymentRecord.paid_at.is_(None), PaymentRecord.created_at >= start_of_day, PaymentRecord.created_at <= end_of_day),
+                    and_(Appointment.start_time >= start_of_day, Appointment.start_time <= end_of_day),
+                ),
             )
         )
         res = await self.db.execute(stmt)

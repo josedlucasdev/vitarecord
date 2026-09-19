@@ -100,6 +100,7 @@ class AppointmentPublic(BaseModel):
     room_name: str | None = None
     payment_status: str | None = None
     payment_amount: Decimal | None = None
+    payment_method: str | None = None
     currency: str | None = None
 
     created_at: datetime.datetime

@@ -27,23 +27,29 @@
       style="max-width: 430px;"
     >
       <!-- Cabecera Institucional VitaRecord Clínico -->
-      <div class="bg-gradient-to-b from-cyan-50/60 to-white pt-7 pb-4 px-6 text-center border-b border-slate-100">
-        <div class="relative inline-flex items-center justify-center mb-2.5">
+      <div class="bg-gradient-to-b from-cyan-50/60 to-white pt-7 pb-4 px-6 flex flex-col items-center justify-center text-center border-b border-slate-100">
+        <!-- 1. Logo arriba centrado -->
+        <div class="relative flex items-center justify-center mb-3">
           <div class="absolute inset-0 rounded-2xl bg-cyan-500/20 blur-md animate-pulse"></div>
           <img
             src="/icons/vitarecord-logo.png"
             alt="VitaRecord"
-            class="relative w-16 h-16 rounded-2xl bg-white shadow-md p-1 border border-slate-100 object-contain"
+            class="relative w-16 h-16 rounded-2xl bg-white shadow-md p-1 border border-slate-100 object-contain mx-auto"
           />
         </div>
-        <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-100/80 text-cyan-800 text-2xs font-bold uppercase tracking-wider mb-1">
-          <q-icon name="medical_services" size="13px" color="cyan-9" />
-          <span>Personal Clínico & Médicos</span>
-        </div>
-        <h1 class="text-2xl font-black text-slate-900 tracking-tight">
-          VitaRecord Clínico
+
+        <!-- 2. Luego debajo VitaRecord -->
+        <h1 class="text-2xl font-black text-slate-900 tracking-tight mb-1.5">
+          VitaRecord
         </h1>
-        <p class="text-xs text-slate-500 mt-0.5">
+
+        <!-- 3. Y luego Portal de Personal Clínico -->
+        <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-cyan-100/80 text-cyan-800 text-xs font-bold uppercase tracking-wider mb-1">
+          <q-icon name="medical_services" size="13px" color="cyan-9" />
+          <span>Portal de Personal Clínico</span>
+        </div>
+
+        <p class="text-xs text-slate-500 mt-1">
           Acceso para Médicos Especialistas, Recepción y Administradores de Clínica
         </p>
       </div>
@@ -251,7 +257,7 @@ async function onSubmit () {
 
     checkClinicStaffRoleAndRedirect(data.access_token, data.refresh_token)
   } catch (err) {
-    errorMessage.value = err.response?.data?.detail || 'Credenciales inválidas o acceso no autorizado'
+    errorMessage.value = err.response?.data?.detail || err.message || 'Credenciales inválidas o acceso no autorizado'
   } finally {
     loading.value = false
   }

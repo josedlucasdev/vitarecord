@@ -27,23 +27,29 @@
       style="max-width: 430px;"
     >
       <!-- Cabecera Institucional SuperAdmin -->
-      <div class="bg-gradient-to-b from-slate-800 to-slate-900/90 pt-7 pb-4 px-6 text-center border-b border-slate-800">
-        <div class="relative inline-flex items-center justify-center mb-2.5">
+      <div class="bg-gradient-to-b from-slate-800 to-slate-900/90 pt-7 pb-4 px-6 flex flex-col items-center justify-center text-center border-b border-slate-800">
+        <!-- 1. Logo arriba centrado -->
+        <div class="relative flex items-center justify-center mb-3">
           <div class="absolute inset-0 rounded-2xl bg-indigo-500/30 blur-md animate-pulse"></div>
           <img
             src="/icons/vitarecord-logo.png"
             alt="VitaRecord"
-            class="relative w-16 h-16 rounded-2xl bg-white shadow-md p-1 border border-slate-700 object-contain"
+            class="relative w-16 h-16 rounded-2xl bg-white shadow-md p-1 border border-slate-700 object-contain mx-auto"
           />
         </div>
-        <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-2xs font-bold uppercase tracking-wider mb-1">
-          <q-icon name="admin_panel_settings" size="13px" color="indigo-3" />
-          <span>Acceso Super Administrador</span>
-        </div>
-        <h1 class="text-2xl font-black text-white tracking-tight">
-          VitaRecord Master
+
+        <!-- 2. Luego debajo VitaRecord -->
+        <h1 class="text-2xl font-black text-white tracking-tight mb-1.5">
+          VitaRecord
         </h1>
-        <p class="text-xs text-slate-400 mt-0.5">
+
+        <!-- 3. Y luego Portal Super Administrador -->
+        <div class="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-bold uppercase tracking-wider mb-1">
+          <q-icon name="admin_panel_settings" size="13px" color="indigo-3" />
+          <span>Portal Super Administrador</span>
+        </div>
+
+        <p class="text-xs text-slate-400 mt-1">
           Gobierno Central SaaS, Torre de Control y Aprovisionamiento
         </p>
       </div>
@@ -245,7 +251,7 @@ async function onSubmit () {
 
     checkSuperAdminRoleAndRedirect(data.access_token, data.refresh_token)
   } catch (err) {
-    errorMessage.value = err.response?.data?.detail || 'Credenciales inválidas o acceso no autorizado'
+    errorMessage.value = err.response?.data?.detail || err.message || 'Credenciales inválidas o acceso no autorizado'
   } finally {
     loading.value = false
   }

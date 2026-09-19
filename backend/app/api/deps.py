@@ -33,6 +33,15 @@ async def get_current_user(
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Usuario no encontrado")
 
+    if user.status in ("SUSPENDED", "DEACTIVATED"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, f"Cuenta {user.status.lower()}, acceso denegado")
+
+    if user.clinic_id and user.role in ("CLINIC_ADMIN", "RECEPTIONIST"):
+        from app.repositories.clinic_repository import ClinicRepository
+        clinic = await ClinicRepository(db).get_by_id(user.clinic_id)
+        if clinic and not clinic.is_active:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "La sede clínica se encuentra inactiva. Acceso revocado")
+
     # Inyecta el contexto de tenant para el filtro automatico de ORM
     # (app/core/tenant.py) - clave para el aislamiento del Principio 3.
     set_tenant_context(clinic_id=x_clinic_id, role=user.role)

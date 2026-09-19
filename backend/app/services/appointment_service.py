@@ -731,8 +731,9 @@ class AppointmentService:
             patient_phone=app.patient.phone if app.patient else None,
             clinic_name=app.clinic.name if app.clinic else None,
             room_name=app.room.name if app.room else None,
-            payment_status=pay.status if pay else None,
-            payment_amount=pay.amount if pay else None,
-            currency=pay.currency if pay else None,
+            payment_status=pay.status if pay else "UNPAID",
+            payment_amount=pay.amount if pay else Decimal("30.00"),
+            payment_method=pay.payment_method if pay else None,
+            currency=pay.currency if pay else "USD",
             created_at=app.created_at,
         )

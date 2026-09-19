@@ -1,7 +1,7 @@
 <template>
   <q-layout view="lHh Lpr lFf">
     <!-- Header -->
-    <q-header elevated class="bg-primary text-white">
+    <q-header elevated style="background-color: #24796a !important;" class="text-white">
       <q-toolbar>
         <q-btn
           flat
@@ -161,7 +161,7 @@
         </div>
       </div>
 
-      <q-list padding class="text-slate-700">
+      <q-list padding class="text-slate-700" style="padding-bottom: 96px;">
         <q-item-label header class="text-xs font-bold text-slate-400 uppercase tracking-wider">
           Principal
         </q-item-label>
@@ -276,8 +276,8 @@
           </q-item>
         </template>
 
-        <!-- Agenda Médica -->
-        <template v-if="can('doctors:schedule_manage')">
+        <!-- Agenda Médica (Exclusivo Médico) -->
+        <template v-if="userRole === 'DOCTOR'">
           <q-item-label header class="text-xs font-bold text-teal-600 uppercase tracking-wider q-mt-md">
             Agenda Médica
           </q-item-label>
@@ -320,7 +320,7 @@
           </q-item-label>
 
           <q-item
-            v-if="can('appointments:book')"
+            v-if="can('appointments:book') && userRole !== 'SUPERADMIN'"
             clickable
             v-ripple
             to="/appointments/book"
@@ -375,7 +375,7 @@
         </template>
 
         <!-- Caja y Finanzas -->
-        <template v-if="can('payments:view_cashier')">
+        <template v-if="can('payments:view_cashier') && userRole !== 'SUPERADMIN'">
           <q-item-label header class="text-xs font-bold text-teal-700 uppercase tracking-wider q-mt-md">
             Caja y Ventanilla
           </q-item-label>
@@ -397,7 +397,7 @@
         </template>
 
         <!-- Urgencias Médicas & Torre de Control -->
-        <template v-if="can('emergency:monitor') || can('emergency:trigger')">
+        <template v-if="(can('emergency:monitor') || can('emergency:trigger')) && userRole !== 'SUPERADMIN'">
           <q-item-label header class="text-xs font-bold text-red-600 uppercase tracking-wider q-mt-md">
             Urgencias & Radar
           </q-item-label>
@@ -446,7 +446,7 @@
             <q-item-section>Sesiones Activas</q-item-section>
           </q-item>
 
-          <q-item clickable v-ripple to="/forgot-password">
+          <q-item clickable v-ripple :to="forgotPasswordRoute">
             <q-item-section avatar>
               <q-icon name="lock_reset" size="20px" />
             </q-item-section>
@@ -843,6 +843,17 @@ const { can, hasRole, user, userRole, isLoggedIn, clearAuthToken } = useAcl()
 
 const userEmail = computed(() => {
   return user.value?.email || `${(userRole.value || 'usuario').toLowerCase()}@intimasalud.com`
+})
+
+const forgotPasswordRoute = computed(() => {
+  const role = userRole.value
+  if (role === 'SUPERADMIN' || role === 'COMPLIANCE_REVIEWER' || role === 'MODERATOR') {
+    return '/admin/forgot-password'
+  }
+  if (['CLINIC_ADMIN', 'DOCTOR', 'RECEPTIONIST'].includes(role)) {
+    return '/clinic/forgot-password'
+  }
+  return '/patient/forgot-password'
 })
 
 function logout () {

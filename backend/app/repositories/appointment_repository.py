@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import or_, select, text
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -145,7 +145,13 @@ class AppointmentRepository:
         if date:
             start_of_day = datetime.datetime.combine(date, datetime.time.min)
             end_of_day = datetime.datetime.combine(date, datetime.time.max)
-            stmt = stmt.where(Appointment.start_time >= start_of_day, Appointment.start_time <= end_of_day)
+            stmt = stmt.outerjoin(PaymentRecord, Appointment.id == PaymentRecord.appointment_id)
+            stmt = stmt.where(
+                or_(
+                    and_(Appointment.start_time >= start_of_day, Appointment.start_time <= end_of_day),
+                    and_(PaymentRecord.paid_at >= start_of_day, PaymentRecord.paid_at <= end_of_day),
+                )
+            ).distinct()
 
         res = await self.db.execute(stmt)
         return list(res.scalars().all())

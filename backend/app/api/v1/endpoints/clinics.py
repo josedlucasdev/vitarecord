@@ -24,6 +24,7 @@ from app.schemas.clinic import (
     ClinicCreateRequest,
     ClinicDoctorPublic,
     ClinicPublic,
+    ClinicUpdateRequest,
     DoctorSearchResult,
 )
 from app.schemas.clinic_user import (
@@ -88,6 +89,8 @@ async def create_clinic(
         slug=payload.slug,
         timezone=payload.timezone,
         country_code=payload.country_code,
+        phone=payload.phone.strip() if payload.phone else None,
+        address=payload.address.strip() if payload.address else None,
         is_active=True,
     )
     await repo.create(clinic)
@@ -107,6 +110,278 @@ async def get_clinic(
     if not clinic:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
     return clinic
+
+
+@router.put("/{clinic_id}", response_model=ClinicPublic)
+async def update_clinic(
+    clinic_id: str,
+    payload: ClinicUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Actualiza los datos de una clínica/tenant.
+
+    Exclusivo para SUPERADMIN.
+    """
+    if current_user.role != "SUPERADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Permisos insuficientes. Solo el SUPERADMIN puede editar clínicas.",
+        )
+
+    repo = ClinicRepository(db)
+    clinic = await repo.get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    if payload.slug and payload.slug != clinic.slug:
+        existing = await repo.get_by_slug(payload.slug)
+        if existing and existing.id != clinic_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"El slug '{payload.slug}' ya se encuentra en uso por otra clínica.",
+            )
+        clinic.slug = payload.slug
+
+    if payload.name is not None:
+        clinic.name = payload.name.strip()
+    if payload.timezone is not None:
+        clinic.timezone = payload.timezone.strip()
+    if payload.country_code is not None:
+        clinic.country_code = payload.country_code.strip().upper()
+    if payload.phone is not None:
+        clinic.phone = payload.phone.strip() if payload.phone else None
+    if payload.address is not None:
+        clinic.address = payload.address.strip() if payload.address else None
+
+    await db.commit()
+    await db.refresh(clinic)
+    return clinic
+
+
+@router.patch("/{clinic_id}/toggle-active", response_model=ClinicPublic)
+async def toggle_clinic_active(
+    clinic_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Activa o inactiva una clínica/tenant.
+
+    Al inactivar:
+    - La clínica no aparece en listados públicos ni agendamiento.
+    - Los administradores y secretarias de la clínica son suspendidos (status = SUSPENDED)
+      y todas sus sesiones activas son revocadas de inmediato.
+    Al reactivar:
+    - Los administradores y secretarias suspendidos son reactivados (status = ACTIVE).
+    """
+    if current_user.role != "SUPERADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Permisos insuficientes. Solo el SUPERADMIN puede activar o inactivar clínicas.",
+        )
+
+    repo = ClinicRepository(db)
+    clinic = await repo.get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    new_active_status = not clinic.is_active
+    clinic.is_active = new_active_status
+
+    from app.repositories.refresh_token_repository import RefreshTokenRepository
+    refresh_repo = RefreshTokenRepository(db)
+
+    stmt_users = select(User).where(
+        User.clinic_id == clinic_id,
+        User.role.in_(TENANT_ROLES),
+    )
+    tenant_users = (await db.scalars(stmt_users)).all()
+
+    if not new_active_status:
+        # Inactivar: suspender usuarios del tenant y revocar todas sus sesiones activas
+        for u in tenant_users:
+            u.status = "SUSPENDED"
+            await refresh_repo.revoke_all_for_user(u.id)
+    else:
+        # Reactivar: restaurar estado a ACTIVE para usuarios que estaban suspendidos
+        for u in tenant_users:
+            if u.status == "SUSPENDED":
+                u.status = "ACTIVE"
+
+    await db.commit()
+    await db.refresh(clinic)
+    return clinic
+
+
+@router.delete("/{clinic_id}", status_code=status.HTTP_200_OK)
+async def delete_clinic(
+    clinic_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Elimina definitivamente una clínica/tenant.
+
+    Acción crítica y definitiva:
+    1. Notifica por correo electrónico a todos los pacientes con citas activas o pendientes,
+       informándoles de la baja de la sede y proporcionándoles el teléfono y dirección de la clínica.
+    2. Elimina en cascada citas, recetas, pagos, salas físicas, registros médicos y llaves.
+    3. Elimina a los administradores y secretarias del tenant (con sus credenciales y sesiones).
+    4. Desvincula a los médicos afiliados.
+    5. Elimina la clínica de la plataforma.
+    """
+    if current_user.role != "SUPERADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Permisos insuficientes. Solo el SUPERADMIN puede eliminar clínicas.",
+        )
+
+    repo = ClinicRepository(db)
+    clinic = await repo.get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    from sqlalchemy import delete, update
+    from app.models.appointment import Appointment
+    from app.models.audit import AuditLog
+    from app.models.clinic import ClinicRoom, RoomScheduleLock
+    from app.models.clinic_encryption_key import ClinicEncryptionKey
+    from app.models.emergency_incident import EmergencyIncident
+    from app.models.medical_attachment import MedicalAttachment
+    from app.models.medical_record import MedicalRecord
+    from app.models.notification_log import NotificationLog
+    from app.models.patient_consent_grant import PatientConsentGrant
+    from app.models.payment_record import PaymentRecord
+    from app.models.prescription import Prescription
+    from app.models.user import RefreshToken
+    from app.models.user_device_token import UserDeviceToken
+
+    # 1. Identificar citas activas o pendientes y notificar a pacientes
+    active_statuses = [
+        "SCHEDULED",
+        "CONFIRMED",
+        "PENDING_DOCTOR_APPROVAL",
+        "PENDING_PATIENT_ACCEPTANCE",
+        "CHECKED_IN",
+        "IN_CONSULTATION",
+        "RESCHEDULED",
+    ]
+    stmt_appts = (
+        select(Appointment)
+        .where(
+            Appointment.clinic_id == clinic_id,
+            Appointment.status.in_(active_statuses),
+        )
+    )
+    active_appointments = (await db.scalars(stmt_appts)).all()
+
+    contact_items = []
+    if clinic.phone:
+        contact_items.append(f"<strong>Teléfono:</strong> {clinic.phone}")
+    if clinic.address:
+        contact_items.append(f"<strong>Dirección:</strong> {clinic.address}")
+    contact_html = "<br/>".join(contact_items) if contact_items else "No se dispone de número telefónico registrado."
+
+    for appt in active_appointments:
+        patient = await db.get(User, appt.patient_id)
+        if patient and patient.email:
+            dt_str = appt.start_time.strftime("%d/%m/%Y a las %H:%M")
+            email_html = build_branded_email_html(
+                title="Aviso de Cancelación de Cita",
+                subtitle=f"Baja de sede clínica: {clinic.name}",
+                content_html=(
+                    f"Estimado(a) <strong>{patient.full_name or 'Paciente'}</strong>,<br/><br/>"
+                    f"Le informamos que la sede clínica <strong>{clinic.name}</strong> ha sido dada de baja del sistema VitaRecord. "
+                    f"Por este motivo, su cita médica programada para el <strong>{dt_str}</strong> no podrá ser gestionada a través de nuestra plataforma.<br/><br/>"
+                    "Si desea retomar o consultar sobre su cita directamente con la clínica por otros medios, puede comunicarse a través de:<br/><br/>"
+                    f"{contact_html}<br/><br/>"
+                    "Lamentamos los inconvenientes que esta situación pueda causarle."
+                ),
+                cta_text="Ir al Portal de Pacientes",
+                cta_link=f"{settings.FRONTEND_URL}/#/patient/login",
+                details_table=[
+                    ("Clínica / Centro", clinic.name),
+                    ("Teléfono", clinic.phone or "No registrado"),
+                    ("Dirección", clinic.address or "No registrada"),
+                    ("Fecha de la Cita", dt_str),
+                ],
+                alert_box="Por favor guarde estos datos de contacto si desea comunicarse directamente con el centro médico.",
+            )
+            try:
+                await send_email(
+                    patient.email,
+                    f"Aviso importante: Cancelación de cita por baja de sede - {clinic.name}",
+                    email_html,
+                )
+            except Exception:
+                pass
+
+    # 2. Cascada de eliminación de registros clínicos y citas
+    all_appt_ids = (await db.scalars(select(Appointment.id).where(Appointment.clinic_id == clinic_id))).all()
+    if all_appt_ids:
+        await db.execute(delete(Prescription).where(Prescription.appointment_id.in_(all_appt_ids)))
+        await db.execute(delete(MedicalRecord).where(MedicalRecord.appointment_id.in_(all_appt_ids)))
+        await db.execute(delete(PaymentRecord).where(PaymentRecord.appointment_id.in_(all_appt_ids)))
+
+    await db.execute(delete(Prescription).where(Prescription.clinic_id == clinic_id))
+    await db.execute(delete(MedicalRecord).where(MedicalRecord.clinic_id == clinic_id))
+    await db.execute(delete(PaymentRecord).where(PaymentRecord.clinic_id == clinic_id))
+    await db.execute(delete(MedicalAttachment).where(MedicalAttachment.clinic_id == clinic_id))
+    await db.execute(delete(Appointment).where(Appointment.clinic_id == clinic_id))
+
+    # 3. Salas y cerraduras
+    room_ids = (await db.scalars(select(ClinicRoom.id).where(ClinicRoom.clinic_id == clinic_id))).all()
+    if room_ids:
+        await db.execute(delete(RoomScheduleLock).where(RoomScheduleLock.room_id.in_(room_ids)))
+    await db.execute(delete(ClinicRoom).where(ClinicRoom.clinic_id == clinic_id))
+
+    # 4. Incidentes de urgencia y notificaciones
+    incident_ids = (await db.scalars(select(EmergencyIncident.id).where(EmergencyIncident.clinic_id == clinic_id))).all()
+    if incident_ids:
+        await db.execute(delete(NotificationLog).where(NotificationLog.incident_id.in_(incident_ids)))
+        await db.execute(delete(EmergencyIncident).where(EmergencyIncident.id.in_(incident_ids)))
+
+    # 5. Horarios, afiliaciones, consentimientos y llaves
+    await db.execute(delete(DoctorWeeklySchedule).where(DoctorWeeklySchedule.clinic_id == clinic_id))
+    await db.execute(delete(DoctorClinicAffiliation).where(DoctorClinicAffiliation.clinic_id == clinic_id))
+    await db.execute(delete(PatientClinicAffiliation).where(PatientClinicAffiliation.clinic_id == clinic_id))
+    await db.execute(delete(PatientConsentGrant).where(PatientConsentGrant.granted_to_clinic_id == clinic_id))
+    await db.execute(delete(ClinicEncryptionKey).where(ClinicEncryptionKey.clinic_id == clinic_id))
+
+    # 6. Desvincular audit logs
+    await db.execute(update(AuditLog).where(AuditLog.clinic_id == clinic_id).values(clinic_id=None))
+
+    # 7. Gestión de usuarios del tenant y médicos
+    # Médicos: desvincular clinic_id sin borrarlos
+    await db.execute(
+        update(User)
+        .where(User.clinic_id == clinic_id, User.role == "DOCTOR")
+        .values(clinic_id=None)
+    )
+
+    # Tenant users (CLINIC_ADMIN, RECEPTIONIST): eliminar definitivamente
+    tenant_uids = (
+        await db.scalars(
+            select(User.id).where(User.clinic_id == clinic_id, User.role.in_(TENANT_ROLES))
+        )
+    ).all()
+    if tenant_uids:
+        await db.execute(update(User).where(User.verified_by_user_id.in_(tenant_uids)).values(verified_by_user_id=None))
+        await db.execute(update(AuditLog).where(AuditLog.user_id.in_(tenant_uids)).values(user_id=None))
+        await db.execute(delete(NotificationLog).where(NotificationLog.recipient_id.in_(tenant_uids)))
+        await db.execute(delete(UserDeviceToken).where(UserDeviceToken.user_id.in_(tenant_uids)))
+        await db.execute(delete(RefreshToken).where(RefreshToken.user_id.in_(tenant_uids)))
+        await db.execute(delete(User).where(User.id.in_(tenant_uids)))
+
+    # 8. Eliminar la clínica
+    await db.delete(clinic)
+    await db.commit()
+
+    return {
+        "success": True,
+        "message": f"La clínica '{clinic.name}' y sus recursos asociados han sido eliminados permanentemente.",
+        "clinic_id": clinic_id,
+        "notified_appointments": len(active_appointments),
+    }
 
 
 @router.get("/{clinic_id}/doctors", response_model=list[ClinicDoctorPublic])

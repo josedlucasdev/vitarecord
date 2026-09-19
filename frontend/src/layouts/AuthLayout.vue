@@ -1,7 +1,7 @@
 <template>
   <q-layout view="lHh Lpr lFf" class="min-h-screen">
     <!-- Header simple sin drawer (oculto en pantallas de login por diseño inmersivo) -->
-    <q-header v-if="!isLoginRoute" elevated class="bg-primary text-white">
+    <q-header v-if="!isLoginRoute" elevated style="background-color: #24796a !important;" class="text-white">
       <q-toolbar>
         <q-toolbar-title class="flex items-center cursor-pointer" @click="$router.push('/')">
           <img src="/icons/vitarecord-logo.png" alt="VitaRecord" class="w-8 h-8 rounded-full bg-white p-0.5 q-mr-sm" />
