@@ -120,7 +120,13 @@ class AuthService:
             return
 
         token = create_password_reset_token(user.id)
-        reset_link = f"{settings.FRONTEND_URL}/#/reset-password?token={token}"
+        portal_prefix = "patient"
+        if user.role in ("SUPERADMIN", "COMPLIANCE_REVIEWER", "MODERATOR"):
+            portal_prefix = "admin"
+        elif user.role in ("CLINIC_ADMIN", "DOCTOR", "RECEPTIONIST"):
+            portal_prefix = "clinic"
+
+        reset_link = f"{settings.FRONTEND_URL}/#/{portal_prefix}/reset-password?token={token}"
         html_body = build_branded_email_html(
             title="Recuperación de Contraseña",
             subtitle="Has solicitado restablecer tu contraseña de acceso a la plataforma VitaRecord.",

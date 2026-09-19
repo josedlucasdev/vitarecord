@@ -24,7 +24,7 @@
           </div>
           <h3 class="text-lg font-semibold text-slate-800">Invitación No Válida</h3>
           <p class="text-slate-600 text-sm mt-2 max-w-sm mx-auto">{{ validationError }}</p>
-          <q-btn to="/login" outline color="primary" label="Ir al Inicio de Sesión" class="mt-6 font-medium" />
+          <q-btn to="/clinic/login" outline color="primary" label="Ir al Inicio de Sesión" class="mt-6 font-medium" />
         </div>
 
         <!-- Invitación válida lista para responder -->
@@ -90,7 +90,7 @@
             {{ responseMessage }}
           </p>
           <div class="mt-8">
-            <q-btn to="/login" color="primary" label="Ir a Mi Cuenta" no-caps class="px-6 font-semibold" />
+            <q-btn to="/clinic/login" color="primary" label="Ir a Mi Cuenta" no-caps class="px-6 font-semibold" />
           </div>
         </div>
       </div>

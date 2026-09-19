@@ -81,7 +81,7 @@
 
       <!-- Footer Back Button -->
       <div class="pt-6 border-t border-slate-100 flex justify-between items-center text-xs">
-        <router-link to="/login" class="text-teal-700 font-bold hover:underline flex items-center space-x-1">
+        <router-link to="/patient/login" class="text-teal-700 font-bold hover:underline flex items-center space-x-1">
           <q-icon name="arrow_back" size="14px" />
           <span>Volver al Inicio de Sesión</span>
         </router-link>

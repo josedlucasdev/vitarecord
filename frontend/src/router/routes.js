@@ -1,27 +1,104 @@
+import { getValidTokenPayload } from 'src/composables/useAcl'
+
 const routes = [
   // Rutas públicas y de autenticación (AuthLayout: sin sidebar ni estado de usuario)
   {
     path: '/',
     component: () => import('layouts/AuthLayout.vue'),
     children: [
+      // Redirección de la raíz: si tiene sesión activa al dashboard, de lo contrario al login de pacientes
+      {
+        path: '',
+        name: 'root',
+        redirect: () => {
+          const payload = getValidTokenPayload()
+          if (payload) {
+            return { name: 'home' }
+          }
+          return '/patient/login'
+        }
+      },
+
+      // 1. Portal de Pacientes
+      {
+        path: 'patient/login',
+        name: 'patient-login',
+        component: () => import('pages/auth/PatientLogin.vue'),
+        meta: { guestOnly: true, portal: 'patient', hideHeader: true }
+      },
+      {
+        path: 'patient/forgot-password',
+        name: 'patient-forgot-password',
+        component: () => import('pages/auth/PasswordReset.vue'),
+        meta: { guestOnly: true, portal: 'patient' }
+      },
+      {
+        path: 'patient/reset-password',
+        name: 'patient-reset-password',
+        component: () => import('pages/auth/PasswordReset.vue'),
+        meta: { guestOnly: true, portal: 'patient' }
+      },
+
+      // 2. Portal de Personal Clínico (Médicos, Admin Clínica, Recepción/Secretarias)
+      {
+        path: 'clinic/login',
+        name: 'clinic-login',
+        alias: ['staff/login'],
+        component: () => import('pages/auth/ClinicStaffLogin.vue'),
+        meta: { guestOnly: true, portal: 'clinic', hideHeader: true }
+      },
+      {
+        path: 'clinic/forgot-password',
+        name: 'clinic-forgot-password',
+        component: () => import('pages/auth/PasswordReset.vue'),
+        meta: { guestOnly: true, portal: 'clinic' }
+      },
+      {
+        path: 'clinic/reset-password',
+        name: 'clinic-reset-password',
+        component: () => import('pages/auth/PasswordReset.vue'),
+        meta: { guestOnly: true, portal: 'clinic' }
+      },
+
+      // 3. Portal Super Administrador del Sistema
+      {
+        path: 'admin/login',
+        name: 'admin-login',
+        alias: ['superadmin/login'],
+        component: () => import('pages/auth/SuperAdminLogin.vue'),
+        meta: { guestOnly: true, portal: 'admin', hideHeader: true }
+      },
+      {
+        path: 'admin/forgot-password',
+        name: 'admin-forgot-password',
+        component: () => import('pages/auth/PasswordReset.vue'),
+        meta: { guestOnly: true, portal: 'admin' }
+      },
+      {
+        path: 'admin/reset-password',
+        name: 'admin-reset-password',
+        component: () => import('pages/auth/PasswordReset.vue'),
+        meta: { guestOnly: true, portal: 'admin' }
+      },
+
+      // Redirecciones retrocompatibles
       {
         path: 'login',
         name: 'login',
-        component: () => import('pages/auth/LoginPage.vue'),
-        meta: { guestOnly: true }
+        redirect: '/patient/login'
       },
       {
         path: 'forgot-password',
         name: 'forgot-password',
-        component: () => import('pages/auth/PasswordReset.vue'),
-        meta: { guestOnly: true }
+        redirect: '/patient/forgot-password'
       },
       {
         path: 'reset-password',
         name: 'reset-password',
-        component: () => import('pages/auth/PasswordReset.vue'),
-        meta: { guestOnly: true }
+        redirect: '/patient/reset-password'
       },
+
+      // Rutas públicas adicionales
       {
         path: 'invitations/respond',
         name: 'doctor-invite-respond',
@@ -67,7 +144,8 @@ const routes = [
     meta: { requiresAuth: true },
     children: [
       {
-        path: '',
+        path: 'dashboard',
+        alias: ['home'],
         name: 'home',
         component: () => import('pages/IndexPage.vue'),
         meta: { requiresAuth: true }

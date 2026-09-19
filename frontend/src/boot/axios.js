@@ -30,22 +30,31 @@ api.interceptors.response.use(
 
       if (routerInstance) {
         const currentRoute = routerInstance.currentRoute.value
-        if (currentRoute.name !== 'login') {
+        const isAuthPage = ['patient-login', 'clinic-login', 'admin-login', 'login'].includes(currentRoute.name)
+        if (!isAuthPage) {
           Notify.create({
             type: 'warning',
             message: 'Tu sesión ha expirado o se ha cerrado. Por favor ingresa nuevamente.',
             position: 'top',
             timeout: 3500
           })
+
+          let targetLogin = 'patient-login'
+          if (currentRoute.path.startsWith('/admin')) {
+            targetLogin = 'admin-login'
+          } else if (currentRoute.path.startsWith('/clinic') || currentRoute.path.startsWith('/doctor')) {
+            targetLogin = 'clinic-login'
+          }
+
           routerInstance.push({
-            name: 'login',
-            query: currentRoute.fullPath && currentRoute.fullPath !== '/' ? { redirect: currentRoute.fullPath } : {}
+            name: targetLogin,
+            query: currentRoute.fullPath && currentRoute.fullPath !== '/' && currentRoute.fullPath !== '/dashboard' ? { redirect: currentRoute.fullPath } : {}
           })
         }
       } else {
         const currentHash = window.location.hash || ''
-        if (!currentHash.includes('/login')) {
-          window.location.hash = '#/login'
+        if (!currentHash.includes('login')) {
+          window.location.hash = '#/patient/login'
         }
       }
     }

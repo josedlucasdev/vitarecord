@@ -25,7 +25,7 @@
           <h3 class="text-base font-bold text-slate-800">Enlace No Válido o Expirado</h3>
           <p class="text-slate-600 text-xs max-w-xs mx-auto leading-relaxed">{{ validationError }}</p>
           <q-btn
-            to="/login"
+            to="/patient/login"
             outline
             color="primary"
             label="Ir a Iniciar Sesión"

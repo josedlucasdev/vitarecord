@@ -24,9 +24,15 @@ export default route(function () {
     if (to.matched.some(record => record.meta.requiresAuth)) {
       if (!isAuthenticated) {
         clearAuthToken()
+        let targetLogin = 'patient-login'
+        if (to.path.startsWith('/admin')) {
+          targetLogin = 'admin-login'
+        } else if (to.path.startsWith('/clinic') || to.path.startsWith('/doctor')) {
+          targetLogin = 'clinic-login'
+        }
         return next({
-          name: 'login',
-          query: to.fullPath && to.fullPath !== '/' ? { redirect: to.fullPath } : {}
+          name: targetLogin,
+          query: to.fullPath && to.fullPath !== '/' && to.fullPath !== '/dashboard' ? { redirect: to.fullPath } : {}
         })
       }
 

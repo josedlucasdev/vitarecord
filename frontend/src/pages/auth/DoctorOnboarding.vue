@@ -24,7 +24,7 @@
           </div>
           <h3 class="text-lg font-semibold text-slate-800">Enlace No Válido</h3>
           <p class="text-slate-600 text-sm mt-2 max-w-sm mx-auto">{{ validationError }}</p>
-          <q-btn to="/login" outline color="primary" label="Ir al Inicio de Sesión" class="mt-6 font-medium" />
+          <q-btn to="/clinic/login" outline color="primary" label="Ir al Inicio de Sesión" class="mt-6 font-medium" />
         </div>
 
         <!-- Formulario Wizard -->
@@ -192,7 +192,7 @@
             Tu cuenta y perfil médico han sido dados de alta. La administración de <strong>{{ inviteData.clinic_name }}</strong> y el equipo de cumplimiento han sido notificados.
           </p>
           <div class="mt-8">
-            <q-btn to="/login" color="primary" label="Iniciar Sesión" no-caps class="px-8 font-semibold" />
+            <q-btn to="/clinic/login" color="primary" label="Iniciar Sesión" no-caps class="px-8 font-semibold" />
           </div>
         </div>
       </div>

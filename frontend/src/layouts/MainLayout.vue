@@ -12,7 +12,7 @@
           @click="toggleLeftDrawer"
         />
 
-        <q-toolbar-title class="cursor-pointer flex items-center" @click="$router.push('/')">
+        <q-toolbar-title class="cursor-pointer flex items-center" @click="$router.push({ name: 'home' })">
           <img src="/icons/vitarecord-logo.png" alt="VitaRecord" class="w-8 h-8 rounded-full bg-white p-0.5 q-mr-sm" />
           <span class="font-bold tracking-tight">VitaRecord</span>
         </q-toolbar-title>
@@ -471,7 +471,7 @@
           color="primary"
           icon="login"
           label="Iniciar Sesión"
-          to="/login"
+          to="/patient/login"
           class="w-full font-medium"
           no-caps
         />
@@ -846,8 +846,15 @@ const userEmail = computed(() => {
 })
 
 function logout () {
+  const currentRole = userRole.value
   clearAuthToken()
-  router.push({ name: 'login' })
+  if (currentRole === 'SUPERADMIN' || currentRole === 'COMPLIANCE_REVIEWER' || currentRole === 'MODERATOR') {
+    router.push({ name: 'admin-login' })
+  } else if (currentRole === 'CLINIC_ADMIN' || currentRole === 'DOCTOR' || currentRole === 'RECEPTIONIST') {
+    router.push({ name: 'clinic-login' })
+  } else {
+    router.push({ name: 'patient-login' })
+  }
 }
 
 // Modal Invitar / Afiliar Médico
