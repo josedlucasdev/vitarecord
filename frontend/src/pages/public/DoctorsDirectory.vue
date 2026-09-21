@@ -138,7 +138,7 @@
             <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-xl shadow-sm shrink-0 overflow-hidden">
               <img
                 v-if="doctor.profile_picture_url"
-                :src="doctor.profile_picture_url"
+                :src="resolveApiUrl(doctor.profile_picture_url)"
                 class="w-full h-full object-cover"
                 alt="Foto doctor"
               />
@@ -244,7 +244,7 @@
             <div class="w-16 h-16 rounded-2xl bg-white text-teal-800 flex items-center justify-center font-bold text-2xl shadow-md shrink-0 overflow-hidden">
               <img
                 v-if="selectedDoctorDetails.profile_picture_url"
-                :src="selectedDoctorDetails.profile_picture_url"
+                :src="resolveApiUrl(selectedDoctorDetails.profile_picture_url)"
                 class="w-full h-full object-cover"
                 alt="Foto doctor"
               />
@@ -382,7 +382,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api } from 'boot/axios'
+import { api, resolveApiUrl } from 'boot/axios'
 
 const router = useRouter()
 

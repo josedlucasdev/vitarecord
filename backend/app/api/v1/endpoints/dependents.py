@@ -122,7 +122,7 @@ async def upload_dependent_avatar(
     return {"profile_picture_url": avatar_url}
 
 
-@router.get("/patients/dependents/{dependent_id}/avatar")
+@router.api_route("/patients/dependents/{dependent_id}/avatar", methods=["GET", "HEAD"])
 async def get_dependent_avatar(dependent_id: str):
     """Sirve la foto de perfil del familiar."""
     if not AVATARS_DIR.exists():

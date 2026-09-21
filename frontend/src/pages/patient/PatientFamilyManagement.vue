@@ -86,12 +86,13 @@
               <div class="flex items-center space-x-3">
                 <!-- Avatar o Foto -->
                 <div class="relative group shrink-0">
-                  <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden border border-slate-100">
+                  <div class="w-14 h-14 rounded-xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-sm overflow-hidden border border-slate-100">
                     <img
-                      v-if="dep.profile_picture_url"
+                      v-if="dep.profile_picture_url && !failedAvatars.has(dep.id)"
                       :src="getResolvedAvatarUrl(dep.profile_picture_url)"
                       class="w-full h-full object-cover"
                       alt="Foto familiar"
+                      @error="failedAvatars.add(dep.id)"
                     />
                     <span v-else>{{ getInitials(dep.full_name) }}</span>
                   </div>
@@ -244,10 +245,11 @@
             <div v-if="isEditing" class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-4">
               <div class="w-14 h-14 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg overflow-hidden shrink-0 border border-white shadow-xs">
                 <img
-                  v-if="form.profile_picture_url"
+                  v-if="form.profile_picture_url && !avatarLoadError"
                   :src="getResolvedAvatarUrl(form.profile_picture_url)"
                   class="w-full h-full object-cover"
                   alt="Foto"
+                  @error="avatarLoadError = true"
                 />
                 <span v-else>{{ getInitials(form.full_name) }}</span>
               </div>
@@ -475,7 +477,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { api } from 'boot/axios'
+import { api, resolveApiUrl } from 'boot/axios'
 import { Notify } from 'quasar'
 
 const router = useRouter()
@@ -484,6 +486,8 @@ const saving = ref(false)
 const deleting = ref(false)
 const uploadingAvatar = ref(false)
 const avatarInputRef = ref(null)
+const avatarLoadError = ref(false)
+const failedAvatars = ref(new Set())
 
 const dependents = ref([])
 const showModal = ref(false)
@@ -526,13 +530,7 @@ function getInitials (name) {
 }
 
 function getResolvedAvatarUrl (url) {
-  if (!url) return null
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  const apiBase = process.env.CLIENT_API_URL || process.env.API_URL || process.env.VITE_API_URL || ''
-  if (apiBase) {
-    return `${apiBase.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`
-  }
-  return url
+  return resolveApiUrl(url)
 }
 
 function formatRelationship (rel) {
@@ -594,6 +592,7 @@ function resetForm () {
 function openCreateModal () {
   isEditing.value = false
   editingId.value = null
+  avatarLoadError.value = false
   resetForm()
   showModal.value = true
 }
@@ -601,6 +600,7 @@ function openCreateModal () {
 function openEditModal (dep) {
   isEditing.value = true
   editingId.value = dep.id
+  avatarLoadError.value = false
   form.full_name = dep.full_name || ''
   form.relationship = dep.relationship || 'HIJO'
   form.birth_date = dep.birth_date || ''
@@ -679,11 +679,13 @@ async function handleAvatarFileSelect (event) {
   formData.append('file', file)
 
   uploadingAvatar.value = true
+  avatarLoadError.value = false
   try {
     const { data } = await api.post(`/patients/me/dependents/${editingId.value}/avatar`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     form.profile_picture_url = `${data.profile_picture_url}?t=${Date.now()}`
+    failedAvatars.value.delete(editingId.value)
     Notify.create({ type: 'positive', message: 'Fotografía del familiar actualizada.' })
     await loadDependents()
   } catch (err) {

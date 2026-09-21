@@ -17,6 +17,20 @@ if (typeof window !== 'undefined') {
 }
 const api = axios.create({ baseURL: `${apiBase}/api/v1` })
 
+export function getApiBaseUrl () {
+  return apiBase
+}
+
+export function resolveApiUrl (url) {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
+    return url
+  }
+  const base = getApiBaseUrl()
+  const cleanPath = url.startsWith('/') ? url : `/${url}`
+  return base ? `${base}${cleanPath}` : cleanPath
+}
+
 let routerInstance = null
 
 // Interceptor para inyectar token Bearer automáticamente en todas las peticiones

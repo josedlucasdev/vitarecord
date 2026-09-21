@@ -411,7 +411,7 @@
                 <div class="flex items-start justify-between gap-3">
                   <div class="flex items-center space-x-3 min-w-0">
                     <q-avatar size="44px" color="teal-1" text-color="teal-9" class="font-bold border border-teal-200">
-                      <img v-if="doc.profile_picture_url" :src="doc.profile_picture_url" />
+                      <img v-if="doc.profile_picture_url" :src="resolveApiUrl(doc.profile_picture_url)" />
                       <span v-else>{{ getInitials(doc.full_name || doc.email) }}</span>
                     </q-avatar>
                     <div class="min-w-0">
@@ -763,7 +763,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Dialog, Notify } from 'quasar'
-import { api } from 'boot/axios'
+import { api, resolveApiUrl } from 'boot/axios'
 import { useAcl } from 'src/composables/useAcl'
 
 const { can, user } = useAcl()

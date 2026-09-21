@@ -52,10 +52,11 @@
             <div class="relative group shrink-0">
               <div class="w-24 h-24 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-2xl shadow-md overflow-hidden border-2 border-white ring-2 ring-teal-100">
                 <img
-                  v-if="profile.profile_picture_url"
+                  v-if="profile.profile_picture_url && !avatarLoadError"
                   :src="getResolvedAvatarUrl(profile.profile_picture_url)"
                   class="w-full h-full object-cover"
                   alt="Foto del paciente"
+                  @error="avatarLoadError = true"
                 />
                 <span v-else class="text-3xl">{{ getInitials(profile.full_name || profile.email) }}</span>
               </div>
@@ -433,13 +434,14 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { api } from 'boot/axios'
+import { api, resolveApiUrl } from 'boot/axios'
 import { Notify } from 'quasar'
 
 const loading = ref(true)
 const saving = ref(false)
 const uploadingAvatar = ref(false)
 const avatarInputRef = ref(null)
+const avatarLoadError = ref(false)
 
 const profile = reactive({
   id: '',
@@ -473,13 +475,7 @@ function getInitials (nameOrEmail) {
 }
 
 function getResolvedAvatarUrl (url) {
-  if (!url) return null
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-  const apiBase = process.env.CLIENT_API_URL || process.env.API_URL || process.env.VITE_API_URL || ''
-  if (apiBase) {
-    return `${apiBase.replace(/\/$/, '')}${url.startsWith('/') ? '' : '/'}${url}`
-  }
-  return url
+  return resolveApiUrl(url)
 }
 
 async function loadProfile () {
@@ -580,11 +576,13 @@ async function handleAvatarFileSelect (event) {
   formData.append('file', file)
 
   uploadingAvatar.value = true
+  avatarLoadError.value = false
   try {
     const { data } = await api.post('/patients/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
     profile.profile_picture_url = `${data.profile_picture_url}?t=${Date.now()}`
+    avatarLoadError.value = false
     Notify.create({
       type: 'positive',
       message: 'Fotografía de perfil actualizada con éxito.'

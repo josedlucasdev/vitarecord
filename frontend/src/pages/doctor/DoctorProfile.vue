@@ -60,7 +60,7 @@
                 <div class="w-24 h-24 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-2xl shadow-md overflow-hidden border-2 border-white ring-2 ring-teal-100">
                   <img
                     v-if="profile.profile_picture_url"
-                    :src="profile.profile_picture_url"
+                    :src="resolveApiUrl(profile.profile_picture_url)"
                     class="w-full h-full object-cover"
                     alt="Foto de perfil"
                   />
@@ -516,7 +516,7 @@
                 <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-teal-700 to-teal-500 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0 overflow-hidden">
                   <img
                     v-if="profile.profile_picture_url"
-                    :src="profile.profile_picture_url"
+                    :src="resolveApiUrl(profile.profile_picture_url)"
                     class="w-full h-full object-cover"
                     alt="Foto Dr."
                   />
@@ -944,7 +944,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Notify } from 'quasar'
-import { api } from 'boot/axios'
+import { api, resolveApiUrl } from 'boot/axios'
 
 const loading = ref(true)
 const saving = ref(false)

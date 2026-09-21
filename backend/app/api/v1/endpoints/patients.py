@@ -150,7 +150,7 @@ async def upload_my_patient_avatar(
     return {"profile_picture_url": avatar_url}
 
 
-@router.get("/patients/{patient_id}/avatar")
+@router.api_route("/patients/{patient_id}/avatar", methods=["GET", "HEAD"])
 async def get_patient_avatar(patient_id: str):
     """Sirve la foto de perfil del paciente."""
     if not AVATARS_DIR.exists():
