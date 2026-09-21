@@ -31,11 +31,26 @@ async def init_db_and_seed() -> None:
             except Exception:
                 pass  # Columna ya existe
 
-        # Asegurar columnas de perfil profesional y datos de paciente en la tabla users
+        # Asegurar columnas de perfil profesional, especialidades, MFA y datos de paciente en la tabla users
         for col_def in [
+            "ADD COLUMN specialty VARCHAR(500) NULL",
+            "ADD COLUMN specialties JSON NULL",
+            "ADD COLUMN license_number VARCHAR(100) NULL",
+            "ADD COLUMN biography VARCHAR(1000) NULL",
             "ADD COLUMN academic_degrees JSON NULL",
             "ADD COLUMN work_experience JSON NULL",
             "ADD COLUMN is_public_profile_enabled BOOLEAN NOT NULL DEFAULT TRUE",
+            "ADD COLUMN license_verification_status VARCHAR(32) NOT NULL DEFAULT 'NOT_APPLICABLE'",
+            "ADD COLUMN license_document_url VARCHAR(500) NULL",
+            "ADD COLUMN verified_by_user_id VARCHAR(36) NULL",
+            "ADD COLUMN verified_at DATETIME NULL",
+            "ADD COLUMN preferred_notification_channels JSON NULL",
+            "ADD COLUMN no_show_strikes INT NOT NULL DEFAULT 0",
+            "ADD COLUMN is_restricted_booking BOOLEAN NOT NULL DEFAULT FALSE",
+            "ADD COLUMN mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+            "ADD COLUMN mfa_secret VARCHAR(64) NULL",
+            "ADD COLUMN mfa_recovery_codes_hash VARCHAR(255) NULL",
+            "ADD COLUMN is_available_for_emergencies BOOLEAN NOT NULL DEFAULT FALSE",
             "ADD COLUMN profile_picture_url VARCHAR(500) NULL",
             "ADD COLUMN identification_number VARCHAR(32) NULL",
             "ADD COLUMN birth_date DATETIME NULL",
@@ -56,6 +71,14 @@ async def init_db_and_seed() -> None:
             except Exception:
                 pass  # Columna ya existe
 
+        # Sincronizar specialty antigua a lista JSON de specialties si está vacía
+        try:
+            await conn.exec_driver_sql(
+                "UPDATE users SET specialties = JSON_ARRAY(specialty) WHERE specialty IS NOT NULL AND (specialties IS NULL OR JSON_LENGTH(specialties) = 0)"
+            )
+        except Exception:
+            pass
+
         # Asegurar columnas de consultorios (salas físicas)
         for col_def in [
             "ADD COLUMN specialty VARCHAR(100) NULL",
@@ -67,11 +90,17 @@ async def init_db_and_seed() -> None:
             except Exception:
                 pass  # Columna ya existe
 
-        # Asegurar columna intake_data en tabla appointments
-        try:
-            await conn.exec_driver_sql("ALTER TABLE appointments ADD COLUMN intake_data JSON NULL")
-        except Exception:
-            pass
+        # Asegurar columnas en tabla appointments
+        for col_def in [
+            "ADD COLUMN intake_data JSON NULL",
+            "ADD COLUMN dependent_id VARCHAR(36) NULL",
+            "ADD COLUMN room_id VARCHAR(36) NULL",
+            "ADD COLUMN cancellation_reason VARCHAR(255) NULL",
+        ]:
+            try:
+                await conn.exec_driver_sql(f"ALTER TABLE appointments {col_def}")
+            except Exception:
+                pass
 
         # Asegurar columnas clínicas y de contacto en patient_dependents
         for col_def in [
