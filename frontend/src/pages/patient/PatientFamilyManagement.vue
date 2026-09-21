@@ -173,23 +173,31 @@
 
               <div class="grid grid-cols-2 gap-2 text-2xs">
                 <div class="bg-teal-50/70 border border-teal-200/80 p-2 rounded-xl">
-                  <div class="text-3xs text-teal-800 font-bold">🩸 Grupo Sanguíneo</div>
+                  <div class="text-3xs text-teal-800 font-bold flex items-center">
+                    <q-icon name="bloodtype" size="13px" class="mr-1 text-red-600" />
+                    Grupo Sanguíneo
+                  </div>
                   <div class="font-black text-slate-800 mt-0.5">{{ dep.blood_type || 'Pendiente' }}</div>
                 </div>
                 <div class="bg-teal-50/70 border border-teal-200/80 p-2 rounded-xl">
-                  <div class="text-3xs text-teal-800 font-bold">📏 Estatura / Talla</div>
+                  <div class="text-3xs text-teal-800 font-bold flex items-center">
+                    <q-icon name="straighten" size="13px" class="mr-1 text-teal-700" />
+                    Estatura / Talla
+                  </div>
                   <div class="font-black text-slate-800 mt-0.5">
                     {{ dep.height_cm ? `${dep.height_cm} cm` : 'Pendiente' }}
                   </div>
                 </div>
               </div>
 
-              <div v-if="dep.allergies" class="text-2xs p-2 rounded-lg bg-red-50 text-red-900 border border-red-200/70">
-                <strong>⚠️ Alergias:</strong> {{ dep.allergies }}
+              <div v-if="dep.allergies" class="text-2xs p-2 rounded-lg bg-red-50 text-red-900 border border-red-200/70 flex items-start gap-1">
+                <q-icon name="warning" size="14px" class="text-red-700 shrink-0 mt-0.5" />
+                <div><strong>Alergias:</strong> {{ dep.allergies }}</div>
               </div>
 
-              <div v-if="dep.chronic_conditions" class="text-2xs p-2 rounded-lg bg-slate-100 text-slate-700">
-                <strong>📋 Antecedentes:</strong> {{ dep.chronic_conditions }}
+              <div v-if="dep.chronic_conditions" class="text-2xs p-2 rounded-lg bg-slate-100 text-slate-700 flex items-start gap-1">
+                <q-icon name="assignment" size="14px" class="text-slate-600 shrink-0 mt-0.5" />
+                <div><strong>Antecedentes:</strong> {{ dep.chronic_conditions }}</div>
               </div>
 
               <div v-if="dep.notes" class="text-2xs italic text-slate-500 px-1 line-clamp-2">

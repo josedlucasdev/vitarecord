@@ -234,16 +234,20 @@
               </div>
               <div class="flex flex-wrap items-center gap-2 text-xs text-slate-700 pt-0.5">
                 <span class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 font-semibold flex items-center shadow-2xs">
-                  🩸 Grupo: <strong class="ml-1 text-teal-900">{{ patientForm.blood_type }}</strong>
+                  <q-icon name="bloodtype" size="14px" class="mr-1 text-red-600" />
+                  Grupo: <strong class="ml-1 text-teal-900">{{ patientForm.blood_type }}</strong>
                 </span>
                 <span class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 font-semibold flex items-center shadow-2xs">
-                  📏 Talla: <strong class="ml-1 text-teal-900">{{ patientForm.height_cm }} cm</strong>
+                  <q-icon name="straighten" size="14px" class="mr-1 text-teal-700" />
+                  Talla: <strong class="ml-1 text-teal-900">{{ patientForm.height_cm }} cm</strong>
                 </span>
-                <span v-if="patientForm.allergies" class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 text-slate-600 shadow-2xs">
-                  ⚠️ Alergias: <strong class="ml-1 text-slate-800">{{ patientForm.allergies }}</strong>
+                <span v-if="patientForm.allergies" class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 text-slate-600 shadow-2xs flex items-center">
+                  <q-icon name="warning" size="14px" class="mr-1 text-amber-600" />
+                  Alergias: <strong class="ml-1 text-slate-800">{{ patientForm.allergies }}</strong>
                 </span>
-                <span v-if="patientForm.chronic_conditions" class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 text-slate-600 shadow-2xs">
-                  📋 Antecedentes: <strong class="ml-1 text-slate-800">{{ patientForm.chronic_conditions }}</strong>
+                <span v-if="patientForm.chronic_conditions" class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 text-slate-600 shadow-2xs flex items-center">
+                  <q-icon name="assignment" size="14px" class="mr-1 text-blue-600" />
+                  Antecedentes: <strong class="ml-1 text-slate-800">{{ patientForm.chronic_conditions }}</strong>
                 </span>
               </div>
             </div>

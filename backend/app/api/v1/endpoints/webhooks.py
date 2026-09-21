@@ -187,7 +187,7 @@ async def _handle_patient_whatsapp_action(
         if from_phone:
             await notif_service.whatsapp.send_text(
                 phone=from_phone,
-                text="✅ ¡Cita Confirmada! Su asistencia ha sido registrada formalmente en ÍntimaSalud. ¡Le esperamos!",
+                text="¡Cita Confirmada! Su asistencia ha sido registrada formalmente en ÍntimaSalud. ¡Le esperamos!",
             )
 
     elif is_reject:
@@ -221,7 +221,7 @@ async def _handle_patient_whatsapp_action(
         if from_phone:
             await notif_service.whatsapp.send_text(
                 phone=from_phone,
-                text="ℹ️ Su cita ha sido cancelada y el horario ha quedado liberado. Gracias por avisarnos.",
+                text="Su cita ha sido cancelada y el horario ha quedado liberado. Gracias por avisarnos.",
             )
 
 

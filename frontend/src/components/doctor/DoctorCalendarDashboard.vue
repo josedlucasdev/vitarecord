@@ -634,22 +634,34 @@
 
           <div v-if="selectedTriageApp.intake_data" class="space-y-2 text-xs">
             <div class="p-3 bg-red-50/60 rounded-xl border border-red-200/60" v-if="selectedTriageApp.intake_data.allergies">
-              <span class="font-bold text-red-800 block mb-0.5">⚠️ Alergias Reportadas:</span>
+              <span class="font-bold text-red-800 flex items-center gap-1 mb-0.5">
+                <q-icon name="warning" size="14px" class="text-red-700" />
+                Alergias Reportadas:
+              </span>
               <span class="text-red-950 font-medium">{{ selectedTriageApp.intake_data.allergies }}</span>
             </div>
 
             <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80" v-if="selectedTriageApp.intake_data.chronic_conditions">
-              <span class="font-bold text-slate-700 block mb-0.5">🩺 Patologías / Antecedentes Crónicos:</span>
+              <span class="font-bold text-slate-700 flex items-center gap-1 mb-0.5">
+                <q-icon name="medical_services" size="14px" class="text-teal-700" />
+                Patologías / Antecedentes Crónicos:
+              </span>
               <span class="text-slate-800">{{ selectedTriageApp.intake_data.chronic_conditions }}</span>
             </div>
 
             <div class="p-3 bg-slate-50 rounded-xl border border-slate-200/80" v-if="selectedTriageApp.intake_data.current_medications">
-              <span class="font-bold text-slate-700 block mb-0.5">💊 Medicación Habitual:</span>
+              <span class="font-bold text-slate-700 flex items-center gap-1 mb-0.5">
+                <q-icon name="medication" size="14px" class="text-indigo-600" />
+                Medicación Habitual:
+              </span>
               <span class="text-slate-800">{{ selectedTriageApp.intake_data.current_medications }}</span>
             </div>
 
             <div class="p-3 bg-blue-50/60 rounded-xl border border-blue-200/60" v-if="selectedTriageApp.intake_data.symptoms">
-              <span class="font-bold text-blue-900 block mb-0.5">📝 Cuadro de Síntomas Detallado:</span>
+              <span class="font-bold text-blue-900 flex items-center gap-1 mb-0.5">
+                <q-icon name="edit_note" size="16px" class="text-blue-700" />
+                Cuadro de Síntomas Detallado:
+              </span>
               <span class="text-blue-950">{{ selectedTriageApp.intake_data.symptoms }}</span>
             </div>
           </div>

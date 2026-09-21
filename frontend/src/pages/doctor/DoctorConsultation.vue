@@ -58,8 +58,9 @@
                   <q-badge color="teal-8" text-color="white" class="font-bold text-2xs py-0.5 px-2">
                     {{ appointment.dependent_relationship || 'Familiar Dependiente' }}
                   </q-badge>
-                  <q-badge outline color="teal-9" class="font-semibold text-3xs">
-                    🔒 Expediente Clínico Separado
+                  <q-badge outline color="teal-9" class="font-semibold text-3xs flex items-center gap-1">
+                    <q-icon name="lock" size="11px" />
+                    Expediente Clínico Separado
                   </q-badge>
                 </div>
                 <div class="text-base font-bold text-slate-900 mt-0.5">
@@ -157,8 +158,8 @@
                 </div>
                 <div class="text-2xs text-slate-600 mt-0.5">
                   <span>{{ patientHistory.length }} consulta{{ patientHistory.length !== 1 ? 's' : '' }} previa{{ patientHistory.length !== 1 ? 's' : '' }}</span>
-                  <span v-if="activeTreatments.length > 0" class="text-amber-900 font-bold ml-1.5">
-                    • ⚠️ {{ activeTreatments.length }} tratamiento{{ activeTreatments.length !== 1 ? 's' : '' }} activo{{ activeTreatments.length !== 1 ? 's' : '' }}
+                  <span v-if="activeTreatments.length > 0" class="text-amber-900 font-bold ml-1.5 inline-flex items-center gap-1">
+                    • <q-icon name="warning" size="13px" class="text-amber-700" /> {{ activeTreatments.length }} tratamiento{{ activeTreatments.length !== 1 ? 's' : '' }} activo{{ activeTreatments.length !== 1 ? 's' : '' }}
                   </span>
                   <span v-else class="text-emerald-700 font-medium ml-1.5">
                     • Sin tratamientos activos vigentes
@@ -793,20 +794,20 @@
         <!-- Resumen de Antecedentes y Triage del Paciente -->
         <div v-if="appointment?.intake_data && Object.keys(appointment.intake_data).length > 0" class="bg-teal-900/10 border-b border-teal-200/60 p-3 px-4 text-xs space-y-1.5">
           <div class="flex flex-wrap items-center gap-2 text-2xs">
-            <span v-if="appointment.intake_data.blood_type" class="bg-white px-2 py-0.5 rounded border border-teal-200 font-semibold text-slate-700">
-              🩸 Grupo: <strong>{{ appointment.intake_data.blood_type }}</strong>
+            <span v-if="appointment.intake_data.blood_type" class="bg-white px-2 py-0.5 rounded border border-teal-200 font-semibold text-slate-700 flex items-center">
+              <q-icon name="bloodtype" size="13px" class="mr-1 text-red-600" />Grupo: <strong class="ml-1">{{ appointment.intake_data.blood_type }}</strong>
             </span>
             <span v-if="appointment.intake_data.weight_kg" class="bg-white px-2 py-0.5 rounded border border-teal-200 text-slate-700">
               Peso: <strong>{{ appointment.intake_data.weight_kg }} kg</strong>
             </span>
-            <span v-if="appointment.intake_data.height_cm" class="bg-white px-2 py-0.5 rounded border border-teal-200 text-slate-700">
-              Talla: <strong>{{ appointment.intake_data.height_cm }} cm</strong>
+            <span v-if="appointment.intake_data.height_cm" class="bg-white px-2 py-0.5 rounded border border-teal-200 text-slate-700 flex items-center">
+              <q-icon name="straighten" size="13px" class="mr-1 text-teal-700" />Talla: <strong class="ml-1">{{ appointment.intake_data.height_cm }} cm</strong>
             </span>
-            <span v-if="appointment.intake_data.allergies" class="bg-red-50 text-red-900 px-2 py-0.5 rounded border border-red-200 font-bold">
-              ⚠️ Alergias: {{ appointment.intake_data.allergies }}
+            <span v-if="appointment.intake_data.allergies" class="bg-red-50 text-red-900 px-2 py-0.5 rounded border border-red-200 font-bold flex items-center">
+              <q-icon name="warning" size="13px" class="mr-1 text-red-700" />Alergias: {{ appointment.intake_data.allergies }}
             </span>
-            <span v-if="appointment.intake_data.chronic_conditions" class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 font-medium">
-              Antecedentes: {{ appointment.intake_data.chronic_conditions }}
+            <span v-if="appointment.intake_data.chronic_conditions" class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200 font-medium flex items-center">
+              <q-icon name="assignment" size="13px" class="mr-1 text-slate-600" />Antecedentes: {{ appointment.intake_data.chronic_conditions }}
             </span>
           </div>
         </div>
