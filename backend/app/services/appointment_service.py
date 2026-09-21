@@ -195,6 +195,54 @@ class AppointmentService:
         else:
             initial_status = "CONFIRMED"
 
+        # Consolidar intake_data con el perfil permanente del paciente
+        intake = dict(payload.intake_data or {})
+
+        # Si el paciente ya tiene datos basales registrados y no vienen en el intake, inyectarlos
+        if patient.blood_type and not intake.get("blood_type"):
+            intake["blood_type"] = patient.blood_type
+        if patient.height_cm and not intake.get("height_cm"):
+            intake["height_cm"] = patient.height_cm
+        if patient.allergies and not intake.get("allergies"):
+            intake["allergies"] = patient.allergies
+        if patient.chronic_conditions and not intake.get("chronic_conditions"):
+            intake["chronic_conditions"] = patient.chronic_conditions
+
+        # Si el intake_data trae datos basales y el paciente aún no los tenía, persistirlos en su perfil
+        if intake.get("blood_type") and not patient.blood_type:
+            patient.blood_type = intake["blood_type"]
+        if intake.get("height_cm") and not patient.height_cm:
+            try:
+                patient.height_cm = float(intake["height_cm"])
+            except (ValueError, TypeError):
+                pass
+        if intake.get("allergies") and not patient.allergies:
+            patient.allergies = intake["allergies"]
+        if intake.get("chronic_conditions") and not patient.chronic_conditions:
+            patient.chronic_conditions = intake["chronic_conditions"]
+
+        # Recalcular IMC dinámicamente si tenemos peso y talla (del intake o del perfil permanente)
+        w_raw = intake.get("weight_kg")
+        h_raw = intake.get("height_cm") or patient.height_cm
+        if w_raw and h_raw:
+            try:
+                w_val = float(w_raw)
+                h_val = float(h_raw)
+                if h_val > 0:
+                    h_m = h_val / 100.0
+                    calc_bmi = round(w_val / (h_m * h_m), 2)
+                    intake["bmi"] = calc_bmi
+                    if calc_bmi < 18.5:
+                        intake["bmi_category"] = "Bajo peso"
+                    elif calc_bmi < 25.0:
+                        intake["bmi_category"] = "Peso normal"
+                    elif calc_bmi < 30.0:
+                        intake["bmi_category"] = "Sobrepeso"
+                    else:
+                        intake["bmi_category"] = "Obesidad"
+            except (ValueError, TypeError):
+                pass
+
         appointment = Appointment(
             clinic_id=payload.clinic_id,
             doctor_id=payload.doctor_id,
@@ -205,6 +253,7 @@ class AppointmentService:
             end_time=payload.end_time,
             status=initial_status,
             reason=payload.reason,
+            intake_data=intake,
         )
         await self.appointments.create(appointment)
 
@@ -491,6 +540,14 @@ class AppointmentService:
                 patient.birth_date = b_date
             if payload.gender and not patient.gender:
                 patient.gender = payload.gender
+            if payload.blood_type and not patient.blood_type:
+                patient.blood_type = payload.blood_type
+            if payload.height_cm and not patient.height_cm:
+                patient.height_cm = payload.height_cm
+            if payload.allergies and not patient.allergies:
+                patient.allergies = payload.allergies
+            if payload.chronic_conditions and not patient.chronic_conditions:
+                patient.chronic_conditions = payload.chronic_conditions
 
             # Si el usuario no era un paciente activo con clave establecida:
             if patient.role != "PATIENT" or patient.status != "ACTIVE" or not patient.hashed_password:

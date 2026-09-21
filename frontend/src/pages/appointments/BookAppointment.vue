@@ -195,146 +195,262 @@
       <q-separator />
 
       <!-- SECCIÓN 2: Triage Clínico y Medidas Biométricas -->
+      <!-- SECCIÓN 2: Triage Clínico y Medidas Biométricas -->
       <div class="space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2">
           <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
             <q-icon name="monitor_heart" size="16px" class="mr-1.5 text-teal-600" />
-            2. Medidas Biométricas y Triage Clínico Previo
+            2. Medidas Biométricas y Triage Clínico
           </label>
           <span class="text-2xs text-slate-500">
             Información médica para preparar tu consulta
           </span>
         </div>
 
-        <!-- Medidas: Estatura, Peso e IMC -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
-          <div>
-            <q-input
-              v-model.number="patientForm.height_cm"
-              outlined
+        <!-- Caso A: El paciente titular ya tiene su Ficha Clínica Permanente (no se le vuelve a pedir) -->
+        <div v-if="hasPermanentClinicalData" class="space-y-4">
+          <!-- Tarjeta de Ficha Basal Registrada -->
+          <div class="p-4 bg-teal-50/80 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+            <div class="space-y-1.5">
+              <div class="flex items-center gap-2">
+                <span class="text-2xs font-bold uppercase tracking-wider text-teal-800 flex items-center">
+                  <q-icon name="verified" size="15px" class="mr-1 text-teal-600" />
+                  Ficha Clínica Basal Permanente
+                </span>
+                <span class="text-3xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
+                  Guardada en tu perfil
+                </span>
+              </div>
+              <div class="flex flex-wrap items-center gap-2 text-xs text-slate-700 pt-0.5">
+                <span class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 font-semibold flex items-center shadow-2xs">
+                  🩸 Grupo: <strong class="ml-1 text-teal-900">{{ patientForm.blood_type }}</strong>
+                </span>
+                <span class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 font-semibold flex items-center shadow-2xs">
+                  📏 Talla: <strong class="ml-1 text-teal-900">{{ patientForm.height_cm }} cm</strong>
+                </span>
+                <span v-if="patientForm.allergies" class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 text-slate-600 shadow-2xs">
+                  ⚠️ Alergias: <strong class="ml-1 text-slate-800">{{ patientForm.allergies }}</strong>
+                </span>
+                <span v-if="patientForm.chronic_conditions" class="bg-white px-2.5 py-1 rounded-lg border border-teal-200 text-slate-600 shadow-2xs">
+                  📋 Antecedentes: <strong class="ml-1 text-slate-800">{{ patientForm.chronic_conditions }}</strong>
+                </span>
+              </div>
+            </div>
+
+            <q-btn
+              flat
               dense
-              type="number"
-              label="Estatura / Talla (cm) *"
-              placeholder="Ej. 165"
-              suffix="cm"
-              bg-color="white"
-              :rules="[val => !val || (val >= 40 && val <= 250) || 'Talla debe ser entre 40 y 250 cm']"
+              no-caps
+              size="sm"
+              color="teal-8"
+              icon="edit"
+              label="Modificar en Mi Perfil"
+              to="/patient/profile"
+              class="text-xs font-bold shrink-0 self-start sm:self-center"
             />
           </div>
 
-          <div>
-            <q-input
-              v-model.number="patientForm.weight_kg"
-              outlined
-              dense
-              type="number"
-              step="0.1"
-              label="Peso Actual (kg) *"
-              placeholder="Ej. 62.5"
-              suffix="kg"
-              bg-color="white"
-              :rules="[val => !val || (val >= 2 && val <= 350) || 'Peso debe ser entre 2 y 350 kg']"
-            />
-          </div>
+          <!-- Campos requeridos de la consulta actual: Solo peso e indicaciones -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
+            <div>
+              <q-input
+                v-model.number="patientForm.weight_kg"
+                outlined
+                dense
+                type="number"
+                step="0.1"
+                label="Peso Actual de Consulta (kg) *"
+                placeholder="Ej. 62.5"
+                suffix="kg"
+                bg-color="white"
+                hint="El peso se registra en cada consulta"
+                :rules="[val => !val || (val >= 2 && val <= 350) || 'Peso debe ser entre 2 y 350 kg']"
+              />
+            </div>
 
-          <!-- Live BMI display -->
-          <div class="flex items-center justify-center bg-white rounded-xl border border-slate-200 p-2.5">
-            <div v-if="calculatedBmi" class="text-center">
-              <div class="text-2xs font-bold uppercase tracking-wider text-slate-400">IMC Calculado</div>
-              <div class="text-lg font-black text-slate-800">{{ calculatedBmi }} <span class="text-xs font-normal text-slate-400">kg/m²</span></div>
-              <span
-                :class="bmiCategoryClass"
-                class="inline-block px-2 py-0.5 rounded-full text-2xs font-bold mt-0.5"
+            <!-- Live BMI display usando la estatura fija del perfil -->
+            <div class="flex items-center justify-center bg-white rounded-xl border border-slate-200 p-2.5">
+              <div v-if="calculatedBmi" class="text-center">
+                <div class="text-2xs font-bold uppercase tracking-wider text-slate-400">IMC (con tu talla {{ patientForm.height_cm }} cm)</div>
+                <div class="text-lg font-black text-slate-800">{{ calculatedBmi }} <span class="text-xs font-normal text-slate-400">kg/m²</span></div>
+                <span
+                  :class="bmiCategoryClass"
+                  class="inline-block px-2 py-0.5 rounded-full text-2xs font-bold mt-0.5"
+                >
+                  {{ bmiCategoryText }}
+                </span>
+              </div>
+              <div v-else class="text-center text-slate-400 text-xs py-1">
+                <q-icon name="calculate" size="18px" class="mb-1" />
+                <div>Ingresa tu peso para calcular IMC</div>
+              </div>
+            </div>
+
+            <div>
+              <q-input
+                v-model="patientForm.current_medications"
+                outlined
+                dense
+                label="Medicamentos Actuales"
+                placeholder="Ej. Losartán, Ninguno"
+                bg-color="white"
               >
-                {{ bmiCategoryText }}
-              </span>
-            </div>
-            <div v-else class="text-center text-slate-400 text-xs py-1">
-              <q-icon name="calculate" size="18px" class="mb-1" />
-              <div>Ingresa talla y peso para calcular IMC</div>
+                <template #append>
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    color="teal"
+                    label="No toma"
+                    class="text-2xs font-bold"
+                    @click="patientForm.current_medications = 'No consume medicamentos actualmente'"
+                  />
+                </template>
+              </q-input>
             </div>
           </div>
         </div>
 
-        <!-- Grupo Sanguíneo y Alergias -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <q-select
-              v-model="patientForm.blood_type"
-              outlined
-              dense
-              :options="['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'No lo sé']"
-              label="Grupo Sanguíneo"
-            />
+        <!-- Caso B: Paciente que aún no ha completado su ficha o reserva pública -->
+        <div v-else class="space-y-4">
+          <div v-if="isLoggedIn && beneficiaryType === 'self'" class="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
+            <q-icon name="lightbulb" color="amber-8" size="18px" class="mt-0.5 shrink-0" />
+            <div>
+              <strong>Completa tus datos basales por primera vez:</strong>
+              Ingresa tu estatura y grupo sanguíneo. Se guardarán en tu perfil de paciente para que no tengas que volver a ingresarlos en tus próximas consultas.
+            </div>
           </div>
 
-          <div>
-            <q-input
-              v-model="patientForm.allergies"
-              outlined
-              dense
-              label="Alergias a Medicamentos o Sustancias"
-              placeholder="Ej. Penicilina, Sulfas, AINEs"
-            >
-              <template #append>
-                <q-btn
-                  flat
-                  dense
-                  no-caps
-                  color="teal"
-                  label="Ninguna"
-                  class="text-2xs font-bold"
-                  @click="patientForm.allergies = 'Ninguna conocida'"
-                />
-              </template>
-            </q-input>
-          </div>
-        </div>
+          <!-- Medidas: Estatura, Peso e IMC -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
+            <div>
+              <q-input
+                v-model.number="patientForm.height_cm"
+                outlined
+                dense
+                type="number"
+                label="Estatura / Talla (cm) *"
+                placeholder="Ej. 165"
+                suffix="cm"
+                bg-color="white"
+                :rules="[val => !val || (val >= 40 && val <= 250) || 'Talla debe ser entre 40 y 250 cm']"
+              />
+            </div>
 
-        <!-- Antecedentes y Medicamentos -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <q-input
-              v-model="patientForm.chronic_conditions"
-              outlined
-              dense
-              label="Antecedentes Médicos / Enfermedades Crónicas"
-              placeholder="Ej. Hipertensión, Diabetes, Asma, Ninguna"
-            >
-              <template #append>
-                <q-btn
-                  flat
-                  dense
-                  no-caps
-                  color="teal"
-                  label="Sin antecedentes"
-                  class="text-2xs font-bold"
-                  @click="patientForm.chronic_conditions = 'Sin antecedentes patológicos'"
-                />
-              </template>
-            </q-input>
+            <div>
+              <q-input
+                v-model.number="patientForm.weight_kg"
+                outlined
+                dense
+                type="number"
+                step="0.1"
+                label="Peso Actual (kg) *"
+                placeholder="Ej. 62.5"
+                suffix="kg"
+                bg-color="white"
+                :rules="[val => !val || (val >= 2 && val <= 350) || 'Peso debe ser entre 2 y 350 kg']"
+              />
+            </div>
+
+            <!-- Live BMI display -->
+            <div class="flex items-center justify-center bg-white rounded-xl border border-slate-200 p-2.5">
+              <div v-if="calculatedBmi" class="text-center">
+                <div class="text-2xs font-bold uppercase tracking-wider text-slate-400">IMC Calculado</div>
+                <div class="text-lg font-black text-slate-800">{{ calculatedBmi }} <span class="text-xs font-normal text-slate-400">kg/m²</span></div>
+                <span
+                  :class="bmiCategoryClass"
+                  class="inline-block px-2 py-0.5 rounded-full text-2xs font-bold mt-0.5"
+                >
+                  {{ bmiCategoryText }}
+                </span>
+              </div>
+              <div v-else class="text-center text-slate-400 text-xs py-1">
+                <q-icon name="calculate" size="18px" class="mb-1" />
+                <div>Ingresa talla y peso para calcular IMC</div>
+              </div>
+            </div>
           </div>
 
-          <div>
-            <q-input
-              v-model="patientForm.current_medications"
-              outlined
-              dense
-              label="Medicamentos que Toma Actualmente"
-              placeholder="Ej. Losartán 50mg, Anticonceptivos, Ninguno"
-            >
-              <template #append>
-                <q-btn
-                  flat
-                  dense
-                  no-caps
-                  color="teal"
-                  label="No toma"
-                  class="text-2xs font-bold"
-                  @click="patientForm.current_medications = 'No consume medicamentos actualmente'"
-                />
-              </template>
-            </q-input>
+          <!-- Grupo Sanguíneo y Alergias -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <q-select
+                v-model="patientForm.blood_type"
+                outlined
+                dense
+                :options="['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'No lo sé']"
+                label="Grupo Sanguíneo"
+              />
+            </div>
+
+            <div>
+              <q-input
+                v-model="patientForm.allergies"
+                outlined
+                dense
+                label="Alergias a Medicamentos o Sustancias"
+                placeholder="Ej. Penicilina, Sulfas, AINEs"
+              >
+                <template #append>
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    color="teal"
+                    label="Ninguna"
+                    class="text-2xs font-bold"
+                    @click="patientForm.allergies = 'Ninguna conocida'"
+                  />
+                </template>
+              </q-input>
+            </div>
+          </div>
+
+          <!-- Antecedentes y Medicamentos -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <q-input
+                v-model="patientForm.chronic_conditions"
+                outlined
+                dense
+                label="Antecedentes Médicos / Enfermedades Crónicas"
+                placeholder="Ej. Hipertensión, Diabetes, Asma, Ninguna"
+              >
+                <template #append>
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    color="teal"
+                    label="Sin antecedentes"
+                    class="text-2xs font-bold"
+                    @click="patientForm.chronic_conditions = 'Sin antecedentes patológicos'"
+                  />
+                </template>
+              </q-input>
+            </div>
+
+            <div>
+              <q-input
+                v-model="patientForm.current_medications"
+                outlined
+                dense
+                label="Medicamentos que Toma Actualmente"
+                placeholder="Ej. Losartán 50mg, Anticonceptivos, Ninguno"
+              >
+                <template #append>
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    color="teal"
+                    label="No toma"
+                    class="text-2xs font-bold"
+                    @click="patientForm.current_medications = 'No consume medicamentos actualmente'"
+                  />
+                </template>
+              </q-input>
+            </div>
           </div>
         </div>
       </div>
@@ -797,6 +913,19 @@ async function loadDoctorFee () {
 }
 
 
+// Perfil permanente del paciente
+const patientProfile = ref(null)
+
+const hasPermanentClinicalData = computed(() => {
+  return !!(
+    isLoggedIn.value &&
+    beneficiaryType.value === 'self' &&
+    patientProfile.value &&
+    patientProfile.value.blood_type &&
+    patientProfile.value.height_cm
+  )
+})
+
 // Formulario unificado de paciente y triage (público y logueado)
 const patientForm = reactive({
   full_name: '',
@@ -1009,6 +1138,27 @@ async function loadInitialData () {
     }
 
     if (isLoggedIn.value) {
+      try {
+        const { data: pData } = await api.get('/patients/me/profile')
+        patientProfile.value = pData
+        if (pData.full_name && !patientForm.full_name) patientForm.full_name = pData.full_name
+        if (pData.email && !patientForm.email) patientForm.email = pData.email
+        if (pData.phone && !patientForm.phone) patientForm.phone = pData.phone
+        if (pData.identification_number && !patientForm.id_document) patientForm.id_document = pData.identification_number
+        if (pData.blood_type) patientForm.blood_type = pData.blood_type
+        if (pData.height_cm != null) patientForm.height_cm = Number(pData.height_cm)
+        if (pData.allergies) patientForm.allergies = pData.allergies
+        if (pData.chronic_conditions) patientForm.chronic_conditions = pData.chronic_conditions
+        if (pData.country) patientForm.country = pData.country
+        if (pData.city) patientForm.city = pData.city
+        if (pData.address) patientForm.address = pData.address
+        if (pData.gender) patientForm.gender = pData.gender
+        if (pData.birth_date) {
+          patientForm.birth_date = typeof pData.birth_date === 'string' ? pData.birth_date.substring(0, 10) : ''
+        }
+      } catch (err) {
+        console.warn('No se pudo precargar perfil de paciente:', err)
+      }
       await fetchDependents()
     }
   } catch (err) {
@@ -1023,6 +1173,12 @@ async function loadInitialData () {
 function selectSelf () {
   beneficiaryType.value = 'self'
   selectedDependentId.value = null
+  if (patientProfile.value) {
+    if (patientProfile.value.blood_type) patientForm.blood_type = patientProfile.value.blood_type
+    if (patientProfile.value.height_cm != null) patientForm.height_cm = Number(patientProfile.value.height_cm)
+    if (patientProfile.value.allergies) patientForm.allergies = patientProfile.value.allergies
+    if (patientProfile.value.chronic_conditions) patientForm.chronic_conditions = patientProfile.value.chronic_conditions
+  }
 }
 
 function selectDependentMode () {

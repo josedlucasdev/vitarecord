@@ -84,23 +84,30 @@ async def get_or_create_clinic_dek(db: AsyncSession, clinic_id: str, version: in
     row = (await db.execute(stmt)).scalars().first()
 
     if row:
-        raw_dek = _decrypt_dek_with_kek(row.encrypted_dek, kek)
-        return raw_dek, row.key_version
+        try:
+            raw_dek = _decrypt_dek_with_kek(row.encrypted_dek, kek)
+            return raw_dek, row.key_version
+        except Exception:
+            pass
 
-    # Generar nueva DEK version 1 para esta clinica
+    # Generar nueva DEK para esta clinica (version subsiguiente o version 1)
+    next_ver = (row.key_version + 1) if row else 1
     raw_dek = AESGCM.generate_key(bit_length=256)
     encrypted_dek = _encrypt_dek_with_kek(raw_dek, kek)
 
+    if row:
+        row.is_active = False
+
     new_key = ClinicEncryptionKey(
         clinic_id=clinic_id,
-        key_version=1,
+        key_version=next_ver,
         encrypted_dek=encrypted_dek,
         is_active=True,
     )
     db.add(new_key)
     await db.flush()
 
-    return raw_dek, 1
+    return raw_dek, next_ver
 
 
 def encrypt_field(plaintext: str | None, dek: bytes) -> str | None:
@@ -164,9 +171,12 @@ async def rewrap_deks_with_new_kek(db: AsyncSession, old_kek: bytes, new_kek: by
     keys = list((await db.execute(stmt)).scalars().all())
     count = 0
     for k in keys:
-        raw_dek = _decrypt_dek_with_kek(k.encrypted_dek, old_kek)
-        k.encrypted_dek = _encrypt_dek_with_kek(raw_dek, new_kek)
-        count += 1
+        try:
+            raw_dek = _decrypt_dek_with_kek(k.encrypted_dek, old_kek)
+            k.encrypted_dek = _encrypt_dek_with_kek(raw_dek, new_kek)
+            count += 1
+        except Exception:
+            pass
     await db.flush()
     return count
 

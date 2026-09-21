@@ -43,6 +43,13 @@ async def init_db_and_seed() -> None:
             "ADD COLUMN address VARCHAR(255) NULL",
             "ADD COLUMN city VARCHAR(100) NULL",
             "ADD COLUMN country VARCHAR(100) NULL DEFAULT 'Venezuela'",
+            "ADD COLUMN blood_type VARCHAR(10) NULL",
+            "ADD COLUMN height_cm FLOAT NULL",
+            "ADD COLUMN allergies VARCHAR(500) NULL",
+            "ADD COLUMN chronic_conditions VARCHAR(500) NULL",
+            "ADD COLUMN emergency_contact_name VARCHAR(255) NULL",
+            "ADD COLUMN emergency_contact_phone VARCHAR(32) NULL",
+            "ADD COLUMN emergency_contact_relationship VARCHAR(100) NULL",
         ]:
             try:
                 await conn.exec_driver_sql(f"ALTER TABLE users {col_def}")

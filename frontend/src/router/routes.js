@@ -217,6 +217,12 @@ const routes = [
         meta: { requiresAuth: true, requiredPermission: 'clinical_records:read' }
       },
       {
+        path: 'patient/profile',
+        name: 'patient-profile',
+        component: () => import('pages/patient/PatientProfile.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'doctor/profile',
         name: 'doctor-profile',
         component: () => import('pages/doctor/DoctorProfile.vue'),

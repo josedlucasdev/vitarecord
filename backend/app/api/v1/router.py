@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     invitations,
     medical_records,
     notifications,
+    patients,
     payments,
     procedures,
     rooms,
@@ -31,6 +32,7 @@ api_router.include_router(availability.router, tags=["availability"])
 api_router.include_router(appointments.router, prefix="/appointments", tags=["appointments"])
 api_router.include_router(procedures.router, tags=["procedures"])
 api_router.include_router(dependents.router, tags=["dependents"])
+api_router.include_router(patients.router, tags=["patients"])
 api_router.include_router(payments.router, tags=["payments"])
 
 api_router.include_router(emergencies.router, prefix="/emergencies", tags=["emergencies"])

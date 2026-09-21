@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship as sa_relationship
 
 from app.models.base import Base, TimestampMixin, generate_uuid
@@ -66,6 +66,17 @@ class User(Base, TimestampMixin):
     address: Mapped[str | None] = mapped_column(String(255))
     city: Mapped[str | None] = mapped_column(String(100))
     country: Mapped[str | None] = mapped_column(String(100), default="Venezuela")
+
+    # Datos clínicos permanentes / basales del paciente (no cambian con frecuencia)
+    blood_type: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    allergies: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    chronic_conditions: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Contacto de emergencia
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    emergency_contact_relationship: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     device_tokens: Mapped[list["UserDeviceToken"]] = sa_relationship(
         "UserDeviceToken", back_populates="user", cascade="all, delete-orphan"

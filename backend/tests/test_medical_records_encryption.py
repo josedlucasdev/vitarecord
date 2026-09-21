@@ -41,6 +41,9 @@ async def test_envelope_encryption_aes_gcm_and_kek_rotation(client: AsyncClient)
         existing_app = (await db.execute(select(Appointment).where(Appointment.id == appointment_id))).scalar_one_or_none()
         if existing_app:
             await db.delete(existing_app)
+        existing_keys = (await db.execute(select(ClinicEncryptionKey).where(ClinicEncryptionKey.clinic_id == clinic_id))).scalars().all()
+        for k in existing_keys:
+            await db.delete(k)
         await db.commit()
 
         app = Appointment(
@@ -95,7 +98,7 @@ async def test_envelope_encryption_aes_gcm_and_kek_rotation(client: AsyncClient)
         await db.commit()
 
         # Verificar que la DEK se descifra correctamente con la NUEVA KEK
-        key_row = (await db.execute(select(ClinicEncryptionKey).where(ClinicEncryptionKey.clinic_id == clinic_id))).scalar_one()
+        key_row = (await db.execute(select(ClinicEncryptionKey).where(ClinicEncryptionKey.clinic_id == clinic_id, ClinicEncryptionKey.is_active == True))).scalar_one()
         raw_dek_after_rotation = _decrypt_dek_with_kek(key_row.encrypted_dek, new_kek)
 
         # Y que los historiales existentes siguen siendo descifrables sin perdida
