@@ -241,12 +241,12 @@
           </q-card-section>
 
           <q-card-section class="space-y-4 max-h-[75vh] overflow-y-auto pt-4">
-            <!-- Si estamos editando, mostrar subida de fotografía del familiar -->
-            <div v-if="isEditing" class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-4">
+            <!-- Subida de fotografía del familiar (disponible tanto al crear como al editar) -->
+            <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-4">
               <div class="w-14 h-14 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg overflow-hidden shrink-0 border border-white shadow-xs">
                 <img
-                  v-if="form.profile_picture_url && !avatarLoadError"
-                  :src="getResolvedAvatarUrl(form.profile_picture_url)"
+                  v-if="displayAvatarUrl && !avatarLoadError"
+                  :src="displayAvatarUrl"
                   class="w-full h-full object-cover"
                   alt="Foto"
                   @error="avatarLoadError = true"
@@ -254,7 +254,9 @@
                 <span v-else>{{ getInitials(form.full_name) }}</span>
               </div>
               <div class="flex-1 space-y-1">
-                <div class="text-xs font-bold text-slate-800">Fotografía del Familiar</div>
+                <div class="text-xs font-bold text-slate-800">
+                  Fotografía del Familiar <span class="text-slate-400 font-normal text-3xs">(Opcional)</span>
+                </div>
                 <div class="flex items-center gap-2">
                   <input
                     ref="avatarInputRef"
@@ -269,11 +271,23 @@
                     size="xs"
                     color="teal-8"
                     icon="photo_camera"
-                    label="Subir Foto"
+                    :label="displayAvatarUrl ? 'Cambiar Foto' : 'Subir Foto'"
                     :loading="uploadingAvatar"
                     no-caps
                     class="px-2 py-1 font-semibold"
                     @click="triggerAvatarUpload"
+                  />
+                  <q-btn
+                    v-if="tempAvatarPreview"
+                    flat
+                    dense
+                    size="xs"
+                    color="negative"
+                    icon="delete"
+                    label="Quitar"
+                    no-caps
+                    class="px-2 py-1 font-semibold"
+                    @click="clearTempAvatar"
                   />
                   <span class="text-3xs text-slate-400">JPG, PNG o WEBP (máx. 5MB)</span>
                 </div>
@@ -475,7 +489,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, resolveApiUrl } from 'boot/axios'
 import { Notify } from 'quasar'
@@ -488,6 +502,22 @@ const uploadingAvatar = ref(false)
 const avatarInputRef = ref(null)
 const avatarLoadError = ref(false)
 const failedAvatars = ref(new Set())
+const tempAvatarFile = ref(null)
+const tempAvatarPreview = ref(null)
+
+const displayAvatarUrl = computed(() => {
+  if (tempAvatarPreview.value) return tempAvatarPreview.value
+  if (form.profile_picture_url) return getResolvedAvatarUrl(form.profile_picture_url)
+  return null
+})
+
+function clearTempAvatar () {
+  if (tempAvatarPreview.value) {
+    URL.revokeObjectURL(tempAvatarPreview.value)
+  }
+  tempAvatarPreview.value = null
+  tempAvatarFile.value = null
+}
 
 const dependents = ref([])
 const showModal = ref(false)
@@ -593,11 +623,13 @@ function openCreateModal () {
   isEditing.value = false
   editingId.value = null
   avatarLoadError.value = false
+  clearTempAvatar()
   resetForm()
   showModal.value = true
 }
 
 function openEditModal (dep) {
+  clearTempAvatar()
   isEditing.value = true
   editingId.value = dep.id
   avatarLoadError.value = false
@@ -645,9 +677,25 @@ async function submitForm () {
       await api.put(`/patients/me/dependents/${editingId.value}`, payload)
       Notify.create({ type: 'positive', message: '¡Ficha del familiar actualizada exitosamente!' })
     } else {
-      await api.post('/patients/me/dependents', payload)
+      const { data: createdDep } = await api.post('/patients/me/dependents', payload)
+      if (tempAvatarFile.value && createdDep?.id) {
+        try {
+          const formData = new FormData()
+          formData.append('file', tempAvatarFile.value)
+          await api.post(`/patients/me/dependents/${createdDep.id}/avatar`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          })
+        } catch (uploadErr) {
+          console.error('Error al subir fotografía del nuevo familiar:', uploadErr)
+          Notify.create({
+            type: 'warning',
+            message: 'Familiar registrado, pero ocurrió un problema al cargar la foto.'
+          })
+        }
+      }
       Notify.create({ type: 'positive', message: '¡Familiar registrado con éxito!' })
     }
+    clearTempAvatar()
     showModal.value = false
     await loadDependents()
   } catch (err) {
@@ -668,33 +716,46 @@ function triggerAvatarUpload () {
 
 async function handleAvatarFileSelect (event) {
   const file = event.target.files?.[0]
-  if (!file || !editingId.value) return
+  if (!file) return
 
   if (file.size > 5 * 1024 * 1024) {
     Notify.create({ type: 'negative', message: 'La imagen excede el límite permitido de 5 MB.' })
+    if (event.target) event.target.value = ''
     return
   }
 
-  const formData = new FormData()
-  formData.append('file', file)
+  if (isEditing.value && editingId.value) {
+    const formData = new FormData()
+    formData.append('file', file)
 
-  uploadingAvatar.value = true
-  avatarLoadError.value = false
-  try {
-    const { data } = await api.post(`/patients/me/dependents/${editingId.value}/avatar`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
-    form.profile_picture_url = `${data.profile_picture_url}?t=${Date.now()}`
-    failedAvatars.value.delete(editingId.value)
-    Notify.create({ type: 'positive', message: 'Fotografía del familiar actualizada.' })
-    await loadDependents()
-  } catch (err) {
-    Notify.create({
-      type: 'negative',
-      message: err.response?.data?.detail || 'Error al subir la fotografía.'
-    })
-  } finally {
-    uploadingAvatar.value = false
+    uploadingAvatar.value = true
+    avatarLoadError.value = false
+    try {
+      const { data } = await api.post(`/patients/me/dependents/${editingId.value}/avatar`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      form.profile_picture_url = `${data.profile_picture_url}?t=${Date.now()}`
+      failedAvatars.value.delete(editingId.value)
+      Notify.create({ type: 'positive', message: 'Fotografía del familiar actualizada.' })
+      await loadDependents()
+    } catch (err) {
+      Notify.create({
+        type: 'negative',
+        message: err.response?.data?.detail || 'Error al subir la fotografía.'
+      })
+    } finally {
+      uploadingAvatar.value = false
+      if (event.target) {
+        event.target.value = ''
+      }
+    }
+  } else {
+    tempAvatarFile.value = file
+    if (tempAvatarPreview.value) {
+      URL.revokeObjectURL(tempAvatarPreview.value)
+    }
+    tempAvatarPreview.value = URL.createObjectURL(file)
+    avatarLoadError.value = false
     if (event.target) {
       event.target.value = ''
     }

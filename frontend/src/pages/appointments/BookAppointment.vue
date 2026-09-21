@@ -811,6 +811,58 @@
         </q-card-section>
 
         <q-card-section class="space-y-4 max-h-[75vh] overflow-y-auto pt-4">
+          <!-- Subida de fotografía del familiar (opcional) -->
+          <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-4">
+            <div class="w-14 h-14 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg overflow-hidden shrink-0 border border-white shadow-xs">
+              <img
+                v-if="depAvatarDisplayUrl && !depAvatarLoadError"
+                :src="depAvatarDisplayUrl"
+                class="w-full h-full object-cover"
+                alt="Foto"
+                @error="depAvatarLoadError = true"
+              />
+              <span v-else>{{ getInitials(depForm.full_name) }}</span>
+            </div>
+            <div class="flex-1 space-y-1">
+              <div class="text-xs font-bold text-slate-800">
+                Fotografía del Familiar <span class="text-slate-400 font-normal text-3xs">(Opcional)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <input
+                  ref="depAvatarInputRef"
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  class="hidden"
+                  @change="handleDepAvatarFileSelect"
+                />
+                <q-btn
+                  unelevated
+                  dense
+                  size="xs"
+                  color="teal-8"
+                  icon="photo_camera"
+                  :label="depAvatarDisplayUrl ? 'Cambiar Foto' : 'Subir Foto'"
+                  no-caps
+                  class="px-2 py-1 font-semibold"
+                  @click="triggerDepAvatarUpload"
+                />
+                <q-btn
+                  v-if="depAvatarPreview"
+                  flat
+                  dense
+                  size="xs"
+                  color="negative"
+                  icon="delete"
+                  label="Quitar"
+                  no-caps
+                  class="px-2 py-1 font-semibold"
+                  @click="clearDepAvatar"
+                />
+                <span class="text-3xs text-slate-400">JPG, PNG o WEBP (máx. 5MB)</span>
+              </div>
+            </div>
+          </div>
+
           <!-- 1. Datos de Identidad -->
           <div class="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-1 flex items-center">
             <q-icon name="badge" size="14px" class="mr-1 text-teal-600" />
@@ -1066,7 +1118,62 @@ const depForm = reactive({
   notes: ''
 })
 
+const depAvatarInputRef = ref(null)
+const depAvatarFile = ref(null)
+const depAvatarPreview = ref(null)
+const depAvatarLoadError = ref(false)
+
+const depAvatarDisplayUrl = computed(() => {
+  return depAvatarPreview.value || null
+})
+
+function getInitials (name) {
+  if (!name) return 'F'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return name.substring(0, 2).toUpperCase()
+}
+
+function triggerDepAvatarUpload () {
+  if (depAvatarInputRef.value) {
+    depAvatarInputRef.value.click()
+  }
+}
+
+function handleDepAvatarFileSelect (event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  if (file.size > 5 * 1024 * 1024) {
+    Notify.create({ type: 'negative', message: 'La imagen excede el límite permitido de 5 MB.' })
+    if (event.target) event.target.value = ''
+    return
+  }
+
+  depAvatarFile.value = file
+  if (depAvatarPreview.value) {
+    URL.revokeObjectURL(depAvatarPreview.value)
+  }
+  depAvatarPreview.value = URL.createObjectURL(file)
+  depAvatarLoadError.value = false
+  if (event.target) {
+    event.target.value = ''
+  }
+}
+
+function clearDepAvatar () {
+  if (depAvatarPreview.value) {
+    URL.revokeObjectURL(depAvatarPreview.value)
+  }
+  depAvatarPreview.value = null
+  depAvatarFile.value = null
+  depAvatarLoadError.value = false
+}
+
 function openQuickAddDependentModal () {
+  clearDepAvatar()
   depForm.full_name = ''
   depForm.relationship = 'HIJO'
   depForm.birth_date = ''
@@ -1471,6 +1578,18 @@ async function saveDependent () {
     }
 
     const { data } = await api.post('/patients/me/dependents', payload)
+    if (depAvatarFile.value && data?.id) {
+      try {
+        const formData = new FormData()
+        formData.append('file', depAvatarFile.value)
+        await api.post(`/patients/me/dependents/${data.id}/avatar`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+      } catch (uploadErr) {
+        console.error('Error al subir fotografía del nuevo familiar:', uploadErr)
+      }
+    }
+    clearDepAvatar()
     Notify.create({ type: 'positive', message: '¡Familiar registrado con éxito!' })
     showAddDependentModal.value = false
     await fetchDependents()
