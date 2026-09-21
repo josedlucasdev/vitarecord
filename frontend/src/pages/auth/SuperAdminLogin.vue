@@ -64,7 +64,7 @@
             <q-input
               v-model="email"
               type="email"
-              placeholder="admin@intimasalud.com"
+              placeholder="admin@vitarecord.com"
               dark
               outlined
               dense

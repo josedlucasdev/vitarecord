@@ -26,7 +26,7 @@ async def test_doctor_verification_queue_permissions(client: AsyncClient):
     # 2. Login como SuperAdmin (debe tener acceso 200)
     admin_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     admin_token = admin_login.json()["access_token"]
@@ -45,7 +45,7 @@ async def test_doctor_verification_approve_and_audit_flow(client: AsyncClient):
     # 1. Admin login
     admin_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     admin_token = admin_login.json()["access_token"]
@@ -151,7 +151,7 @@ async def test_doctor_verification_reject_flow(client: AsyncClient):
     # 1. Admin login
     admin_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     admin_token = admin_login.json()["access_token"]

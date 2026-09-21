@@ -7,7 +7,7 @@ async def test_clinic_analytics_dashboard_metrics(client: AsyncClient):
     # 1. Login como SuperAdmin
     admin_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert admin_login.status_code == 200

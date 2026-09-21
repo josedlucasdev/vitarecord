@@ -10,7 +10,7 @@ async def test_case_a_invitation_flow_existing_doctor(client: AsyncClient):
     # 1. Login como Admin para invitar
     admin_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert admin_login.status_code == 200
@@ -87,7 +87,7 @@ async def test_case_b_invitation_flow_new_doctor(client: AsyncClient):
     # 1. Login como Admin
     admin_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     admin_token = admin_login.json()["access_token"]

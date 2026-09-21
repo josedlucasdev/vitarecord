@@ -114,7 +114,7 @@ async def init_db_and_seed() -> None:
 
     async with AsyncSessionLocal() as db:
         # Verificar si ya existe el usuario superadmin
-        stmt = select(User).where(User.email == "admin@intimasalud.com")
+        stmt = select(User).where(User.email.in_(["admin@vitarecord.com", "admin@intimasalud.com"]))
         existing_admin = (await db.execute(stmt)).scalar_one_or_none()
         if existing_admin:
             logger.info("Base de datos ya cuenta con datos semilla. Enriqueciendo perfiles médicos, consultorios y procedimientos...")
@@ -175,7 +175,7 @@ async def init_db_and_seed() -> None:
         # 2. SuperAdmin (sin MFA obligatorio para acceso rapido en dev)
         admin = User(
             id="u1111111-1111-1111-1111-111111111111",
-            email="admin@intimasalud.com",
+            email="admin@vitarecord.com",
             phone="+584120000001",
             hashed_password=default_hashed,
             role="SUPERADMIN",
@@ -267,7 +267,7 @@ async def init_db_and_seed() -> None:
         # 5. Moderador / Compliance Reviewer (Staff Global)
         moderator = User(
             id="u7777777-7777-7777-7777-777777777777",
-            email="moderador@intimasalud.com",
+            email="moderador@vitarecord.com",
             full_name="Dra. Elena Rivas (Cumplimiento)",
             phone="+584120000007",
             hashed_password=default_hashed,
@@ -308,7 +308,7 @@ async def init_db_and_seed() -> None:
         # 8. SuperAdmin con MFA habilitado
         mfa_admin = User(
             id="u5555555-5555-5555-5555-555555555555",
-            email="mfa.admin@intimasalud.com",
+            email="mfa.admin@vitarecord.com",
             full_name="SuperAdmin con MFA",
             phone="+584120000005",
             hashed_password=default_hashed,

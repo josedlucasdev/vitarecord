@@ -585,7 +585,7 @@ async def disaffiliate_from_clinic(
     admins = (await db.execute(stmt_admins)).scalars().all()
     admin_emails = [a.email for a in admins if a.email]
     if not admin_emails:
-        admin_emails = ["admin@intimasalud.com"]
+        admin_emails = ["admin@vitarecord.com"]
 
     now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y a las %H:%M UTC")
     html_content = build_branded_email_html(

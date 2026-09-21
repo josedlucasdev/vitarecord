@@ -115,7 +115,7 @@ async def test_emergency_multichannel_escalation_chain(client: AsyncClient):
 
     admin_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     admin_headers = {"Authorization": f"Bearer {admin_login.json()['access_token']}"}
@@ -177,7 +177,7 @@ async def test_control_tower_access_control(client: AsyncClient):
     # SuperAdmin tiene permiso de monitoreo -> 200
     admin_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     admin_headers = {"Authorization": f"Bearer {admin_login.json()['access_token']}"}

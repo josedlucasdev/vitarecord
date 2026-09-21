@@ -9,7 +9,7 @@ from app.core.security import create_password_reset_token
 async def test_login_success(client: AsyncClient):
     response = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert response.status_code == 200
@@ -23,7 +23,7 @@ async def test_login_success(client: AsyncClient):
 async def test_login_wrong_password(client: AsyncClient):
     response = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@intimasalud.com", "password": "WrongPassword!"},
+        data={"username": "admin@vitarecord.com", "password": "WrongPassword!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert response.status_code == 401
@@ -31,14 +31,14 @@ async def test_login_wrong_password(client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_login_with_mfa(client: AsyncClient):
-    # mfa.admin@intimasalud.com tiene MFA habilitado con secreto JBSWY3DPEHPK3PXP
+    # mfa.admin@vitarecord.com tiene MFA habilitado con secreto JBSWY3DPEHPK3PXP
     totp = pyotp.TOTP("JBSWY3DPEHPK3PXP")
     valid_code = totp.now()
 
     # Intento sin codigo MFA
     response_no_mfa = await client.post(
         "/api/v1/auth/login",
-        data={"username": "mfa.admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "mfa.admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert response_no_mfa.status_code == 401
@@ -47,7 +47,7 @@ async def test_login_with_mfa(client: AsyncClient):
     # Intento con codigo MFA valido
     response_with_mfa = await client.post(
         "/api/v1/auth/login?mfa_code=" + valid_code,
-        data={"username": "mfa.admin@intimasalud.com", "password": "Password123!"},
+        data={"username": "mfa.admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert response_with_mfa.status_code == 200
@@ -57,9 +57,10 @@ async def test_login_with_mfa(client: AsyncClient):
 @pytest.mark.anyio
 async def test_refresh_token_rotation_and_reuse_detection(client: AsyncClient):
     # 1. Login
+    # 1. Login
     login_resp = await client.post(
         "/api/v1/auth/login",
-        data={"username": "paciente@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert login_resp.status_code == 200
@@ -87,7 +88,7 @@ async def test_sessions_list_and_revoke(client: AsyncClient):
     # 1. Login para obtener token
     login_resp = await client.post(
         "/api/v1/auth/login",
-        data={"username": "recepcion@intimasalud.com", "password": "Password123!"},
+        data={"username": "admin@vitarecord.com", "password": "Password123!"},
         headers={"content-type": "application/x-www-form-urlencoded", "user-agent": "TestDevice/1.0"},
     )
     assert login_resp.status_code == 200
@@ -111,12 +112,12 @@ async def test_forgot_and_reset_password_flow(client: AsyncClient):
     # 1. Solicitar enlace de recuperacion
     forgot_resp = await client.post(
         "/api/v1/auth/forgot-password",
-        json={"email": "paciente@intimasalud.com"},
+        json={"email": "admin@vitarecord.com"},
     )
     assert forgot_resp.status_code == 200
 
-    # 2. Crear token de reset para paciente (id: u4444444-4444-4444-4444-444444444444)
-    token = create_password_reset_token("u4444444-4444-4444-4444-444444444444")
+    # 2. Crear token de reset para admin (id: u1111111-1111-1111-1111-111111111111)
+    token = create_password_reset_token("u1111111-1111-1111-1111-111111111111")
 
     # 3. Resetear contraseña
     reset_resp = await client.post(
@@ -128,14 +129,15 @@ async def test_forgot_and_reset_password_flow(client: AsyncClient):
     # 4. Probar login con nueva contrasena
     new_login = await client.post(
         "/api/v1/auth/login",
-        data={"username": "paciente@intimasalud.com", "password": "NewPassword456!"},
+        data={"username": "admin@vitarecord.com", "password": "NewPassword456!"},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert new_login.status_code == 200
 
     # Restaurar password original para evitar alterar otros tests
-    reset_back_token = create_password_reset_token("u4444444-4444-4444-4444-444444444444")
+    reset_back_token = create_password_reset_token("u1111111-1111-1111-1111-111111111111")
     await client.post(
         "/api/v1/auth/reset-password",
         json={"token": reset_back_token, "new_password": "Password123!"},
+        headers={"content-type": "application/json"},
     )
