@@ -11,7 +11,11 @@ from app.core.acl import Permission
 from app.core.database import get_db
 from app.models.medical_attachment import MedicalAttachment
 from app.models.user import User
-from app.schemas.medical_record import MedicalRecordCreate, MedicalRecordPublic
+from app.schemas.medical_record import (
+    DoctorAttendedPatientPublic,
+    MedicalRecordCreate,
+    MedicalRecordPublic,
+)
 from app.schemas.prescription import PrescriptionVerificationPublic
 from app.services.medical_record_service import MedicalRecordService
 from app.services.storage_service import storage_service
@@ -80,6 +84,33 @@ async def get_medical_record_by_appointment(
 
 
 @router.get(
+    "/doctor/my-patients",
+    response_model=list[DoctorAttendedPatientPublic],
+    summary="Listar pacientes atendidos por el médico (Búsqueda y expediente)",
+)
+async def list_doctor_attended_patients(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_READ))],
+    q: Annotated[str | None, Query(description="Término de búsqueda")] = None,
+    filter_type: Annotated[str | None, Query(alias="filter", description="Filtro ALL, TITULAR o DEPENDENT")] = None,
+):
+    """Permite al médico buscar y listar los pacientes a los que ha atendido al menos una vez."""
+    from fastapi import HTTPException
+    if current_user.role != "DOCTOR":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los médicos especialistas pueden acceder a su lista de pacientes atendidos.",
+        )
+    service = MedicalRecordService(db)
+    return await service.list_doctor_attended_patients(
+        doctor_id=current_user.id,
+        query=q,
+        filter_type=filter_type,
+    )
+
+
+@router.get(
     "/patient/{patient_id}",
     response_model=list[MedicalRecordPublic],
     summary="Consultar historial clínico del paciente (Registra action=READ por cada registro)",
@@ -107,6 +138,36 @@ async def list_patient_history(
         include_dependents=include_dependents,
         client_ip=client_ip,
         user_agent=user_agent,
+    )
+
+
+@router.get(
+    "/patient/{patient_id}/pdf",
+    summary="Descargar o imprimir historia clínica integral en PDF",
+)
+async def download_patient_medical_history_pdf(
+    patient_id: str,
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_READ))],
+    dependent_id: Annotated[str | None, Query()] = None,
+):
+    """Genera e imprime el expediente clínico completo del paciente en formato PDF oficial."""
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    service = MedicalRecordService(db)
+    pdf_bytes = await service.get_medical_history_pdf_bytes(
+        patient_id=patient_id,
+        current_user=current_user,
+        dependent_id=dependent_id,
+        client_ip=client_ip,
+        user_agent=user_agent,
+    )
+    suffix = f"_{dependent_id[:8]}" if dependent_id else f"_{patient_id[:8]}"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=historia_clinica{suffix}.pdf"},
     )
 
 

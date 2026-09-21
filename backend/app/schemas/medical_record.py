@@ -54,3 +54,28 @@ class MedicalRecordPublic(BaseModel):
     prescriptions: list[PrescriptionPublic] = []
     attachments: list[MedicalAttachmentPublic] = []
 
+
+class DoctorAttendedPatientPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    patient_id: str
+    dependent_id: str | None = None
+    full_name: str
+    is_dependent: bool
+    relationship: str = "TITULAR"
+    guardian_name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    identification_number: str | None = None
+    birth_date: datetime.date | None = None
+    age: int | None = None
+    gender: str | None = None
+    blood_type: str | None = None
+    height_cm: float | None = None
+    allergies: str | None = None
+    chronic_conditions: str | None = None
+    profile_picture_url: str | None = None
+    total_consultations: int = 1
+    last_consultation_at: datetime.datetime | None = None
+    latest_diagnosis: str | None = None
+

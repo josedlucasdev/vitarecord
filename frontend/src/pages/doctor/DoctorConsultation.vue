@@ -166,15 +166,30 @@
                 </div>
               </div>
             </div>
-            <q-btn
-              color="teal-8"
-              icon="open_in_new"
-              :label="'Ver Expediente de ' + (appointment.dependent_id ? (appointment.dependent_name || 'Familiar') : 'Paciente')"
-              no-caps
-              dense
-              class="text-xs px-3 py-1.5 font-bold shadow-xs self-start sm:self-auto"
-              @click="showHistoryDialog = true"
-            />
+            <div class="flex items-center space-x-2 self-start sm:self-auto">
+              <q-btn
+                outline
+                color="teal-8"
+                icon="print"
+                label="Imprimir PDF"
+                no-caps
+                dense
+                class="text-xs px-2.5 py-1.5 font-bold shadow-xs"
+                :loading="downloadingHistoryPdf"
+                @click="downloadCompleteHistoryPdf"
+              >
+                <q-tooltip>Descargar o imprimir la historia clínica completa en PDF</q-tooltip>
+              </q-btn>
+              <q-btn
+                color="teal-8"
+                icon="open_in_new"
+                :label="'Ver Expediente de ' + (appointment.dependent_id ? (appointment.dependent_name || 'Familiar') : 'Paciente')"
+                no-caps
+                dense
+                class="text-xs px-3 py-1.5 font-bold shadow-xs"
+                @click="openPatientHistoryDialog"
+              />
+            </div>
           </div>
         </div>
 
@@ -746,7 +761,22 @@
               </p>
             </div>
           </div>
-          <q-btn flat round dense icon="close" color="white" v-close-popup />
+          <div class="flex items-center space-x-2">
+            <q-btn
+              flat
+              dense
+              icon="print"
+              label="Imprimir Historia (PDF)"
+              color="white"
+              no-caps
+              class="text-xs font-bold bg-white/10 hover:bg-white/20 px-2.5 py-1 rounded-lg"
+              :loading="downloadingHistoryPdf"
+              @click="downloadCompleteHistoryPdf"
+            >
+              <q-tooltip>Descargar o imprimir la historia clínica completa en PDF</q-tooltip>
+            </q-btn>
+            <q-btn flat round dense icon="close" color="white" v-close-popup />
+          </div>
         </div>
 
         <!-- Banner de Aislamiento Estricto de Historia Clínica -->
@@ -1130,9 +1160,14 @@ const newProcForm = reactive({
 // Estados de Historial Clínico y Farmacovigilancia
 const patientHistory = ref([])
 const loadingHistory = ref(false)
+const downloadingHistoryPdf = ref(false)
 const activeTreatments = ref([])
 const showHistoryDialog = ref(false)
 const activeHistoryTab = ref('active_meds')
+
+function openPatientHistoryDialog () {
+  showHistoryDialog.value = true
+}
 
 // Estado si la consulta ya fue completada previamente
 const appointmentRecord = ref(null)
@@ -1275,6 +1310,29 @@ async function fetchPatientHistory (patientId, dependentId) {
     console.error('Error al cargar historial del paciente:', err)
   } finally {
     loadingHistory.value = false
+  }
+}
+
+async function downloadCompleteHistoryPdf () {
+  if (!appointment.value) return
+  downloadingHistoryPdf.value = true
+  try {
+    let url = `/medical-records/patient/${appointment.value.patient_id}/pdf`
+    if (appointment.value.dependent_id) {
+      url += `?dependent_id=${appointment.value.dependent_id}`
+    }
+    const response = await api.get(url, { responseType: 'blob' })
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const blobUrl = window.URL.createObjectURL(blob)
+    window.open(blobUrl, '_blank')
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: 'No se pudo generar la historia clínica en PDF',
+      caption: err.response?.data?.detail || err.message,
+    })
+  } finally {
+    downloadingHistoryPdf.value = false
   }
 }
 

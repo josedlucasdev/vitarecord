@@ -205,6 +205,12 @@ const routes = [
         meta: { requiresAuth: true, requiredPermission: 'payments:view_cashier' }
       },
       {
+        path: 'doctor/patients',
+        name: 'doctor-patients',
+        component: () => import('pages/doctor/DoctorPatientHistory.vue'),
+        meta: { requiresAuth: true, requiredPermission: 'clinical_records:read' }
+      },
+      {
         path: 'medical/consultation',
         name: 'doctor-consultation',
         component: () => import('pages/doctor/DoctorConsultation.vue'),

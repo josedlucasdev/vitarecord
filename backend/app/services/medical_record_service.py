@@ -11,7 +11,7 @@ import hashlib
 import logging
 import uuid
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -29,6 +29,7 @@ from app.models.patient_dependent import PatientDependent
 from app.models.prescription import Prescription
 from app.models.user import User
 from app.schemas.medical_record import (
+    DoctorAttendedPatientPublic,
     MedicalAttachmentPublic,
     MedicalRecordCreate,
     MedicalRecordPublic,
@@ -37,6 +38,7 @@ from app.schemas.prescription import (
     PrescriptionPublic,
     PrescriptionVerificationPublic,
 )
+from app.services.medical_history_pdf_service import generate_medical_history_pdf
 from app.services.prescription_pdf_service import generate_prescription_pdf
 
 logger = logging.getLogger("medical_records")
@@ -413,6 +415,288 @@ class MedicalRecordService:
             diagnosis_summary=prescription.diagnosis_summary,
             items=prescription.items,
         )
+
+    async def list_doctor_attended_patients(
+        self,
+        doctor_id: str,
+        query: str | None = None,
+        filter_type: str | None = None,
+    ) -> list[DoctorAttendedPatientPublic]:
+        """Obtiene la lista consolidada de pacientes (titulares o dependientes) atendidos por este médico."""
+        # 1. Agrupar pares (patient_id, dependent_id) atendidos en MedicalRecord
+        mr_stmt = (
+            select(
+                MedicalRecord.patient_id,
+                MedicalRecord.dependent_id,
+                func.count(MedicalRecord.id).label("total_records"),
+                func.max(MedicalRecord.created_at).label("last_record_at"),
+            )
+            .where(MedicalRecord.doctor_id == doctor_id)
+            .group_by(MedicalRecord.patient_id, MedicalRecord.dependent_id)
+        )
+        mr_rows = (await self.db.execute(mr_stmt)).all()
+
+        # También verificar citas completadas o atendidas
+        app_stmt = (
+            select(
+                Appointment.patient_id,
+                Appointment.dependent_id,
+                func.count(Appointment.id).label("total_appts"),
+                func.max(Appointment.start_time).label("last_appt_at"),
+            )
+            .where(
+                Appointment.doctor_id == doctor_id,
+                Appointment.status.in_(["COMPLETED", "ATTENDED"]),
+            )
+            .group_by(Appointment.patient_id, Appointment.dependent_id)
+        )
+        app_rows = (await self.db.execute(app_stmt)).all()
+
+        groups: dict[tuple[str, str | None], dict] = {}
+        for r in mr_rows:
+            key = (r.patient_id, r.dependent_id)
+            groups[key] = {
+                "total": r.total_records,
+                "last_at": r.last_record_at,
+            }
+
+        for r in app_rows:
+            key = (r.patient_id, r.dependent_id)
+            if key in groups:
+                groups[key]["total"] = max(groups[key]["total"], r.total_appts)
+                if r.last_appt_at and (not groups[key]["last_at"] or r.last_appt_at > groups[key]["last_at"]):
+                    groups[key]["last_at"] = r.last_appt_at
+            else:
+                groups[key] = {
+                    "total": r.total_appts,
+                    "last_at": r.last_appt_at,
+                }
+
+        if not groups:
+            return []
+
+        # 2. Cargar entidades relacionadas y aplicar filtros
+        results: list[DoctorAttendedPatientPublic] = []
+        q_clean = query.strip().lower() if query else None
+
+        for (pat_id, dep_id), stats in groups.items():
+            patient = (await self.db.execute(select(User).where(User.id == pat_id))).scalar_one_or_none()
+            if not patient:
+                continue
+
+            dependent = None
+            if dep_id:
+                dependent = (await self.db.execute(select(PatientDependent).where(PatientDependent.id == dep_id))).scalar_one_or_none()
+                if not dependent:
+                    continue
+
+            is_dependent = dependent is not None
+
+            # Filtro por tipo de paciente
+            if filter_type == "TITULAR" and is_dependent:
+                continue
+            if filter_type == "DEPENDENT" and not is_dependent:
+                continue
+
+            # Mapeo de datos demográficos y de contacto
+            full_name = dependent.full_name if is_dependent else (patient.full_name or patient.email)
+            rel = dependent.relationship if is_dependent else "TITULAR"
+            guardian_name = patient.full_name if is_dependent else None
+            email = patient.email
+            phone = (dependent.phone or patient.phone) if is_dependent else patient.phone
+            ident_num = patient.identification_number
+            birth_date = dependent.birth_date if is_dependent else patient.birth_date
+            gender = dependent.gender if is_dependent else patient.gender
+            blood_type = dependent.blood_type if is_dependent else patient.blood_type
+            height_cm = dependent.height_cm if is_dependent else patient.height_cm
+            allergies = dependent.allergies if is_dependent else patient.allergies
+            chronic = dependent.chronic_conditions if is_dependent else patient.chronic_conditions
+            avatar_url = dependent.profile_picture_url if is_dependent else patient.profile_picture_url
+
+            # Cálculo de edad
+            age = None
+            if birth_date:
+                today = datetime.date.today()
+                age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
+
+            # Filtro de búsqueda textual
+            if q_clean:
+                searchable_text = f"{full_name} {email or ''} {phone or ''} {ident_num or ''} {guardian_name or ''}".lower()
+                if q_clean not in searchable_text:
+                    continue
+
+            # Diagnóstico más reciente
+            latest_diag = None
+            last_rec_stmt = (
+                select(MedicalRecord)
+                .where(
+                    MedicalRecord.doctor_id == doctor_id,
+                    MedicalRecord.patient_id == pat_id,
+                )
+            )
+            if is_dependent:
+                last_rec_stmt = last_rec_stmt.where(MedicalRecord.dependent_id == dep_id)
+            else:
+                last_rec_stmt = last_rec_stmt.where(MedicalRecord.dependent_id.is_(None))
+
+            last_rec_stmt = last_rec_stmt.order_by(MedicalRecord.created_at.desc())
+            last_rec = (await self.db.execute(last_rec_stmt)).scalars().first()
+            if last_rec:
+                try:
+                    dek, _ = await get_or_create_clinic_dek(self.db, last_rec.clinic_id, version=last_rec.encryption_key_version)
+                    latest_diag = decrypt_field(last_rec.encrypted_diagnosis, dek)
+                    if latest_diag and latest_diag.startswith("[ERROR"):
+                        latest_diag = last_rec.icd10_description or "Consulta Médica"
+                except Exception:
+                    latest_diag = last_rec.icd10_description or "Consulta Médica"
+
+            results.append(
+                DoctorAttendedPatientPublic(
+                    patient_id=pat_id,
+                    dependent_id=dep_id,
+                    full_name=full_name,
+                    is_dependent=is_dependent,
+                    relationship=rel,
+                    guardian_name=guardian_name,
+                    email=email,
+                    phone=phone,
+                    identification_number=ident_num,
+                    birth_date=birth_date,
+                    age=age,
+                    gender=gender,
+                    blood_type=blood_type,
+                    height_cm=height_cm,
+                    allergies=allergies,
+                    chronic_conditions=chronic,
+                    profile_picture_url=avatar_url,
+                    total_consultations=stats["total"],
+                    last_consultation_at=stats["last_at"],
+                    latest_diagnosis=latest_diag,
+                )
+            )
+
+        results.sort(key=lambda x: x.last_consultation_at or datetime.datetime.min, reverse=True)
+        return results
+
+    async def get_medical_history_pdf_bytes(
+        self,
+        patient_id: str,
+        current_user: User,
+        dependent_id: str | None = None,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> bytes:
+        """Genera el PDF del expediente clínico integral del paciente o familiar dependiente."""
+        # 1. Validación de acceso
+        if current_user.role == "PATIENT" and current_user.id != patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo puedes descargar tu propio expediente clínico o el de tus dependientes autorizados.",
+            )
+
+        if current_user.role == "DOCTOR":
+            check_stmt = (
+                select(MedicalRecord.id)
+                .where(MedicalRecord.doctor_id == current_user.id, MedicalRecord.patient_id == patient_id)
+            )
+            if dependent_id:
+                check_stmt = check_stmt.where(MedicalRecord.dependent_id == dependent_id)
+            has_attended = (await self.db.execute(check_stmt)).scalars().first() is not None
+
+            if not has_attended:
+                appt_stmt = (
+                    select(Appointment.id)
+                    .where(
+                        Appointment.doctor_id == current_user.id,
+                        Appointment.patient_id == patient_id,
+                        Appointment.status.in_(["COMPLETED", "CONFIRMED", "ATTENDED"]),
+                    )
+                )
+                if dependent_id:
+                    appt_stmt = appt_stmt.where(Appointment.dependent_id == dependent_id)
+                has_attended = (await self.db.execute(appt_stmt)).scalars().first() is not None
+
+            if not has_attended:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Solo puedes generar la historia clínica de pacientes a los que has atendido.",
+                )
+
+        # 2. Cargar datos del paciente y dependiente
+        patient = (await self.db.execute(select(User).where(User.id == patient_id))).scalar_one_or_none()
+        if not patient:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente no encontrado.")
+
+        dependent = None
+        if dependent_id:
+            dependent = (await self.db.execute(select(PatientDependent).where(PatientDependent.id == dependent_id))).scalar_one_or_none()
+            if not dependent:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Familiar dependiente no encontrado.")
+
+        is_dep = dependent is not None
+        patient_data = {
+            "id": dependent.id if is_dep else patient.id,
+            "full_name": dependent.full_name if is_dep else (patient.full_name or patient.email),
+            "is_dependent": is_dep,
+            "relationship": dependent.relationship if is_dep else "TITULAR",
+            "guardian_name": patient.full_name if is_dep else None,
+            "identification_number": patient.identification_number,
+            "email": patient.email,
+            "phone": (dependent.phone or patient.phone) if is_dep else patient.phone,
+            "birth_date": dependent.birth_date if is_dep else patient.birth_date,
+            "gender": dependent.gender if is_dep else patient.gender,
+            "blood_type": dependent.blood_type if is_dep else patient.blood_type,
+            "height_cm": dependent.height_cm if is_dep else patient.height_cm,
+            "allergies": dependent.allergies if is_dep else patient.allergies,
+            "chronic_conditions": dependent.chronic_conditions if is_dep else patient.chronic_conditions,
+        }
+
+        # 3. Cargar historial clínico cronológico
+        records_pub = await self.list_patient_history(
+            patient_id=patient_id,
+            current_user=current_user,
+            dependent_id=dependent_id,
+            include_dependents=False,
+            client_ip=client_ip,
+            user_agent=user_agent,
+        )
+
+        records_dicts = [r.model_dump() for r in records_pub]
+
+        # 4. Generar PDF
+        doctor_name = current_user.full_name if current_user.role == "DOCTOR" else None
+        doctor_spec = current_user.specialty if current_user.role == "DOCTOR" else None
+
+        clinic_name = None
+        if records_pub and records_pub[0].clinic_name:
+            clinic_name = records_pub[0].clinic_name
+
+        pdf_bytes = generate_medical_history_pdf(
+            patient_data=patient_data,
+            records=records_dicts,
+            doctor_emitter_name=doctor_name,
+            doctor_emitter_specialty=doctor_spec,
+            clinic_name=clinic_name,
+        )
+
+        # 5. Auditoría obligatoria
+        await self._audit(
+            action="DOWNLOAD_PDF",
+            entity_type="medical_history",
+            entity_id=dependent_id or patient_id,
+            clinic_id=current_user.clinic_id,
+            user_id=current_user.id,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            details={
+                "patient_id": patient_id,
+                "dependent_id": dependent_id,
+                "total_records": len(records_pub),
+            },
+        )
+        await self.db.commit()
+
+        return pdf_bytes
 
     async def _build_public_record(
         self,

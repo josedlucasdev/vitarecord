@@ -311,6 +311,21 @@
               <q-item-label caption>Títulos y experiencia pública</q-item-label>
             </q-item-section>
           </q-item>
+
+          <q-item
+            clickable
+            v-ripple
+            to="/doctor/patients"
+            active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600"
+          >
+            <q-item-section avatar>
+              <q-icon name="people_alt" size="20px" color="teal" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>Pacientes y Expedientes</q-item-label>
+              <q-item-label caption>Búsqueda e historia en PDF</q-item-label>
+            </q-item-section>
+          </q-item>
         </template>
 
         <!-- Citas y Turnos -->
