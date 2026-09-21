@@ -4,11 +4,15 @@ import { Notify } from 'quasar'
 import { clearAuthToken } from 'src/composables/useAcl'
 
 // En desarrollo, quasar.config.js reenvia /api al backend (ver
-// devServer.proxy). En produccion, el reverse proxy hace el mismo trabajo.
-let apiBase = (process.env.CLIENT_API_URL || process.env.API_URL || '').replace(/\/$/, '')
+// devServer.proxy). En produccion, se apunta al dominio del API.
+let apiBase = (process.env.CLIENT_API_URL || process.env.API_URL || process.env.VITE_API_URL || '').replace(/\/$/, '')
 if (typeof window !== 'undefined') {
-  if (apiBase.includes('backend') || apiBase.includes('localhost:9000') || !apiBase.startsWith('http')) {
+  if (apiBase.includes('backend') || apiBase.includes('localhost:9000')) {
     apiBase = ''
+  }
+  // En producción (app.vitarecord.com), si apiBase está vacío o no es una URL absoluta válida, usar api.vitarecord.com
+  if (!apiBase && (window.location.hostname === 'app.vitarecord.com' || window.location.hostname.endsWith('vitarecord.com'))) {
+    apiBase = 'https://api.vitarecord.com'
   }
 }
 const api = axios.create({ baseURL: `${apiBase}/api/v1` })

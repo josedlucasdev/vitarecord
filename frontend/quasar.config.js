@@ -15,7 +15,9 @@ export default configure(function (/* ctx */) {
       },
       vueRouterMode: 'hash',
       env: {
-        API_URL: process.env.CLIENT_API_URL || ''
+        API_URL: process.env.CLIENT_API_URL || process.env.API_URL || process.env.VITE_API_URL || '',
+        CLIENT_API_URL: process.env.CLIENT_API_URL || process.env.API_URL || process.env.VITE_API_URL || '',
+        VITE_API_URL: process.env.CLIENT_API_URL || process.env.API_URL || process.env.VITE_API_URL || ''
       }
     },
 

@@ -32,6 +32,7 @@ jobs:
       - name: 🏗️ Compilar Quasar SPA para Producción
         working-directory: frontend
         env:
+          CLIENT_API_URL: https://api.vitarecord.com
           API_URL: https://api.vitarecord.com
           VITE_API_URL: https://api.vitarecord.com
         run: npm run build

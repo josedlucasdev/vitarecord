@@ -212,6 +212,11 @@ onMounted(() => {
 })
 
 function checkClinicStaffRoleAndRedirect (accessToken, refreshToken) {
+  if (!accessToken) {
+    clearAuthToken()
+    errorMessage.value = 'Respuesta no válida del servidor. No se recibió credencial de acceso.'
+    return false
+  }
   const payload = getValidTokenPayload(accessToken)
   if (!payload || !ALLOWED_STAFF_ROLES.includes(payload.role)) {
     clearAuthToken()
@@ -254,6 +259,16 @@ async function onSubmit () {
     const { data } = await api.post('/auth/login', form, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
+
+    if (typeof data === 'string' && (data.includes('<!DOCTYPE') || data.includes('<html'))) {
+      errorMessage.value = 'Error de conexión: El servidor devolvió una página HTML en lugar de la API. Verifica la URL del servicio.'
+      return
+    }
+
+    if (!data || !data.access_token) {
+      errorMessage.value = data?.detail || 'No se pudo iniciar sesión. Verifique sus credenciales.'
+      return
+    }
 
     checkClinicStaffRoleAndRedirect(data.access_token, data.refresh_token)
   } catch (err) {

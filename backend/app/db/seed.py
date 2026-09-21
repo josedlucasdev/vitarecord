@@ -20,6 +20,17 @@ async def init_db_and_seed() -> None:
         # Crea tablas registradas en Base.metadata si aun no existen
         await conn.run_sync(Base.metadata.create_all)
 
+        # Asegurar columnas en la tabla clinics
+        for col_def in [
+            "ADD COLUMN phone VARCHAR(32) NULL",
+            "ADD COLUMN address VARCHAR(255) NULL",
+            "ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE",
+        ]:
+            try:
+                await conn.exec_driver_sql(f"ALTER TABLE clinics {col_def}")
+            except Exception:
+                pass  # Columna ya existe
+
         # Asegurar columnas de perfil profesional y datos de paciente en la tabla users
         for col_def in [
             "ADD COLUMN academic_degrees JSON NULL",
