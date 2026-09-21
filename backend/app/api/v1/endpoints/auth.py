@@ -6,19 +6,23 @@ contraseña por enlace firmado / OTP, gestion de sesiones activas listables
 por el usuario, y setup/activacion de MFA TOTP para roles obligados.
 """
 
+import base64
+import io
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+import httpx
+import pyotp
+import qrcode
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import decode_token, hash_password, is_token_type, verify_password
+from app.core.security import decode_token, generate_totp_secret, hash_password, is_token_type, verify_password, verify_totp
 from app.models.user import User
 from app.repositories.appointment_repository import AppointmentRepository
-import httpx
 from app.repositories.clinic_repository import ClinicRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import (
@@ -26,6 +30,10 @@ from app.schemas.auth import (
     FacebookLoginRequest,
     ForgotPasswordRequest,
     GoogleLoginRequest,
+    MFADisableRequest,
+    MFAEnableRequest,
+    MFASetupResponse,
+    MFAStatusResponse,
     PatientOnboardingCompleteRequest,
     PatientOnboardingValidateResponse,
     RefreshRequest,
@@ -121,6 +129,19 @@ async def complete_patient_onboarding(
     return TokenPair(access_token=access_token, refresh_token=refresh_token)
 
 
+@router.get("/mfa-status", response_model=MFAStatusResponse, summary="Verifica si un usuario tiene MFA activo para el login")
+async def get_mfa_status(
+    email: Annotated[str, Query()],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Retorna si el usuario tiene MFA activado sin revelar más información."""
+    clean_email = email.strip().lower()
+    user = await UserRepository(db).get_by_email(clean_email)
+    if not user:
+        return MFAStatusResponse(mfa_enabled=False)
+    return MFAStatusResponse(mfa_enabled=bool(user.mfa_enabled and user.mfa_secret))
+
+
 @router.post("/login", response_model=TokenPair)
 async def login(
     request: Request,
@@ -128,6 +149,14 @@ async def login(
     db: Annotated[AsyncSession, Depends(get_db)],
     mfa_code: str | None = None,
 ):
+    # Si mfa_code no vino en query params, extraerlo del form body si existe
+    if not mfa_code:
+        try:
+            form = await request.form()
+            mfa_code = form.get("mfa_code")
+        except Exception:
+            pass
+
     service = AuthService(db)
     user = await service.authenticate(form_data.username, form_data.password, mfa_code)
     access_token, refresh_token = await service.issue_token_pair(
@@ -358,4 +387,76 @@ async def revoke_all_sessions(
 ):
     """Revoca todas las sesiones activas del usuario."""
     await AuthService(db).revoke_all_sessions(current_user.id)
+
+
+@router.get("/mfa/status", response_model=MFAStatusResponse, summary="Estado actual de MFA del usuario autenticado")
+async def get_my_mfa_status(
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Verifica si el usuario autenticado tiene habilitado el segundo factor."""
+    return MFAStatusResponse(mfa_enabled=bool(current_user.mfa_enabled and current_user.mfa_secret))
+
+
+@router.post("/mfa/setup", response_model=MFASetupResponse, summary="Genera clave secreta y código QR para Google Authenticator")
+async def setup_mfa(
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Genera secreto TOTP Base32 y código QR PNG en base64 para escanear con Google Authenticator."""
+    secret = generate_totp_secret()
+    totp = pyotp.TOTP(secret)
+    otpauth_url = totp.provisioning_uri(name=current_user.email, issuer_name="VitaRecord")
+
+    qr = qrcode.QRCode(box_size=6, border=2)
+    qr.add_data(otpauth_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    qr_base64 = f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
+
+    return MFASetupResponse(
+        secret=secret,
+        otpauth_url=otpauth_url,
+        qr_code=qr_base64,
+    )
+
+
+@router.post("/mfa/enable", summary="Verifica el primer código y activa MFA para el usuario")
+async def enable_mfa(
+    payload: MFAEnableRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Valida el código de 6 dígitos con el secreto generado y activa el segundo factor."""
+    if not payload.secret or not payload.code:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Se requiere la clave secreta y el código de verificación.")
+
+    clean_code = payload.code.strip().replace(" ", "").replace("-", "")
+    if not verify_totp(payload.secret, clean_code):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "El código ingresado es incorrecto o ha expirado. Verifica que la hora de tu dispositivo esté sincronizada.",
+        )
+
+    current_user.mfa_enabled = True
+    current_user.mfa_secret = payload.secret
+    await db.commit()
+    return {"message": "Autenticación de segundo factor (Google Authenticator) activada exitosamente."}
+
+
+@router.post("/mfa/disable", summary="Desactiva MFA para el usuario previa comprobación de contraseña")
+async def disable_mfa(
+    payload: MFADisableRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Desactiva el segundo factor solicitando la contraseña del usuario por seguridad."""
+    if not current_user.hashed_password or not verify_password(payload.password, current_user.hashed_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La contraseña ingresada no es correcta.")
+
+    current_user.mfa_enabled = False
+    current_user.mfa_secret = None
+    await db.commit()
+    return {"message": "Autenticación de segundo factor desactivada exitosamente."}
+
 

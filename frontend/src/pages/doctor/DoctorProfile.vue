@@ -502,6 +502,30 @@
               </div>
             </div>
           </div>
+
+          <!-- Tarjeta de Verificación en Dos Pasos (Google Authenticator) -->
+          <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2">
+                <q-icon name="security" size="20px" color="teal" />
+                <h2 class="text-sm font-bold text-slate-800 m-0">Verificación en Dos Pasos (Google Authenticator)</h2>
+              </div>
+            </div>
+            <p class="text-xs text-slate-500 m-0">
+              Aumenta la seguridad de tus accesos a consultas y expedientes médicos mediante un código TOTP de 6 dígitos.
+            </p>
+            <div class="pt-1">
+              <q-btn
+                unelevated
+                color="teal-8"
+                icon="phonelink_lock"
+                label="Configurar Segundo Factor (MFA)"
+                no-caps
+                class="font-bold text-xs shadow-sm"
+                @click="showMfaModal = true"
+              />
+            </div>
+          </div>
         </div>
 
         <!-- Columna Derecha: Vista Previa en Vivo (1 Col) -->
@@ -956,6 +980,8 @@
         </q-card-actions>
       </q-card>
     </q-dialog>
+
+    <MfaSecurityModal v-model="showMfaModal" />
   </q-page>
 </template>
 
@@ -965,7 +991,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { Notify } from 'quasar'
 import { api, resolveApiUrl } from 'boot/axios'
 import { MEDICAL_SPECIALTIES } from 'src/constants/specialties'
+import MfaSecurityModal from 'src/components/auth/MfaSecurityModal.vue'
 
+const showMfaModal = ref(false)
 const specialtyCatalog = ref([...MEDICAL_SPECIALTIES])
 const loading = ref(true)
 const saving = ref(false)

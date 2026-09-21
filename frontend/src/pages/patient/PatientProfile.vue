@@ -427,8 +427,34 @@
             @click="saveProfile"
           />
         </div>
+
+        <!-- Tarjeta de Seguridad y Verificación en Dos Pasos (Google Authenticator) -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div class="flex items-center space-x-3.5">
+            <div class="w-12 h-12 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center font-bold shadow-xs border border-teal-100">
+              <q-icon name="security" size="26px" />
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900 leading-tight m-0">Seguridad y Verificación en Dos Pasos</h3>
+              <p class="text-xs text-slate-500 mt-1 m-0">
+                Protege tu historial y datos de salud vinculando Google Authenticator a tu cuenta.
+              </p>
+            </div>
+          </div>
+          <q-btn
+            unelevated
+            color="teal-8"
+            icon="phonelink_lock"
+            label="Configurar Google Authenticator"
+            no-caps
+            class="text-xs font-bold shadow-sm px-4 py-2 rounded-xl text-white self-start sm:self-center"
+            @click="showMfaModal = true"
+          />
+        </div>
       </div>
     </div>
+
+    <MfaSecurityModal v-model="showMfaModal" />
   </q-page>
 </template>
 
@@ -436,7 +462,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { api, resolveApiUrl } from 'boot/axios'
 import { Notify } from 'quasar'
+import MfaSecurityModal from 'src/components/auth/MfaSecurityModal.vue'
 
+const showMfaModal = ref(false)
 const loading = ref(true)
 const saving = ref(false)
 const uploadingAvatar = ref(false)

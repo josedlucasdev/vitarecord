@@ -49,9 +49,16 @@ class AuthService:
                     "La sede clínica asociada se encuentra inactiva o suspendida. Comuníquese con el Super Administrador.",
                 )
 
-        if user.mfa_enabled:
-            if not mfa_code or not user.mfa_secret or not verify_totp(user.mfa_secret, mfa_code):
-                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Codigo MFA invalido o ausente")
+        if user.mfa_enabled and user.mfa_secret:
+            if not mfa_code:
+                raise HTTPException(
+                    status.HTTP_401_UNAUTHORIZED,
+                    "MFA_REQUIRED: Se requiere código de autenticación de segundo factor (Google Authenticator)",
+                    headers={"X-MFA-Required": "true"},
+                )
+            clean_code = mfa_code.strip().replace(" ", "").replace("-", "")
+            if not verify_totp(user.mfa_secret, clean_code):
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Código MFA inválido o expirado")
 
         return user
 

@@ -120,6 +120,11 @@
             </q-menu>
           </q-btn>
 
+          <!-- Botón de Seguridad y Google Authenticator (MFA) -->
+          <q-btn flat round dense icon="security" @click="showMfaModal = true">
+            <q-tooltip>Seguridad y Segundo Factor (Google Authenticator)</q-tooltip>
+          </q-btn>
+
           <q-btn flat round dense icon="logout" @click="logout">
             <q-tooltip>Cerrar Sesión</q-tooltip>
           </q-btn>
@@ -153,10 +158,23 @@
         <div v-if="isLoggedIn" class="mt-4 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
           <div class="text-slate-500 font-medium">Conectado como:</div>
           <div class="font-bold text-slate-900 truncate">{{ userEmail || 'Usuario' }}</div>
-          <div class="mt-1">
+          <div class="mt-1.5 flex items-center justify-between">
             <span class="px-2 py-0.5 rounded text-2xs font-semibold bg-blue-100 text-blue-800">
               {{ userRole }}
             </span>
+            <q-btn
+              flat
+              dense
+              no-caps
+              size="xs"
+              icon="security"
+              label="MFA"
+              color="teal-8"
+              class="font-bold rounded-md bg-teal-50 px-1.5 border border-teal-200"
+              @click="showMfaModal = true"
+            >
+              <q-tooltip>Gestionar Verificación en Dos Pasos (Google Authenticator)</q-tooltip>
+            </q-btn>
           </div>
         </div>
       </div>
@@ -873,6 +891,9 @@
 
     <!-- Modal Global de Urgencia Médica SOS -->
     <EmergencySosModal v-model="showEmergencyModal" />
+
+    <!-- Modal Global de Seguridad y Segundo Factor MFA (Google Authenticator) -->
+    <MfaSecurityModal v-model="showMfaModal" />
   </q-layout>
 </template>
 
@@ -883,12 +904,14 @@ import { Notify } from 'quasar'
 import { api, resolveApiUrl } from 'boot/axios'
 import { useAcl } from 'src/composables/useAcl'
 import EmergencySosModal from 'src/components/EmergencySosModal.vue'
+import MfaSecurityModal from 'src/components/auth/MfaSecurityModal.vue'
 import { MEDICAL_SPECIALTIES } from 'src/constants/specialties'
 
 
 const router = useRouter()
 const leftDrawerOpen = ref(false)
 const showEmergencyModal = ref(false)
+const showMfaModal = ref(false)
 
 function toggleLeftDrawer () {
   leftDrawerOpen.value = !leftDrawerOpen.value

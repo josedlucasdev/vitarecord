@@ -71,3 +71,22 @@ class PatientOnboardingValidateResponse(BaseModel):
     appointment_id: str | None = None
     start_time: str | None = None
 
+
+class MFAStatusResponse(BaseModel):
+    mfa_enabled: bool
+
+
+class MFASetupResponse(BaseModel):
+    secret: str
+    otpauth_url: str
+    qr_code: str
+
+
+class MFAEnableRequest(BaseModel):
+    secret: str
+    code: str
+
+
+class MFADisableRequest(BaseModel):
+    password: str
+

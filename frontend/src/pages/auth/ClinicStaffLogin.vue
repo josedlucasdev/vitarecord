@@ -69,6 +69,8 @@
               dense
               class="rounded-xl"
               required
+              @blur="checkMfaStatus"
+              @update:model-value="onEmailChange"
             >
               <template v-slot:prepend>
                 <q-icon name="mail_outline" size="18px" color="cyan-8" />
@@ -103,22 +105,42 @@
             </q-input>
           </div>
 
-          <div>
-            <label class="block text-xs font-medium text-slate-500 mb-1">
-              Código de Segundo Factor MFA (opcional)
-            </label>
-            <q-input
-              v-model="mfaCode"
-              placeholder="6 dígitos de tu app autenticadora"
-              outlined
-              dense
-              class="rounded-xl"
-            >
-              <template v-slot:prepend>
-                <q-icon name="security" size="18px" color="cyan-8" />
-              </template>
-            </q-input>
-          </div>
+          <!-- Campo condicional de Segundo Factor MFA (Google Authenticator) -->
+          <transition
+            appear
+            enter-active-class="animated fadeIn"
+            leave-active-class="animated fadeOut"
+          >
+            <div v-if="showMfaField" class="space-y-1 p-3 rounded-xl bg-cyan-50/50 border border-cyan-200">
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+                  Código de Seguridad (Google Authenticator)
+                </label>
+                <span class="inline-flex items-center text-3xs font-bold text-cyan-800 bg-cyan-100 px-2 py-0.5 rounded-full">
+                  <q-icon name="verified_user" size="11px" class="mr-1" />
+                  MFA Activo
+                </span>
+              </div>
+              <q-input
+                ref="mfaInputRef"
+                v-model="mfaCode"
+                type="text"
+                mask="######"
+                placeholder="000000"
+                outlined
+                dense
+                class="rounded-xl font-mono text-center tracking-widest text-base font-bold bg-white"
+                required
+              >
+                <template v-slot:prepend>
+                  <q-icon name="security" size="18px" color="cyan-8" />
+                </template>
+              </q-input>
+              <p class="text-3xs text-slate-500 m-0">
+                Ingresa el código temporal de 6 dígitos de tu aplicación Google Authenticator.
+              </p>
+            </div>
+          </transition>
 
           <q-banner v-if="errorMessage" class="bg-red-50 text-red-800 rounded-xl text-xs border border-red-200">
             <template v-slot:avatar>
@@ -161,8 +183,36 @@ import { setAuthToken, clearAuthToken, useAcl, getValidTokenPayload } from 'src/
 const email = ref('')
 const password = ref('')
 const mfaCode = ref('')
+const showMfaField = ref(false)
+const mfaInputRef = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
+
+let emailDebounceTimer = null
+
+function onEmailChange () {
+  if (emailDebounceTimer) clearTimeout(emailDebounceTimer)
+  emailDebounceTimer = setTimeout(() => {
+    checkMfaStatus()
+  }, 500)
+}
+
+async function checkMfaStatus () {
+  const cleanEmail = (email.value || '').trim().toLowerCase()
+  if (!cleanEmail || !cleanEmail.includes('@')) {
+    showMfaField.value = false
+    return
+  }
+  try {
+    const { data } = await api.get(`/auth/mfa-status?email=${encodeURIComponent(cleanEmail)}`)
+    showMfaField.value = !!data.mfa_enabled
+    if (!data.mfa_enabled) {
+      mfaCode.value = ''
+    }
+  } catch (err) {
+    // Si falla la consulta no interrumpimos el flujo
+  }
+}
 
 const router = useRouter()
 const { isLoggedIn } = useAcl()
@@ -211,7 +261,9 @@ async function onSubmit () {
     const form = new URLSearchParams()
     form.set('username', email.value)
     form.set('password', password.value)
-    if (mfaCode.value) form.set('mfa_code', mfaCode.value)
+    if (mfaCode.value) {
+      form.set('mfa_code', mfaCode.value.trim().replace(/\D/g, ''))
+    }
 
     const { data } = await api.post('/auth/login', form, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -229,7 +281,14 @@ async function onSubmit () {
 
     checkClinicStaffRoleAndRedirect(data.access_token, data.refresh_token)
   } catch (err) {
-    errorMessage.value = err.response?.data?.detail || err.message || 'Credenciales inválidas o acceso no autorizado'
+    const detail = err.response?.data?.detail || ''
+    if (detail.includes('MFA') || err.response?.headers?.['x-mfa-required']) {
+      showMfaField.value = true
+      errorMessage.value = 'Tu cuenta tiene activada la verificación en dos pasos. Por favor ingresa el código de 6 dígitos de Google Authenticator.'
+      setTimeout(() => mfaInputRef.value?.focus(), 150)
+      return
+    }
+    errorMessage.value = detail || err.message || 'Credenciales inválidas o acceso no autorizado'
   } finally {
     loading.value = false
   }
