@@ -85,7 +85,11 @@
                 <div class="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-4 gap-y-1">
                   <span><q-icon name="email" size="14px" class="mr-1" />{{ doctor.email }}</span>
                   <span v-if="doctor.phone"><q-icon name="phone" size="14px" class="mr-1" />{{ doctor.phone }}</span>
-                  <span v-if="doctor.specialty" class="text-slate-700 font-medium">
+                  <span v-if="Array.isArray(doctor.specialties) && doctor.specialties.length > 0" class="flex items-center gap-1 text-slate-700 font-medium">
+                    <q-icon name="local_offer" size="14px" class="text-teal-600" />
+                    <span>{{ doctor.specialties.join(', ') }}</span>
+                  </span>
+                  <span v-else-if="doctor.specialty" class="text-slate-700 font-medium">
                     <q-icon name="local_offer" size="14px" class="mr-1 text-teal-600" />{{ doctor.specialty }}
                   </span>
                 </div>
@@ -137,8 +141,8 @@
               <span class="text-slate-800">{{ selectedDoctor.email }}</span>
             </div>
             <div class="flex justify-between">
-              <span class="text-slate-500">Especialidad:</span>
-              <strong class="text-teal-700">{{ selectedDoctor.specialty || 'General' }}</strong>
+              <span class="text-slate-500">Especialidad(es):</span>
+              <strong class="text-teal-700">{{ (Array.isArray(selectedDoctor.specialties) && selectedDoctor.specialties.length > 0) ? selectedDoctor.specialties.join(', ') : (selectedDoctor.specialty || 'General') }}</strong>
             </div>
             <div class="flex justify-between items-center">
               <span class="text-slate-500">Colegiatura / Matrícula:</span>
@@ -233,6 +237,7 @@ const filteredDoctors = computed(() => {
     d =>
       (d.full_name && d.full_name.toLowerCase().includes(q)) ||
       (d.email && d.email.toLowerCase().includes(q)) ||
+      (Array.isArray(d.specialties) && d.specialties.some(s => s && s.toLowerCase().includes(q))) ||
       (d.specialty && d.specialty.toLowerCase().includes(q)) ||
       (d.license_number && d.license_number.toLowerCase().includes(q))
   )

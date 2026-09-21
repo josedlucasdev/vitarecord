@@ -204,9 +204,22 @@
           </div>
 
           <!-- Doctor details -->
-          <div v-if="u.role === 'DOCTOR' && u.specialty" class="flex items-center justify-between">
-            <span class="text-slate-500">Especialidad:</span>
-            <span class="font-semibold text-teal-800 text-right truncate max-w-[170px]">{{ u.specialty }}</span>
+          <div v-if="u.role === 'DOCTOR' && (u.specialties?.length || u.specialty)" class="flex items-start justify-between gap-2">
+            <span class="text-slate-500 shrink-0">Especialidad:</span>
+            <div class="flex flex-wrap justify-end gap-1 max-w-[220px]">
+              <template v-if="u.specialties && u.specialties.length > 0">
+                <q-badge
+                  v-for="sp in u.specialties"
+                  :key="sp"
+                  color="teal-1"
+                  text-color="teal-9"
+                  class="text-3xs font-semibold"
+                >
+                  {{ sp }}
+                </q-badge>
+              </template>
+              <span v-else class="font-semibold text-teal-800 text-right truncate">{{ u.specialty }}</span>
+            </div>
           </div>
 
           <div v-if="u.role === 'DOCTOR' && u.license_number" class="flex items-center justify-between">
@@ -419,9 +432,22 @@
                         <h4 class="text-sm font-bold text-slate-900 truncate">
                           {{ doc.full_name || 'Médico sin nombre' }}
                         </h4>
-                        <q-badge v-if="doc.specialty" color="teal-1" text-color="teal-9" class="text-2xs font-semibold">
-                          {{ doc.specialty }}
-                        </q-badge>
+                        <div v-if="doc.specialties?.length || doc.specialty" class="flex flex-wrap gap-1">
+                          <template v-if="doc.specialties && doc.specialties.length > 0">
+                            <q-badge
+                              v-for="sp in doc.specialties"
+                              :key="sp"
+                              color="teal-1"
+                              text-color="teal-9"
+                              class="text-2xs font-semibold"
+                            >
+                              {{ sp }}
+                            </q-badge>
+                          </template>
+                          <q-badge v-else color="teal-1" text-color="teal-9" class="text-2xs font-semibold">
+                            {{ doc.specialty }}
+                          </q-badge>
+                        </div>
                       </div>
                       <p class="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5">
                         <q-icon name="mail" size="14px" color="slate-400" />
@@ -594,13 +620,17 @@
                 </p>
 
                 <q-select
-                  v-model="form.specialty"
+                  v-model="form.specialties"
                   :options="specialtyOptions"
-                  label="Especialidad Médica"
+                  label="Especialidades Médicas *"
                   filled
                   clearable
-                  use-input
-                  new-value-mode="add-unique"
+                  multiple
+                  use-chips
+                  emit-value
+                  map-options
+                  hint="Seleccione una o varias especialidades avaladas"
+                  :rules="[val => (val && val.length > 0) || 'Seleccione al menos una especialidad']"
                 />
 
                 <q-input
@@ -765,6 +795,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { Dialog, Notify } from 'quasar'
 import { api, resolveApiUrl } from 'boot/axios'
 import { useAcl } from 'src/composables/useAcl'
+import { MEDICAL_SPECIALTIES } from 'src/constants/specialties'
 
 const { can, user } = useAcl()
 
@@ -823,19 +854,7 @@ const tenantRoleOptions = [
   { label: 'Secretaria / Recepcionista', value: 'RECEPTIONIST' }
 ]
 
-const specialtyOptions = [
-  'Ginecología & Obstetricia',
-  'Medicina Materno-Fetal',
-  'Fertilidad & Reproducción Asistida',
-  'Ginecología Oncológica',
-  'Mastología & Patología Mamaria',
-  'Endocrinología Ginecológica',
-  'Urología Ginecológica & Piso Pélvico',
-  'Perinatología & Alto Riesgo',
-  'Pediatría',
-  'Medicina Interna',
-  'Medicina General'
-]
+const specialtyOptions = MEDICAL_SPECIALTIES
 
 const form = reactive({
   role: 'RECEPTIONIST',
@@ -843,6 +862,7 @@ const form = reactive({
   email: '',
   phone: '',
   specialty: null,
+  specialties: [],
   license_number: ''
 })
 
@@ -852,6 +872,7 @@ function resetForm () {
   form.email = ''
   form.phone = ''
   form.specialty = null
+  form.specialties = []
   form.license_number = ''
   formError.value = ''
 }
@@ -1081,7 +1102,8 @@ async function submitCreateUser () {
       full_name: form.full_name,
       email: form.email,
       phone: form.phone || null,
-      specialty: form.role === 'DOCTOR' ? form.specialty : null,
+      specialty: form.role === 'DOCTOR' ? (form.specialties?.length ? form.specialties.join(', ') : form.specialty) : null,
+      specialties: form.role === 'DOCTOR' ? form.specialties : null,
       license_number: form.role === 'DOCTOR' ? form.license_number : null
     }
 

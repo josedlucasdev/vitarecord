@@ -134,12 +134,18 @@
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <q-input
-                v-model="profile.specialty"
-                label="Especialidad Médica Principal"
+              <q-select
+                v-model="profile.specialties"
+                :options="specialtyCatalog"
+                label="Especialidades Médicas *"
                 outlined
                 dense
-                placeholder="Ej. Ginecología & Obstetricia"
+                multiple
+                use-chips
+                emit-value
+                map-options
+                hint="Seleccione una o varias de sus especialidades avaladas"
+                :rules="[val => (val && val.length > 0) || 'Seleccione al menos una especialidad']"
               />
               <q-input
                 v-model="profile.phone"
@@ -532,8 +538,21 @@
                   <div class="text-sm font-bold text-slate-900 truncate">
                     {{ profile.full_name || 'Dr. Tu Nombre' }}
                   </div>
-                  <div class="text-xs font-semibold text-teal-700">
-                    {{ profile.specialty || 'Especialidad Médica' }}
+                  <div class="flex flex-wrap gap-1 mt-1">
+                    <template v-if="profile.specialties && profile.specialties.length > 0">
+                      <q-badge
+                        v-for="sp in profile.specialties"
+                        :key="sp"
+                        color="teal-1"
+                        text-color="teal-9"
+                        class="text-3xs font-semibold px-1.5 py-0.5"
+                      >
+                        {{ sp }}
+                      </q-badge>
+                    </template>
+                    <div v-else class="text-xs font-semibold text-teal-700">
+                      {{ profile.specialty || 'Especialidad Médica' }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -945,7 +964,9 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Notify } from 'quasar'
 import { api, resolveApiUrl } from 'boot/axios'
+import { MEDICAL_SPECIALTIES } from 'src/constants/specialties'
 
+const specialtyCatalog = ref([...MEDICAL_SPECIALTIES])
 const loading = ref(true)
 const saving = ref(false)
 
@@ -954,6 +975,7 @@ const profile = reactive({
   email: '',
   phone: '',
   specialty: '',
+  specialties: [],
   biography: '',
   profile_picture_url: '',
   license_number: '',
@@ -1344,6 +1366,13 @@ async function loadMyProfile () {
     profile.email = data.email || ''
     profile.phone = data.phone || ''
     profile.specialty = data.specialty || ''
+    if (Array.isArray(data.specialties) && data.specialties.length > 0) {
+      profile.specialties = [...data.specialties]
+    } else if (data.specialty) {
+      profile.specialties = data.specialty.split(',').map(s => s.trim()).filter(Boolean)
+    } else {
+      profile.specialties = []
+    }
     profile.biography = data.biography || ''
     profile.profile_picture_url = data.profile_picture_url || ''
     profile.license_number = data.license_number || ''
@@ -1360,12 +1389,17 @@ async function loadMyProfile () {
 }
 
 async function saveProfile () {
+  if (!profile.specialties || profile.specialties.length === 0) {
+    Notify.create({ type: 'warning', message: 'Por favor selecciona al menos una especialidad médica.' })
+    return
+  }
   saving.value = true
   try {
     const payload = {
       biography: profile.biography,
       phone: profile.phone,
-      specialty: profile.specialty,
+      specialty: profile.specialties.join(', '),
+      specialties: profile.specialties,
       profile_picture_url: profile.profile_picture_url,
       is_public_profile_enabled: profile.is_public_profile_enabled,
       academic_degrees: profile.academic_degrees,

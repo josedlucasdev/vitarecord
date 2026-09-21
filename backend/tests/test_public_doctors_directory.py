@@ -228,3 +228,42 @@ async def test_doctor_clinic_disaffiliation(client: AsyncClient):
             s.is_active = True
 
         await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_doctor_multiple_specialties_and_catalog(client: AsyncClient):
+    """Verifica el catálogo oficial de especialidades y actualización múltiple en perfil de médico."""
+    # 1. Catálogo oficial sin autenticación
+    cat_resp = await client.get("/api/v1/doctors/specialties")
+    assert cat_resp.status_code == 200
+    specialties_list = cat_resp.json()
+    assert isinstance(specialties_list, list)
+    assert "Ginecología & Obstetricia" in specialties_list
+    assert "Medicina General" in specialties_list
+
+    # 2. Actualizar especialidades múltiples como médico autenticado
+    doctor_token = create_access_token(
+        "u2222222-2222-2222-2222-222222222222",
+        role="DOCTOR",
+        email="doctor@intimasalud.com",
+    )
+    headers = {"Authorization": f"Bearer {doctor_token}"}
+
+    update_payload = {
+        "specialties": ["Ginecología & Obstetricia", "Endocrinología & Metabolismo"],
+    }
+    put_resp = await client.put("/api/v1/doctors/me/profile", json=update_payload, headers=headers)
+    assert put_resp.status_code == 200
+    data = put_resp.json()
+    assert "Ginecología & Obstetricia" in data["specialties"]
+    assert "Endocrinología & Metabolismo" in data["specialties"]
+    assert "Ginecología & Obstetricia, Endocrinología & Metabolismo" in data["specialty"]
+
+    # 3. Comprobar que en el directorio público devuelve las especialidades
+    dir_resp = await client.get("/api/v1/doctors/public-directory")
+    assert dir_resp.status_code == 200
+    doc_in_dir = next((d for d in dir_resp.json() if d["id"] == "u2222222-2222-2222-2222-222222222222"), None)
+    assert doc_in_dir is not None
+    assert "Ginecología & Obstetricia" in doc_in_dir["specialties"]
+    assert "Endocrinología & Metabolismo" in doc_in_dir["specialties"]
+

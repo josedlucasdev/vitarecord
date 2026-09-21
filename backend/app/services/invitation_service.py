@@ -73,13 +73,21 @@ class InvitationService:
 
         if is_new_user:
             # Caso B: Crear usuario provisional
+            specs = request.specialties
+            if specs is not None:
+                spec_str = ", ".join(specs) if specs else None
+            else:
+                spec_str = request.specialty
+                specs = [s.strip() for s in spec_str.split(",") if s.strip()] if spec_str else []
+
             doctor = User(
                 email=request.email,
-                full_name=request.full_name,
                 phone=request.phone,
+                full_name=request.full_name,
                 role="DOCTOR",
                 status="PENDING_ONBOARDING",
-                specialty=request.specialty,
+                specialty=spec_str,
+                specialties=specs,
                 license_verification_status="NOT_APPLICABLE",
                 mfa_enabled=False,
             )
@@ -207,6 +215,13 @@ class InvitationService:
 
         is_new_user = doctor.status == "PENDING_ONBOARDING" or doctor.hashed_password is None
 
+        raw_specs = getattr(doctor, "specialties", None)
+        specs: list[str] = []
+        if isinstance(raw_specs, list):
+            specs = [str(s).strip() for s in raw_specs if s]
+        elif doctor.specialty:
+            specs = [s.strip() for s in doctor.specialty.split(",") if s.strip()]
+
         return ValidateTokenResponse(
             valid=True,
             is_new_user=is_new_user,
@@ -214,6 +229,9 @@ class InvitationService:
             clinic_id=clinic.id,
             doctor_email=doctor.email,
             doctor_id=doctor.id,
+            full_name=doctor.full_name,
+            specialty=doctor.specialty,
+            specialties=specs,
         )
 
     async def respond_invitation(self, token: str, action: str) -> dict:
@@ -269,8 +287,12 @@ class InvitationService:
         doctor.hashed_password = hash_password(request.password)
         if request.full_name:
             doctor.full_name = request.full_name
-        if request.specialty:
+        if request.specialties is not None:
+            doctor.specialties = request.specialties
+            doctor.specialty = ", ".join(request.specialties) if request.specialties else None
+        elif request.specialty:
             doctor.specialty = request.specialty
+            doctor.specialties = [s.strip() for s in request.specialty.split(",") if s.strip()]
         if request.license_number:
             doctor.license_number = request.license_number
         if request.biography:

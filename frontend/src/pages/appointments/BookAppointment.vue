@@ -610,7 +610,7 @@
           <div class="flex items-center space-x-2">
             <q-icon name="check_circle" size="18px" color="teal" />
             <span>
-              Consultando turnos en <strong>{{ selectedClinic.name }}</strong> con <strong>{{ selectedDoctor.full_name }}</strong> ({{ selectedDoctor.specialty }}).
+              Consultando turnos en <strong>{{ selectedClinic.name }}</strong> con <strong>{{ selectedDoctor.full_name }}</strong> ({{ (Array.isArray(selectedDoctor.specialties) && selectedDoctor.specialties.length > 0) ? selectedDoctor.specialties.join(', ') : (selectedDoctor.specialty || 'Especialista') }}).
             </span>
           </div>
           <div v-if="selectedDoctor.clinics && selectedDoctor.clinics.length > 1" class="text-2xs text-teal-800 bg-teal-100/90 px-2.5 py-1 rounded-full font-semibold self-start sm:self-auto">
@@ -1368,7 +1368,10 @@ const doctorOptions = computed(() => {
   }
   return unique.map(d => ({
     label: `${d.full_name || d.email}`,
-    specialty: d.specialty || 'Medicina Especializada',
+    specialties: d.specialties || [],
+    specialty: (Array.isArray(d.specialties) && d.specialties.length > 0)
+      ? d.specialties.join(', ')
+      : (d.specialty || 'Medicina Especializada'),
     clinicsCount: (d.clinics || []).length,
     value: d.id
   }))

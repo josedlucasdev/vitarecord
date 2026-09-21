@@ -111,11 +111,17 @@
               filled
               required
             />
-            <q-input
-              v-model="specialty"
-              label="Especialidad Médica Principal (ej. Ginecología)"
+            <q-select
+              v-model="specialties"
+              :options="MEDICAL_SPECIALTIES"
+              label="Especialidades Médicas *"
               filled
-              required
+              multiple
+              use-chips
+              emit-value
+              map-options
+              hint="Selecciona una o más especialidades médicas autorizadas"
+              :rules="[val => (val && val.length > 0) || 'Selecciona al menos una especialidad']"
             />
             <q-input
               v-model="licenseNumber"
@@ -150,7 +156,20 @@
             <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm space-y-2">
               <div><span class="text-slate-500">Médico:</span> <strong>{{ fullName }}</strong></div>
               <div><span class="text-slate-500">Email:</span> <strong>{{ inviteData.doctor_email }}</strong></div>
-              <div><span class="text-slate-500">Especialidad:</span> <strong>{{ specialty }}</strong></div>
+              <div>
+                <span class="text-slate-500">Especialidades:</span>
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <q-badge
+                    v-for="sp in specialties"
+                    :key="sp"
+                    color="primary"
+                    text-color="white"
+                    class="text-xs font-semibold px-2 py-0.5"
+                  >
+                    {{ sp }}
+                  </q-badge>
+                </div>
+              </div>
               <div><span class="text-slate-500">Matrícula:</span> <strong>{{ licenseNumber }}</strong></div>
               <div><span class="text-slate-500">Clínica:</span> <strong>{{ inviteData.clinic_name }}</strong></div>
             </div>
@@ -204,6 +223,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from 'boot/axios'
+import { MEDICAL_SPECIALTIES } from 'src/constants/specialties'
 
 const route = useRoute()
 const token = ref('')
@@ -216,7 +236,7 @@ const currentStep = ref(1)
 const password = ref('')
 const confirmPassword = ref('')
 const fullName = ref('')
-const specialty = ref('')
+const specialties = ref([])
 const licenseNumber = ref('')
 const biography = ref('')
 
@@ -233,7 +253,7 @@ const canProceedStep1 = computed(() => {
 })
 
 const canProceedStep2 = computed(() => {
-  return fullName.value.trim().length > 0 && specialty.value.trim().length > 0 && licenseNumber.value.trim().length > 0
+  return fullName.value.trim().length > 0 && specialties.value.length > 0 && licenseNumber.value.trim().length > 0
 })
 
 onMounted(async () => {
@@ -247,6 +267,14 @@ onMounted(async () => {
   try {
     const { data } = await api.get(`/invitations/validate?token=${token.value}`)
     inviteData.value = data
+    if (data.full_name && !fullName.value) {
+      fullName.value = data.full_name
+    }
+    if (data.specialties && Array.isArray(data.specialties) && data.specialties.length > 0) {
+      specialties.value = [...data.specialties]
+    } else if (data.specialty) {
+      specialties.value = data.specialty.split(',').map(s => s.trim()).filter(Boolean)
+    }
   } catch (err) {
     validationError.value = err.response?.data?.detail || 'El enlace de onboarding no es válido o ha expirado.'
   } finally {
@@ -262,7 +290,8 @@ async function submitOnboarding() {
       token: token.value,
       password: password.value,
       full_name: fullName.value,
-      specialty: specialty.value,
+      specialty: specialties.value.join(', '),
+      specialties: specialties.value,
       license_number: licenseNumber.value,
       biography: biography.value
     })

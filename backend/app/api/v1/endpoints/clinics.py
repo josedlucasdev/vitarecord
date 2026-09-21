@@ -422,6 +422,7 @@ async def list_clinic_doctors(
                 full_name=doc.full_name,
                 email=doc.email,
                 specialty=doc.specialty,
+                specialties=doc.specialties or ([doc.specialty] if doc.specialty else []),
                 is_available_for_emergencies=doc.is_available_for_emergencies,
                 contract_type=aff.contract_type if aff else "INDEPENDENT",
                 consultation_fee=aff.consultation_fee if aff and aff.consultation_fee is not None else Decimal("30.00"),
@@ -449,6 +450,7 @@ async def list_clinic_doctors(
                     full_name=doc.full_name,
                     email=doc.email,
                     specialty=doc.specialty,
+                    specialties=doc.specialties or ([doc.specialty] if doc.specialty else []),
                     is_available_for_emergencies=doc.is_available_for_emergencies,
                     contract_type="INDEPENDENT",
                     consultation_fee=Decimal("30.00"),
@@ -492,9 +494,8 @@ async def search_doctors_to_affiliate(
             or_(
                 User.full_name.ilike(search_pattern),
                 User.email.ilike(search_pattern),
-                User.identification_number.ilike(search_pattern),
-                User.license_number.ilike(search_pattern),
                 User.specialty.ilike(search_pattern),
+                User.license_number.ilike(search_pattern),
             )
         )
 
@@ -509,13 +510,15 @@ async def search_doctors_to_affiliate(
         .order_by(User.full_name.asc())
         .limit(25)
     )
+
     result = await db.execute(stmt)
     rows = result.all()
 
-    doctors_out: list[DoctorSearchResult] = []
+    doctors_out = []
     for user_obj, aff in rows:
-        is_aff = (aff is not None and aff.status == "ACTIVE") or (user_obj.clinic_id == clinic_id)
-        aff_status = aff.status if aff else ("ACTIVE" if user_obj.clinic_id == clinic_id else None)
+        is_aff = aff is not None and aff.status in ("ACTIVE", "INVITED")
+        aff_status = aff.status if aff else None
+
         doctors_out.append(
             DoctorSearchResult(
                 id=user_obj.id,
@@ -523,6 +526,7 @@ async def search_doctors_to_affiliate(
                 email=user_obj.email,
                 phone=user_obj.phone,
                 specialty=user_obj.specialty,
+                specialties=user_obj.specialties or ([user_obj.specialty] if user_obj.specialty else []),
                 identification_number=user_obj.identification_number,
                 license_number=user_obj.license_number,
                 profile_picture_url=user_obj.profile_picture_url,
@@ -932,6 +936,13 @@ async def create_clinic_user(
             return existing_user
 
         # Nuevo médico no existente en la plataforma
+        specs = payload.specialties
+        if specs is not None:
+            spec_str = ", ".join(specs) if specs else None
+        else:
+            spec_str = payload.specialty.strip() if payload.specialty else None
+            specs = [s.strip() for s in spec_str.split(",") if s.strip()] if spec_str else []
+
         new_user = User(
             email=clean_email,
             full_name=payload.full_name.strip(),
@@ -939,7 +950,8 @@ async def create_clinic_user(
             role="DOCTOR",
             status="PENDING_ONBOARDING",
             clinic_id=None,  # Entidad global
-            specialty=payload.specialty.strip() if payload.specialty else None,
+            specialty=spec_str,
+            specialties=specs,
             license_number=payload.license_number.strip() if payload.license_number else None,
             license_verification_status="VERIFIED",
         )

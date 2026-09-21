@@ -36,6 +36,52 @@ logger = logging.getLogger("doctors")
 router = APIRouter()
 AVATARS_DIR = Path("uploads/avatars")
 
+MEDICAL_SPECIALTIES: list[str] = [
+    "Ginecología & Obstetricia",
+    "Medicina Materno-Fetal (Perinatología)",
+    "Fertilidad & Reproducción Asistida",
+    "Ginecología Oncológica",
+    "Mastología & Patología Mamaria",
+    "Endocrinología Ginecológica",
+    "Urología Ginecológica & Piso Pélvico",
+    "Pediatría & Puericultura",
+    "Medicina Interna",
+    "Medicina General",
+    "Cardiología",
+    "Dermatología",
+    "Endocrinología & Metabolismo",
+    "Gastroenterología",
+    "Neurología",
+    "Nutrición Clínica",
+    "Odontología",
+    "Oftalmología",
+    "Oncología Médica",
+    "Otorrinolaringología",
+    "Psicología Clínica & Sexología",
+    "Psiquiatría",
+    "Reumatología",
+    "Traumatología & Ortopedia",
+    "Urología General",
+    "Cirugía General",
+    "Anestesiología",
+    "Ecografía & Imagenología Diagnóstica",
+]
+
+
+def extract_specialties(doc: User) -> list[str]:
+    """Extrae la lista normalizada de especialidades del usuario médico."""
+    if doc.specialties and isinstance(doc.specialties, list) and len(doc.specialties) > 0:
+        return doc.specialties
+    if doc.specialty:
+        return [s.strip() for s in doc.specialty.split(",") if s.strip()]
+    return []
+
+
+@router.get("/specialties", response_model=list[str])
+async def list_medical_specialties():
+    """Retorna el catálogo estandarizado y cerrado de especialidades médicas."""
+    return MEDICAL_SPECIALTIES
+
 
 @router.get("/public-directory", response_model=list[DoctorPublicWithClinics])
 async def list_public_doctors_directory(
@@ -120,6 +166,7 @@ async def list_public_doctors_directory(
                 email=doc.email,
                 phone=doc.phone,
                 specialty=doc.specialty,
+                specialties=extract_specialties(doc),
                 biography=doc.biography,
                 profile_picture_url=doc.profile_picture_url,
                 license_number=doc.license_number,
@@ -170,6 +217,7 @@ async def get_my_doctor_profile(
         email=current_user.email,
         phone=current_user.phone,
         specialty=current_user.specialty,
+        specialties=extract_specialties(current_user),
         biography=current_user.biography,
         profile_picture_url=current_user.profile_picture_url,
         license_number=current_user.license_number,
@@ -196,13 +244,20 @@ async def update_my_doctor_profile(
         current_user.biography = payload.biography
     if payload.phone is not None:
         current_user.phone = payload.phone
-    if payload.specialty is not None:
+    if payload.specialties is not None:
+        current_user.specialties = payload.specialties
+        current_user.specialty = ", ".join(payload.specialties) if payload.specialties else None
+    elif payload.specialty is not None:
         current_user.specialty = payload.specialty
+        current_user.specialties = [s.strip() for s in payload.specialty.split(",") if s.strip()]
     if payload.profile_picture_url is not None:
         current_user.profile_picture_url = payload.profile_picture_url
-    current_user.is_public_profile_enabled = payload.is_public_profile_enabled
-    current_user.academic_degrees = [d.model_dump() for d in payload.academic_degrees]
-    current_user.work_experience = [e.model_dump() for e in payload.work_experience]
+    if payload.is_public_profile_enabled is not None:
+        current_user.is_public_profile_enabled = payload.is_public_profile_enabled
+    if payload.academic_degrees is not None:
+        current_user.academic_degrees = [d.model_dump() for d in payload.academic_degrees]
+    if payload.work_experience is not None:
+        current_user.work_experience = [e.model_dump() for e in payload.work_experience]
 
     await db.commit()
     await db.refresh(current_user)
@@ -328,6 +383,7 @@ async def get_doctor_public_profile(
         email=user.email,
         phone=user.phone,
         specialty=user.specialty,
+        specialties=extract_specialties(user),
         biography=user.biography,
         profile_picture_url=user.profile_picture_url,
         license_number=user.license_number,
@@ -392,6 +448,7 @@ async def list_doctors_with_clinics(
                 email=doc.email,
                 phone=doc.phone,
                 specialty=doc.specialty,
+                specialties=extract_specialties(doc),
                 biography=doc.biography,
                 profile_picture_url=doc.profile_picture_url,
                 license_number=doc.license_number,

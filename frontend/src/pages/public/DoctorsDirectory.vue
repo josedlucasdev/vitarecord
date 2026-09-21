@@ -159,9 +159,22 @@
               <h2 class="text-base font-bold text-slate-900 truncate leading-snug">
                 {{ doctor.full_name }}
               </h2>
-              <p class="text-xs font-semibold text-teal-700 leading-tight mt-0.5">
-                {{ doctor.specialty }}
-              </p>
+              <div class="flex flex-wrap gap-1 mt-1">
+                <template v-if="Array.isArray(doctor.specialties) && doctor.specialties.length > 0">
+                  <q-badge
+                    v-for="spec in doctor.specialties"
+                    :key="spec"
+                    color="teal-1"
+                    text-color="teal-9"
+                    class="text-3xs font-semibold py-0.5 px-2"
+                  >
+                    {{ spec }}
+                  </q-badge>
+                </template>
+                <p v-else class="text-xs font-semibold text-teal-700 leading-tight">
+                  {{ doctor.specialty || 'Especialista' }}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -257,7 +270,20 @@
                 MÉDICO VERIFICADO VITARECORD
               </div>
               <h2 class="text-xl font-bold leading-tight">{{ selectedDoctorDetails.full_name }}</h2>
-              <p class="text-xs text-teal-200 mt-0.5 font-medium">{{ selectedDoctorDetails.specialty }}</p>
+              <div class="flex flex-wrap gap-1.5 mt-1.5">
+                <template v-if="Array.isArray(selectedDoctorDetails.specialties) && selectedDoctorDetails.specialties.length > 0">
+                  <q-badge
+                    v-for="spec in selectedDoctorDetails.specialties"
+                    :key="spec"
+                    color="teal-8"
+                    text-color="white"
+                    class="text-xs font-medium py-1 px-2.5"
+                  >
+                    {{ spec }}
+                  </q-badge>
+                </template>
+                <p v-else class="text-xs text-teal-200 font-medium">{{ selectedDoctorDetails.specialty || 'Especialista' }}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -414,8 +440,16 @@ const specialtyOptions = computed(() => {
   const options = [{ label: 'Todas las Especialidades', value: null }]
   const set = new Set()
   for (const d of doctors.value) {
+    if (Array.isArray(d.specialties)) {
+      for (const s of d.specialties) {
+        if (s) set.add(s)
+      }
+    }
     if (d.specialty) {
-      set.add(d.specialty)
+      d.specialty.split(',').forEach(s => {
+        const trimmed = s.trim()
+        if (trimmed) set.add(trimmed)
+      })
     }
   }
   for (const spec of Array.from(set).sort()) {
@@ -435,14 +469,19 @@ const filteredDoctors = computed(() => {
 
     // Filtro especialidad
     if (selectedSpecialty.value) {
-      if (doc.specialty !== selectedSpecialty.value) return false
+      const matchSpecialty = Array.isArray(doc.specialties) && doc.specialties.length > 0
+        ? doc.specialties.includes(selectedSpecialty.value)
+        : (doc.specialty || '').toLowerCase().includes(selectedSpecialty.value.toLowerCase())
+      if (!matchSpecialty) return false
     }
 
     // Filtro texto libre
     if (searchQuery.value && searchQuery.value.trim()) {
       const q = searchQuery.value.toLowerCase().trim()
       const inName = (doc.full_name || '').toLowerCase().includes(q)
-      const inSpec = (doc.specialty || '').toLowerCase().includes(q)
+      const inSpec = Array.isArray(doc.specialties)
+        ? doc.specialties.some(s => (s || '').toLowerCase().includes(q))
+        : (doc.specialty || '').toLowerCase().includes(q)
       const inBio = (doc.biography || '').toLowerCase().includes(q)
       const inClinic = (doc.clinics || []).some(c => c.name.toLowerCase().includes(q))
       if (!inName && !inSpec && !inBio && !inClinic) return false

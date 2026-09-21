@@ -13,7 +13,8 @@ class ClinicUserCreateRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=255)
     phone: str | None = Field(None, max_length=32)
     role: str
-    specialty: str | None = Field(None, max_length=100)
+    specialty: str | None = Field(None, max_length=500)
+    specialties: list[str] | None = None
     license_number: str | None = Field(None, max_length=100)
 
 
@@ -30,6 +31,7 @@ class ClinicUserPublic(BaseModel):
     status: str
     clinic_id: str | None = None
     specialty: str | None = None
+    specialties: list[str] = []
     license_number: str | None = None
     created_at: datetime | None = None
     contract_type: str | None = None

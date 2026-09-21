@@ -30,7 +30,8 @@ class User(Base, TimestampMixin):
     clinic_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("clinics.id"), index=True)
 
     # Perfil profesional (medicos)
-    specialty: Mapped[str | None] = mapped_column(String(100))
+    specialty: Mapped[str | None] = mapped_column(String(500))
+    specialties: Mapped[list | None] = mapped_column(JSON, default=list)
     license_number: Mapped[str | None] = mapped_column(String(100))
     biography: Mapped[str | None] = mapped_column(String(1000))
     profile_picture_url: Mapped[str | None] = mapped_column(String(500), nullable=True)

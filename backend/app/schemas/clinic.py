@@ -41,6 +41,7 @@ class ClinicDoctorPublic(BaseModel):
     full_name: str | None = None
     email: str
     specialty: str | None = None
+    specialties: list[str] = []
     is_available_for_emergencies: bool = False
     contract_type: str | None = "INDEPENDENT"
     consultation_fee: Decimal | None = None
@@ -70,6 +71,7 @@ class DoctorPublicWithClinics(BaseModel):
     email: str
     phone: str | None = None
     specialty: str | None = None
+    specialties: list[str] = []
     biography: str | None = None
     profile_picture_url: str | None = None
     license_number: str | None = None
@@ -87,6 +89,7 @@ class DoctorProfileUpdateRequest(BaseModel):
     full_name: str | None = None
     phone: str | None = None
     specialty: str | None = None
+    specialties: list[str] | None = None
     biography: str | None = None
     profile_picture_url: str | None = None
     academic_degrees: list[AcademicDegree] | None = None
@@ -100,6 +103,7 @@ class DoctorSearchResult(BaseModel):
     email: str
     phone: str | None = None
     specialty: str | None = None
+    specialties: list[str] = []
     identification_number: str | None = None
     license_number: str | None = None
     profile_picture_url: str | None = None

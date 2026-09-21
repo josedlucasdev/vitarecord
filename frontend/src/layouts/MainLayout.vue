@@ -619,7 +619,12 @@
                         <h4 class="text-sm font-bold text-slate-900 truncate">
                           {{ doc.full_name || 'Médico sin nombre' }}
                         </h4>
-                        <q-badge v-if="doc.specialty" color="teal-1" text-color="teal-9" class="text-2xs font-semibold">
+                        <div v-if="Array.isArray(doc.specialties) && doc.specialties.length > 0" class="flex flex-wrap gap-1">
+                          <q-badge v-for="s in doc.specialties" :key="s" color="teal-1" text-color="teal-9" class="text-2xs font-semibold">
+                            {{ s }}
+                          </q-badge>
+                        </div>
+                        <q-badge v-else-if="doc.specialty" color="teal-1" text-color="teal-9" class="text-2xs font-semibold">
                           {{ doc.specialty }}
                         </q-badge>
                       </div>
@@ -759,10 +764,14 @@
                 label="Nombre completo (opcional)"
                 filled
               />
-              <q-input
-                v-model="inviteSpecialty"
-                label="Especialidad médica (ej. Ginecología)"
+              <q-select
+                v-model="inviteSpecialties"
+                :options="MEDICAL_SPECIALTIES"
+                label="Especialidad(es) médica(s)"
+                multiple
+                use-chips
                 filled
+                hint="Seleccione una o varias especialidades del catálogo oficial"
               />
               <q-input
                 v-model="invitePhone"
@@ -874,6 +883,7 @@ import { Notify } from 'quasar'
 import { api, resolveApiUrl } from 'boot/axios'
 import { useAcl } from 'src/composables/useAcl'
 import EmergencySosModal from 'src/components/EmergencySosModal.vue'
+import { MEDICAL_SPECIALTIES } from 'src/constants/specialties'
 
 
 const router = useRouter()
@@ -925,7 +935,7 @@ let inviteSearchDebounceTimeout = null
 
 const inviteEmail = ref('')
 const inviteFullName = ref('')
-const inviteSpecialty = ref('')
+const inviteSpecialties = ref([])
 const invitePhone = ref('')
 const submittingInvite = ref(false)
 const inviteError = ref('')
@@ -939,6 +949,7 @@ watch(showInviteModal, (val) => {
     inviteDoctorSearchPerformed.value = false
     inviteResult.value = null
     inviteError.value = ''
+    inviteSpecialties.value = []
   }
 })
 
@@ -1047,7 +1058,8 @@ async function submitInvite () {
       {
         email: inviteEmail.value,
         full_name: inviteFullName.value || undefined,
-        specialty: inviteSpecialty.value || undefined,
+        specialties: inviteSpecialties.value.length > 0 ? inviteSpecialties.value : undefined,
+        specialty: inviteSpecialties.value.join(', ') || undefined,
         phone: invitePhone.value || undefined
       },
       {
