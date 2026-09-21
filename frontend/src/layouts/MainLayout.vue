@@ -376,6 +376,21 @@
           <q-item
             clickable
             v-ripple
+            to="/patient/family"
+            active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600"
+          >
+            <q-item-section avatar>
+              <q-icon name="family_restroom" size="20px" color="teal" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>Mis Familiares</q-item-label>
+              <q-item-label caption>Fichas y dependientes</q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item
+            clickable
+            v-ripple
             to="/medical/history"
             active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600"
           >

@@ -73,6 +73,21 @@ async def init_db_and_seed() -> None:
         except Exception:
             pass
 
+        # Asegurar columnas clínicas y de contacto en patient_dependents
+        for col_def in [
+            "ADD COLUMN blood_type VARCHAR(10) NULL",
+            "ADD COLUMN height_cm FLOAT NULL",
+            "ADD COLUMN allergies VARCHAR(500) NULL",
+            "ADD COLUMN chronic_conditions VARCHAR(500) NULL",
+            "ADD COLUMN phone VARCHAR(32) NULL",
+            "ADD COLUMN notes VARCHAR(1000) NULL",
+            "ADD COLUMN profile_picture_url VARCHAR(500) NULL",
+        ]:
+            try:
+                await conn.exec_driver_sql(f"ALTER TABLE patient_dependents {col_def}")
+            except Exception:
+                pass  # Columna ya existe
+
         # Asegurar columnas para el Módulo 6 en notification_logs
         for col_def in [
             "ADD COLUMN appointment_id VARCHAR(36) NULL",

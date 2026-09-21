@@ -223,6 +223,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'patient/family',
+        name: 'patient-family',
+        component: () => import('pages/patient/PatientFamilyManagement.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'doctor/profile',
         name: 'doctor-profile',
         component: () => import('pages/doctor/DoctorProfile.vue'),

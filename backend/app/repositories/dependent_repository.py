@@ -17,6 +17,12 @@ class DependentRepository:
         birth_date: datetime.date,
         id_document: str | None = None,
         gender: str | None = None,
+        blood_type: str | None = None,
+        height_cm: float | None = None,
+        allergies: str | None = None,
+        chronic_conditions: str | None = None,
+        phone: str | None = None,
+        notes: str | None = None,
     ) -> PatientDependent:
         today = datetime.date.today()
         # Verificar edad para estatus de emancipacion inicial
@@ -31,6 +37,12 @@ class DependentRepository:
             id_document=id_document,
             gender=gender,
             emancipation_status=emancipation_status,
+            blood_type=blood_type,
+            height_cm=height_cm,
+            allergies=allergies,
+            chronic_conditions=chronic_conditions,
+            phone=phone,
+            notes=notes,
         )
         self.db.add(dep)
         await self.db.flush()
@@ -50,9 +62,21 @@ class DependentRepository:
         res = await self.db.execute(stmt)
         return res.scalar_one_or_none()
 
+    async def get_by_id_and_guardian(self, dependent_id: str, guardian_id: str) -> PatientDependent | None:
+        stmt = select(PatientDependent).where(
+            PatientDependent.id == dependent_id,
+            PatientDependent.guardian_user_id == guardian_id,
+        )
+        res = await self.db.execute(stmt)
+        return res.scalar_one_or_none()
+
     async def update_emancipation_status(self, dependent_id: str, status: str) -> PatientDependent | None:
         dep = await self.get_by_id(dependent_id)
         if dep:
             dep.emancipation_status = status
             await self.db.flush()
         return dep
+
+    async def delete(self, dependent: PatientDependent) -> None:
+        await self.db.delete(dependent)
+        await self.db.flush()

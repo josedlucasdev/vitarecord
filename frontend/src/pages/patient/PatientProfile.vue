@@ -17,6 +17,15 @@
 
         <div class="flex items-center gap-2 self-end sm:self-center">
           <q-btn
+            outline
+            color="teal-8"
+            icon="family_restroom"
+            label="Mis Familiares"
+            to="/patient/family"
+            no-caps
+            class="text-xs font-bold px-3 py-2"
+          />
+          <q-btn
             unelevated
             color="primary"
             icon="save"
@@ -119,6 +128,30 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Acceso a Mi Núcleo Familiar -->
+        <div class="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+          <div class="flex items-center space-x-3.5">
+            <div class="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-xs shrink-0">
+              <q-icon name="family_restroom" size="24px" />
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 leading-tight">¿Tienes familiares o personas a tu cargo?</h3>
+              <p class="text-xs text-slate-600 mt-0.5 leading-relaxed">
+                Gestiona a tus dependientes (hijos, cónyuge, padres). Podrás subir sus fotografías individuales y registrar sus fichas médicas permanentes para que sus citas se agenden sin repetir datos.
+              </p>
+            </div>
+          </div>
+          <q-btn
+            unelevated
+            color="teal-8"
+            icon="people"
+            label="Gestionar Familiares"
+            to="/patient/family"
+            no-caps
+            class="text-xs font-bold px-4 py-2 shrink-0 self-stretch sm:self-center"
+          />
         </div>
 
         <!-- 3. SECCIÓN: Ficha Clínica Basal (Datos Inmutables en el Tiempo) -->

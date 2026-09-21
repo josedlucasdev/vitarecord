@@ -70,8 +70,19 @@
             flat
             dense
             color="primary"
+            icon="family_restroom"
+            label="Gestionar Familiares"
+            to="/patient/family"
+            no-caps
+            class="text-xs font-semibold"
+          />
+          <q-btn
+            v-if="beneficiaryType === 'dependent'"
+            flat
+            dense
+            color="teal-8"
             icon="add"
-            label="Registrar Nuevo Familiar"
+            label="Registro Rápido"
             no-caps
             class="text-xs"
             @click="showAddDependentModal = true"
@@ -207,7 +218,7 @@
           </span>
         </div>
 
-        <!-- Caso A: El paciente titular ya tiene su Ficha Clínica Permanente (no se le vuelve a pedir) -->
+        <!-- Caso A: El paciente titular o su familiar ya tiene su Ficha Clínica Basal (no se le vuelve a pedir) -->
         <div v-if="hasPermanentClinicalData" class="space-y-4">
           <!-- Tarjeta de Ficha Basal Registrada -->
           <div class="p-4 bg-teal-50/80 border border-teal-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -215,10 +226,10 @@
               <div class="flex items-center gap-2">
                 <span class="text-2xs font-bold uppercase tracking-wider text-teal-800 flex items-center">
                   <q-icon name="verified" size="15px" class="mr-1 text-teal-600" />
-                  Ficha Clínica Basal Permanente
+                  {{ beneficiaryType === 'dependent' ? `Ficha Clínica Basal: ${selectedDependent?.full_name || 'Familiar'}` : 'Ficha Clínica Basal Permanente' }}
                 </span>
                 <span class="text-3xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold border border-emerald-300">
-                  Guardada en tu perfil
+                  {{ beneficiaryType === 'dependent' ? 'Guardada en Núcleo Familiar' : 'Guardada en tu perfil' }}
                 </span>
               </div>
               <div class="flex flex-wrap items-center gap-2 text-xs text-slate-700 pt-0.5">
@@ -244,8 +255,8 @@
               size="sm"
               color="teal-8"
               icon="edit"
-              label="Modificar en Mi Perfil"
-              to="/patient/profile"
+              :label="beneficiaryType === 'dependent' ? 'Modificar en Familiares' : 'Modificar en Mi Perfil'"
+              :to="beneficiaryType === 'dependent' ? '/patient/family' : '/patient/profile'"
               class="text-xs font-bold shrink-0 self-start sm:self-center"
             />
           </div>
@@ -318,6 +329,13 @@
             <div>
               <strong>Completa tus datos basales por primera vez:</strong>
               Ingresa tu estatura y grupo sanguíneo. Se guardarán en tu perfil de paciente para que no tengas que volver a ingresarlos en tus próximas consultas.
+            </div>
+          </div>
+          <div v-else-if="isLoggedIn && beneficiaryType === 'dependent'" class="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 leading-relaxed">
+            <q-icon name="lightbulb" color="amber-8" size="18px" class="mt-0.5 shrink-0" />
+            <div>
+              <strong>Ficha médica incompleta para {{ selectedDependent?.full_name || 'este familiar' }}:</strong>
+              Aún no tiene registrados su grupo sanguíneo y estatura fija. Puedes ingresarlos aquí para la consulta o guardarlos permanentemente en <router-link to="/patient/family" class="font-bold underline text-amber-950">Mis Familiares</router-link>.
             </div>
           </div>
 
@@ -791,16 +809,38 @@
         <q-card-section class="p-6 space-y-4">
           <form class="space-y-3" @submit.prevent="saveDependent">
             <q-input v-model="depForm.full_name" label="Nombre Completo *" filled required />
-            <q-select
-              v-model="depForm.relationship"
-              :options="['HIJO', 'PADRE', 'CONYUGE', 'OTRO']"
-              label="Parentesco *"
-              filled
-              required
-            />
-            <q-input v-model="depForm.birth_date" label="Fecha de Nacimiento *" type="date" filled required />
-            <q-input v-model="depForm.id_document" label="Cédula / Documento (Opcional)" filled />
-            <q-select v-model="depForm.gender" :options="['FEMENINO', 'MASCULINO', 'OTRO']" label="Género" filled />
+            <div class="grid grid-cols-2 gap-2">
+              <q-select
+                v-model="depForm.relationship"
+                :options="['HIJO', 'PADRE', 'CONYUGE', 'HERMANO', 'OTRO']"
+                label="Parentesco *"
+                filled
+                required
+              />
+              <q-select v-model="depForm.gender" :options="['FEMENINO', 'MASCULINO', 'OTRO']" label="Género" filled />
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <q-input v-model="depForm.birth_date" label="Fecha de Nacimiento *" type="date" filled required />
+              <q-input v-model="depForm.id_document" label="Cédula / Documento (Opcional)" filled />
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <q-select
+                v-model="depForm.blood_type"
+                :options="['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']"
+                label="Grupo Sanguíneo"
+                filled
+              />
+              <q-input
+                v-model.number="depForm.height_cm"
+                label="Talla (cm)"
+                type="number"
+                suffix="cm"
+                filled
+              />
+            </div>
+            <div class="text-2xs text-slate-500 pt-1">
+              💡 Podrás subir su foto y completar sus alergias y antecedentes en <router-link to="/patient/family" class="text-teal-700 font-bold underline" v-close-popup>Mis Familiares</router-link>.
+            </div>
 
             <div class="flex justify-end space-x-2 pt-4">
               <q-btn flat label="Cancelar" v-close-popup no-caps />
@@ -861,7 +901,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Notify } from 'quasar'
 import { api } from 'boot/axios'
@@ -884,7 +924,13 @@ const depForm = reactive({
   relationship: 'HIJO',
   birth_date: '',
   id_document: '',
-  gender: 'FEMENINO'
+  gender: 'FEMENINO',
+  blood_type: 'O+',
+  height_cm: null,
+  allergies: '',
+  chronic_conditions: '',
+  phone: '',
+  notes: ''
 })
 
 // Honorarios de Consulta Médica
@@ -916,14 +962,28 @@ async function loadDoctorFee () {
 // Perfil permanente del paciente
 const patientProfile = ref(null)
 
+const selectedDependent = computed(() => {
+  return dependents.value.find(d => d.id === selectedDependentId.value)
+})
+
 const hasPermanentClinicalData = computed(() => {
-  return !!(
-    isLoggedIn.value &&
-    beneficiaryType.value === 'self' &&
-    patientProfile.value &&
-    patientProfile.value.blood_type &&
-    patientProfile.value.height_cm
-  )
+  if (!isLoggedIn.value) return false
+  if (beneficiaryType.value === 'self') {
+    return !!(
+      patientProfile.value &&
+      patientProfile.value.blood_type &&
+      patientProfile.value.height_cm
+    )
+  }
+  if (beneficiaryType.value === 'dependent') {
+    const dep = selectedDependent.value
+    return !!(
+      dep &&
+      dep.blood_type &&
+      dep.height_cm
+    )
+  }
+  return false
 })
 
 // Formulario unificado de paciente y triage (público y logueado)
@@ -1174,10 +1234,34 @@ function selectSelf () {
   beneficiaryType.value = 'self'
   selectedDependentId.value = null
   if (patientProfile.value) {
+    if (patientProfile.value.full_name) patientForm.full_name = patientProfile.value.full_name
+    if (patientProfile.value.email) patientForm.email = patientProfile.value.email
+    if (patientProfile.value.phone) patientForm.phone = patientProfile.value.phone
+    if (patientProfile.value.identification_number) patientForm.id_document = patientProfile.value.identification_number
     if (patientProfile.value.blood_type) patientForm.blood_type = patientProfile.value.blood_type
     if (patientProfile.value.height_cm != null) patientForm.height_cm = Number(patientProfile.value.height_cm)
     if (patientProfile.value.allergies) patientForm.allergies = patientProfile.value.allergies
     if (patientProfile.value.chronic_conditions) patientForm.chronic_conditions = patientProfile.value.chronic_conditions
+    if (patientProfile.value.gender) patientForm.gender = patientProfile.value.gender
+    if (patientProfile.value.birth_date) {
+      patientForm.birth_date = typeof patientProfile.value.birth_date === 'string' ? patientProfile.value.birth_date.substring(0, 10) : ''
+    }
+  }
+}
+
+function applySelectedDependent () {
+  const dep = dependents.value.find(d => d.id === selectedDependentId.value)
+  if (dep) {
+    if (dep.full_name) patientForm.full_name = dep.full_name
+    if (dep.id_document) patientForm.id_document = dep.id_document
+    patientForm.blood_type = dep.blood_type || ''
+    patientForm.height_cm = dep.height_cm != null ? Number(dep.height_cm) : null
+    patientForm.allergies = dep.allergies || ''
+    patientForm.chronic_conditions = dep.chronic_conditions || ''
+    if (dep.gender) patientForm.gender = dep.gender
+    if (dep.birth_date) {
+      patientForm.birth_date = typeof dep.birth_date === 'string' ? dep.birth_date.substring(0, 10) : ''
+    }
   }
 }
 
@@ -1186,15 +1270,25 @@ function selectDependentMode () {
   if (dependents.value.length > 0 && !selectedDependentId.value) {
     selectedDependentId.value = dependents.value[0].id
   }
+  applySelectedDependent()
 }
+
+watch(selectedDependentId, () => {
+  if (beneficiaryType.value === 'dependent') {
+    applySelectedDependent()
+  }
+})
 
 async function fetchDependents () {
   loadingDependents.value = true
   try {
     const { data } = await api.get('/patients/me/dependents')
-    dependents.value = data
-    if (beneficiaryType.value === 'dependent' && data.length > 0 && !selectedDependentId.value) {
-      selectedDependentId.value = data[0].id
+    dependents.value = data || []
+    if (beneficiaryType.value === 'dependent' && dependents.value.length > 0 && !selectedDependentId.value) {
+      selectedDependentId.value = dependents.value[0].id
+    }
+    if (beneficiaryType.value === 'dependent') {
+      applySelectedDependent()
     }
   } catch (err) {
     // Si no está autenticado o error, silenciar
@@ -1210,6 +1304,7 @@ async function saveDependent () {
     showAddDependentModal.value = false
     await fetchDependents()
     selectedDependentId.value = data.id
+    applySelectedDependent()
   } catch (err) {
     Notify.create({ type: 'negative', message: err.response?.data?.detail || 'Error al guardar familiar.' })
   }

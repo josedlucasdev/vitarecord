@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Date, ForeignKey, String
+from sqlalchemy import Date, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship as sa_relationship
 
 from app.models.base import Base, TimestampMixin, generate_uuid
@@ -18,6 +18,17 @@ class PatientDependent(Base, TimestampMixin):
     id_document: Mapped[str | None] = mapped_column(String(32), nullable=True)
     gender: Mapped[str | None] = mapped_column(String(16), nullable=True)
     emancipation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="MINOR")
+
+    # Ficha clínica basal del familiar
+    blood_type: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    height_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    allergies: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    chronic_conditions: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Contacto adicional y notas
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    profile_picture_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Relacion con el paciente titular
     guardian: Mapped["User"] = sa_relationship("User", backref="dependents")
