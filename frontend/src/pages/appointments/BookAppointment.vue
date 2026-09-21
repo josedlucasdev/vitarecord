@@ -84,8 +84,8 @@
             icon="add"
             label="Registro Rápido"
             no-caps
-            class="text-xs"
-            @click="showAddDependentModal = true"
+            class="text-xs font-semibold"
+            @click="openQuickAddDependentModal"
           />
         </div>
 
@@ -797,57 +797,181 @@
 
     <!-- Modal Registrar Familiar (Modo Autenticado) -->
     <q-dialog v-model="showAddDependentModal">
-      <q-card style="min-width: 400px; border-radius: 20px;">
-        <q-card-section class="bg-gradient-to-r from-teal-700 to-cyan-800 text-white p-5 flex items-center justify-between">
+      <q-card class="rounded-2xl max-w-lg w-full p-2">
+        <q-card-section class="flex items-center justify-between pb-2 border-b border-slate-100">
           <div class="flex items-center space-x-2">
-            <q-icon name="person_add" size="22px" />
-            <h3 class="text-base font-bold">Registrar Familiar Dependiente</h3>
+            <div class="w-8 h-8 rounded-lg bg-teal-50 text-teal-800 flex items-center justify-center font-bold">
+              <q-icon name="person_add" size="20px" color="teal" />
+            </div>
+            <h2 class="text-sm font-bold text-slate-900 m-0">
+              Registrar Nuevo Familiar
+            </h2>
           </div>
-          <q-btn flat round dense icon="close" text-color="white" v-close-popup />
+          <q-btn flat round dense icon="close" v-close-popup />
         </q-card-section>
 
-        <q-card-section class="p-6 space-y-4">
-          <form class="space-y-3" @submit.prevent="saveDependent">
-            <q-input v-model="depForm.full_name" label="Nombre Completo *" filled required />
-            <div class="grid grid-cols-2 gap-2">
+        <q-card-section class="space-y-4 max-h-[75vh] overflow-y-auto pt-4">
+          <!-- 1. Datos de Identidad -->
+          <div class="text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-1 flex items-center">
+            <q-icon name="badge" size="14px" class="mr-1 text-teal-600" />
+            1. Datos de Identidad
+          </div>
+
+          <div class="space-y-3">
+            <q-input
+              v-model="depForm.full_name"
+              outlined
+              dense
+              label="Nombre y Apellido del Familiar *"
+              placeholder="Ej. Sofía Pérez"
+              :rules="[val => !!val || 'El nombre es obligatorio']"
+            />
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <q-select
                 v-model="depForm.relationship"
-                :options="['HIJO', 'PADRE', 'CONYUGE', 'HERMANO', 'OTRO']"
-                label="Parentesco *"
-                filled
-                required
+                outlined
+                dense
+                :options="relationshipOptions"
+                emit-value
+                map-options
+                label="Parentesco o Relación *"
+                :rules="[val => !!val || 'El parentesco es obligatorio']"
               />
-              <q-select v-model="depForm.gender" :options="['FEMENINO', 'MASCULINO', 'OTRO']" label="Género" filled />
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <q-input v-model="depForm.birth_date" label="Fecha de Nacimiento *" type="date" filled required />
-              <q-input v-model="depForm.id_document" label="Cédula / Documento (Opcional)" filled />
-            </div>
-            <div class="grid grid-cols-2 gap-2">
-              <q-select
-                v-model="depForm.blood_type"
-                :options="['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']"
-                label="Grupo Sanguíneo"
-                filled
-              />
+
               <q-input
-                v-model.number="depForm.height_cm"
-                label="Talla (cm)"
-                type="number"
-                suffix="cm"
-                filled
+                v-model="depForm.birth_date"
+                outlined
+                dense
+                type="date"
+                label="Fecha de Nacimiento *"
+                :rules="[val => !!val || 'La fecha es obligatoria']"
               />
-            </div>
-            <div class="text-2xs text-slate-500 pt-1">
-              💡 Podrás subir su foto y completar sus alergias y antecedentes en <router-link to="/patient/family" class="text-teal-700 font-bold underline" v-close-popup>Mis Familiares</router-link>.
             </div>
 
-            <div class="flex justify-end space-x-2 pt-4">
-              <q-btn flat label="Cancelar" v-close-popup no-caps />
-              <q-btn color="primary" label="Guardar Familiar" type="submit" no-caps class="font-bold" />
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <q-select
+                v-model="depForm.gender"
+                outlined
+                dense
+                :options="['Femenino', 'Masculino', 'Otro']"
+                label="Sexo Biológico"
+              />
+
+              <q-input
+                v-model="depForm.id_document"
+                outlined
+                dense
+                label="Documento de Identidad / Cédula"
+                placeholder="Ej. V-32111222"
+              />
             </div>
-          </form>
+
+            <q-input
+              v-model="depForm.phone"
+              outlined
+              dense
+              label="Teléfono del Familiar (opcional)"
+              placeholder="Ej. +58 412 1234567"
+            />
+          </div>
+
+          <!-- 2. Ficha Clínica Basal Permanente -->
+          <div class="text-xs font-bold uppercase tracking-wider text-teal-800 border-b border-teal-100 pb-1 pt-2 flex items-center">
+            <q-icon name="monitor_heart" size="14px" class="mr-1 text-teal-600" />
+            2. Ficha Clínica Permanente del Familiar
+          </div>
+
+          <div class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <q-select
+                v-model="depForm.blood_type"
+                outlined
+                dense
+                :options="['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'No lo sé']"
+                label="Grupo Sanguíneo"
+              >
+                <template #prepend>
+                  <q-icon name="bloodtype" color="red-6" size="18px" />
+                </template>
+              </q-select>
+
+              <q-input
+                v-model.number="depForm.height_cm"
+                outlined
+                dense
+                type="number"
+                label="Estatura / Talla (cm)"
+                placeholder="Ej. 130"
+                suffix="cm"
+                :rules="[val => !val || (val >= 20 && val <= 250) || 'Talla debe ser entre 20 y 250 cm']"
+              />
+            </div>
+
+            <q-input
+              v-model="depForm.allergies"
+              outlined
+              dense
+              label="Alergias Conocidas"
+              placeholder="Ej. Amoxicilina, Maní, Ninguna"
+            >
+              <template #append>
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  color="teal"
+                  label="Ninguna"
+                  class="text-2xs font-bold"
+                  @click="depForm.allergies = 'Ninguna conocida'"
+                />
+              </template>
+            </q-input>
+
+            <q-input
+              v-model="depForm.chronic_conditions"
+              outlined
+              dense
+              label="Antecedentes Médicos / Enfermedades"
+              placeholder="Ej. Asma, Dermatitis, Ninguna"
+            >
+              <template #append>
+                <q-btn
+                  flat
+                  dense
+                  no-caps
+                  color="teal"
+                  label="Sin antecedentes"
+                  class="text-2xs font-bold"
+                  @click="depForm.chronic_conditions = 'Sin antecedentes patológicos'"
+                />
+              </template>
+            </q-input>
+
+            <q-input
+              v-model="depForm.notes"
+              outlined
+              dense
+              type="textarea"
+              rows="2"
+              label="Notas Clínicas / Observaciones Especiales"
+              placeholder="Observaciones para el médico especialista durante su consulta..."
+            />
+          </div>
         </q-card-section>
+
+        <q-card-actions align="right" class="p-3 bg-slate-50 border-t border-slate-100">
+          <q-btn flat label="Cancelar" color="slate-7" no-caps v-close-popup />
+          <q-btn
+            unelevated
+            color="primary"
+            label="Guardar Familiar"
+            :loading="savingDependent"
+            no-caps
+            class="font-bold text-xs px-4 py-2 shadow-xs"
+            @click="saveDependent"
+          />
+        </q-card-actions>
       </q-card>
     </q-dialog>
 
@@ -918,20 +1042,44 @@ const dependents = ref([])
 const loadingDependents = ref(false)
 const showAddDependentModal = ref(false)
 const showSuccessModal = ref(false)
+const savingDependent = ref(false)
+
+const relationshipOptions = [
+  { label: 'Hijo / Hija', value: 'HIJO' },
+  { label: 'Cónyuge / Pareja', value: 'CONYUGE' },
+  { label: 'Madre / Padre', value: 'PADRE' },
+  { label: 'Hermano / Hermana', value: 'HERMANO' },
+  { label: 'Otro Familiar / Tutor', value: 'OTRO' }
+]
 
 const depForm = reactive({
   full_name: '',
   relationship: 'HIJO',
   birth_date: '',
   id_document: '',
-  gender: 'FEMENINO',
+  gender: 'Femenino',
+  phone: '',
   blood_type: 'O+',
   height_cm: null,
   allergies: '',
   chronic_conditions: '',
-  phone: '',
   notes: ''
 })
+
+function openQuickAddDependentModal () {
+  depForm.full_name = ''
+  depForm.relationship = 'HIJO'
+  depForm.birth_date = ''
+  depForm.id_document = ''
+  depForm.gender = 'Femenino'
+  depForm.phone = ''
+  depForm.blood_type = 'O+'
+  depForm.height_cm = null
+  depForm.allergies = ''
+  depForm.chronic_conditions = ''
+  depForm.notes = ''
+  showAddDependentModal.value = true
+}
 
 // Honorarios de Consulta Médica
 const doctorConsultationFee = ref(30.00)
@@ -1298,15 +1446,43 @@ async function fetchDependents () {
 }
 
 async function saveDependent () {
+  if (!depForm.full_name || !depForm.birth_date) {
+    Notify.create({
+      type: 'warning',
+      message: 'Por favor completa el nombre y la fecha de nacimiento.'
+    })
+    return
+  }
+
+  savingDependent.value = true
   try {
-    const { data } = await api.post('/patients/me/dependents', depForm)
-    Notify.create({ type: 'positive', message: 'Familiar registrado correctamente.' })
+    const payload = {
+      full_name: depForm.full_name.trim(),
+      relationship: depForm.relationship,
+      birth_date: depForm.birth_date,
+      gender: depForm.gender,
+      id_document: depForm.id_document?.trim() || undefined,
+      phone: depForm.phone?.trim() || undefined,
+      blood_type: depForm.blood_type || undefined,
+      height_cm: depForm.height_cm != null ? Number(depForm.height_cm) : undefined,
+      allergies: depForm.allergies?.trim() || undefined,
+      chronic_conditions: depForm.chronic_conditions?.trim() || undefined,
+      notes: depForm.notes?.trim() || undefined
+    }
+
+    const { data } = await api.post('/patients/me/dependents', payload)
+    Notify.create({ type: 'positive', message: '¡Familiar registrado con éxito!' })
     showAddDependentModal.value = false
     await fetchDependents()
     selectedDependentId.value = data.id
     applySelectedDependent()
   } catch (err) {
-    Notify.create({ type: 'negative', message: err.response?.data?.detail || 'Error al guardar familiar.' })
+    Notify.create({
+      type: 'negative',
+      message: err.response?.data?.detail || 'Error al guardar familiar.'
+    })
+  } finally {
+    savingDependent.value = false
   }
 }
 
