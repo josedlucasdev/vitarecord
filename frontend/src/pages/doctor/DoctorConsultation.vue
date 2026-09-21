@@ -46,15 +46,43 @@
             </q-badge>
           </div>
 
+          <!-- Si es familiar dependiente, destacar al paciente atendido y al titular responsable -->
+          <div v-if="appointment.dependent_id" class="p-4 bg-teal-50/70 rounded-xl border border-teal-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="flex items-center space-x-3">
+              <div class="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                <q-icon name="family_restroom" size="24px" />
+              </div>
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs font-bold uppercase text-teal-800 tracking-wider">Paciente en Consulta (Familiar):</span>
+                  <q-badge color="teal-8" text-color="white" class="font-bold text-2xs py-0.5 px-2">
+                    {{ appointment.dependent_relationship || 'Familiar Dependiente' }}
+                  </q-badge>
+                  <q-badge outline color="teal-9" class="font-semibold text-3xs">
+                    🔒 Expediente Clínico Separado
+                  </q-badge>
+                </div>
+                <div class="text-base font-bold text-slate-900 mt-0.5">
+                  {{ appointment.dependent_name || 'Familiar Dependiente' }}
+                </div>
+              </div>
+            </div>
+            <div class="text-2xs text-slate-600 bg-white/90 p-2.5 rounded-lg border border-teal-100 flex flex-col justify-center">
+              <span class="text-slate-400 font-semibold">Titular / Representante:</span>
+              <span class="font-bold text-slate-800">{{ appointment.patient_name }}</span>
+              <span v-if="appointment.patient_phone" class="text-slate-500">Tel: {{ appointment.patient_phone }}</span>
+            </div>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div v-if="!appointment.dependent_id" class="bg-slate-50 p-3 rounded-xl border border-slate-200">
               <div class="text-slate-400 font-medium">Paciente Titular:</div>
               <div class="font-bold text-slate-800 mt-0.5 text-sm">{{ appointment.patient_name || 'Paciente' }}</div>
             </div>
             <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <div class="text-slate-400 font-medium">Beneficiario / Atención:</div>
+              <div class="text-slate-400 font-medium">Modalidad:</div>
               <div class="font-bold text-slate-800 mt-0.5 text-sm">
-                {{ appointment.dependent_id ? 'Familiar Dependiente' : 'Titular Directo' }}
+                {{ appointment.dependent_id ? 'Familiar a Cargo' : 'Titular Directo' }}
               </div>
             </div>
             <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -72,15 +100,18 @@
           <div v-if="appointment.reason" class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start">
             <q-icon name="info" size="16px" class="mr-2 mt-0.5 text-amber-600" />
             <div>
-              <span class="font-bold">Motivo reportado por el paciente al agendar:</span> "{{ appointment.reason }}"
+              <span class="font-bold">Motivo reportado al agendar:</span> "{{ appointment.reason }}"
             </div>
           </div>
 
           <!-- Medidas de Triage y Antecedentes reportados al agendar -->
           <div v-if="appointment.intake_data && Object.keys(appointment.intake_data).length > 0" class="p-4 bg-teal-50/70 border border-teal-200/80 rounded-xl space-y-2 text-xs">
-            <div class="flex items-center text-teal-800 font-bold uppercase tracking-wide text-2xs">
-              <q-icon name="monitor_heart" size="14px" class="mr-1 text-teal-600" />
-              Triage Clínico y Medidas Reportadas al Agendar
+            <div class="flex items-center justify-between text-teal-800 font-bold uppercase tracking-wide text-2xs">
+              <div class="flex items-center">
+                <q-icon name="monitor_heart" size="14px" class="mr-1 text-teal-600" />
+                Triage Clínico y Ficha Basal de {{ appointment.dependent_id ? (appointment.dependent_name || 'Familiar') : appointment.patient_name }}
+              </div>
+              <span class="text-3xs font-medium lowercase text-teal-700">Ficha clínica individual</span>
             </div>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-700">
               <div class="bg-white p-2.5 rounded-lg border border-teal-100">
@@ -114,27 +145,34 @@
           </div>
 
           <!-- Acceso Directo al Historial Clínico Completo -->
-          <div v-if="patientHistory.length > 0 || activeTreatments.length > 0" class="p-3 bg-teal-50/50 border border-teal-200/80 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-            <div class="flex items-center space-x-2 text-slate-700">
-              <q-icon name="folder_shared" size="20px" class="text-teal-700 shrink-0" />
+          <div class="p-3.5 bg-teal-50/60 border border-teal-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div class="flex items-center space-x-2.5 text-slate-700">
+              <q-icon name="folder_shared" size="22px" class="text-teal-700 shrink-0" />
               <div>
-                <span class="font-bold text-slate-900">Historial Clínico:</span>
-                <span> {{ patientHistory.length }} consulta{{ patientHistory.length !== 1 ? 's' : '' }} previa{{ patientHistory.length !== 1 ? 's' : '' }}</span>
-                <span v-if="activeTreatments.length > 0" class="text-amber-900 font-bold ml-1.5">
-                  • ⚠️ {{ activeTreatments.length }} tratamiento{{ activeTreatments.length !== 1 ? 's' : '' }} activo{{ activeTreatments.length !== 1 ? 's' : '' }}
-                </span>
-                <span v-else class="text-emerald-700 font-medium ml-1.5">
-                  • Sin tratamientos activos vigentes
-                </span>
+                <div class="font-bold text-slate-900 flex items-center gap-1.5">
+                  <span>Historial de {{ appointment.dependent_id ? (appointment.dependent_name || 'Familiar') : appointment.patient_name }}:</span>
+                  <q-badge color="teal-1" text-color="teal-9" class="font-semibold text-3xs">
+                    {{ appointment.dependent_id ? 'Expediente del Familiar' : 'Expediente del Titular' }}
+                  </q-badge>
+                </div>
+                <div class="text-2xs text-slate-600 mt-0.5">
+                  <span>{{ patientHistory.length }} consulta{{ patientHistory.length !== 1 ? 's' : '' }} previa{{ patientHistory.length !== 1 ? 's' : '' }}</span>
+                  <span v-if="activeTreatments.length > 0" class="text-amber-900 font-bold ml-1.5">
+                    • ⚠️ {{ activeTreatments.length }} tratamiento{{ activeTreatments.length !== 1 ? 's' : '' }} activo{{ activeTreatments.length !== 1 ? 's' : '' }}
+                  </span>
+                  <span v-else class="text-emerald-700 font-medium ml-1.5">
+                    • Sin tratamientos activos vigentes
+                  </span>
+                </div>
               </div>
             </div>
             <q-btn
               color="teal-8"
               icon="open_in_new"
-              label="Ver Historial Completo"
+              :label="'Ver Expediente de ' + (appointment.dependent_id ? (appointment.dependent_name || 'Familiar') : 'Paciente')"
               no-caps
               dense
-              class="text-xs px-3 py-1 font-bold shadow-xs self-start sm:self-auto"
+              class="text-xs px-3 py-1.5 font-bold shadow-xs self-start sm:self-auto"
               @click="showHistoryDialog = true"
             />
           </div>
@@ -695,14 +733,31 @@
               <q-icon name="folder_shared" size="24px" class="text-teal-200" />
             </div>
             <div>
-              <h3 class="text-sm font-bold leading-tight">Expediente Clínico del Paciente</h3>
+              <h3 class="text-sm font-bold leading-tight">
+                Expediente Clínico: {{ appointment?.dependent_id ? (appointment.dependent_name || 'Familiar') : appointment?.patient_name }}
+              </h3>
               <p class="text-2xs text-teal-100">
-                {{ appointment?.patient_name || 'Paciente' }}
-                <span v-if="appointment?.dependent_id"> • Dependiente Familiar</span>
+                <span v-if="appointment?.dependent_id">
+                  Familiar Dependiente ({{ appointment.dependent_relationship || 'Dependiente' }}) • Titular: {{ appointment.patient_name }}
+                </span>
+                <span v-else>
+                  Paciente Titular Directo
+                </span>
               </p>
             </div>
           </div>
           <q-btn flat round dense icon="close" color="white" v-close-popup />
+        </div>
+
+        <!-- Banner de Aislamiento Estricto de Historia Clínica -->
+        <div class="bg-teal-900 text-teal-100 px-4 py-2 text-2xs flex items-center justify-between border-b border-teal-800">
+          <div class="flex items-center gap-1.5">
+            <q-icon name="lock" size="14px" class="text-teal-300" />
+            <span>
+              <strong>Expediente Individualizado:</strong> Consultas y recetas exclusivas de
+              <strong>{{ appointment?.dependent_id ? (appointment.dependent_name || 'este familiar') : appointment?.patient_name }}</strong>, separado del titular y otros dependientes.
+            </span>
+          </div>
         </div>
 
         <!-- Resumen de Antecedentes y Triage del Paciente -->
@@ -848,8 +903,13 @@
                     #{{ patientHistory.length - idx }}
                   </div>
                   <div>
-                    <span class="font-bold text-slate-800">{{ formatDate(rec.created_at) }}</span>
-                    <span v-if="rec.clinic_name" class="text-slate-400 text-2xs ml-1">• {{ rec.clinic_name }}</span>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="font-bold text-slate-800">{{ formatDate(rec.created_at) }}</span>
+                      <span v-if="rec.clinic_name" class="text-slate-400 text-2xs">• {{ rec.clinic_name }}</span>
+                      <q-badge v-if="rec.dependent_name" color="teal-8" text-color="white" class="text-3xs font-semibold py-0.5 px-1.5">
+                        {{ rec.dependent_name }} ({{ rec.dependent_relationship || 'Familiar' }})
+                      </q-badge>
+                    </div>
                     <div class="text-2xs text-slate-500">
                       Dr(a). <strong>{{ rec.doctor_name || 'Especialista' }}</strong>
                       <span v-if="rec.doctor_specialty">({{ rec.doctor_specialty }})</span>
@@ -1207,7 +1267,9 @@ async function fetchPatientHistory (patientId, dependentId) {
     const params = {}
     if (dependentId) params.dependent_id = dependentId
     const { data } = await api.get(`/medical-records/patient/${patientId}`, { params })
-    patientHistory.value = Array.isArray(data) ? data : []
+    const allRecords = Array.isArray(data) ? data : []
+    // Excluir la cita actual si ya fue completada para que "Consultas Previas" sean estrictamente anteriores
+    patientHistory.value = allRecords.filter(r => r.appointment_id !== appointmentId.value)
     computeTreatments()
   } catch (err) {
     console.error('Error al cargar historial del paciente:', err)
@@ -1237,8 +1299,14 @@ async function fetchAppointment () {
   }
   loadingAppointment.value = true
   try {
-    const { data } = await api.get('/appointments')
-    const match = data.find(a => a.id === appointmentId.value)
+    let match = null
+    try {
+      const resSingle = await api.get(`/appointments/${appointmentId.value}`)
+      match = resSingle.data
+    } catch {
+      const { data } = await api.get('/appointments')
+      match = data.find(a => a.id === appointmentId.value)
+    }
     if (match) {
       appointment.value = match
       if (match.patient_id) {

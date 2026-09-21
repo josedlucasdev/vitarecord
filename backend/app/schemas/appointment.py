@@ -100,6 +100,8 @@ class AppointmentPublic(BaseModel):
     patient_name: str | None = None
     patient_email: str | None = None
     patient_phone: str | None = None
+    dependent_name: str | None = None
+    dependent_relationship: str | None = None
     clinic_name: str | None = None
     room_name: str | None = None
     payment_status: str | None = None
@@ -110,4 +112,5 @@ class AppointmentPublic(BaseModel):
     procedures: list["AppointmentProcedurePublic"] = Field(default_factory=list)
 
     created_at: datetime.datetime
+
 

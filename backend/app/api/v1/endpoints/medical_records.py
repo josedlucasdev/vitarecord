@@ -90,8 +90,13 @@ async def list_patient_history(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_READ))],
     dependent_id: Annotated[str | None, Query()] = None,
+    include_dependents: Annotated[bool, Query()] = False,
 ):
-    """Obtiene el listado histórico de consultas de un paciente o dependiente familiar."""
+    """Obtiene el listado histórico de consultas de un paciente o dependiente familiar.
+    
+    Por defecto aísla estrictamente el expediente: si se pasa dependent_id solo devuelve ese familiar;
+    si no se pasa, solo devuelve las del titular directo, a menos que include_dependents=True.
+    """
     client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     service = MedicalRecordService(db)
@@ -99,6 +104,7 @@ async def list_patient_history(
         patient_id=patient_id,
         current_user=current_user,
         dependent_id=dependent_id,
+        include_dependents=include_dependents,
         client_ip=client_ip,
         user_agent=user_agent,
     )

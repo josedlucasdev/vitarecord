@@ -25,6 +25,7 @@ from app.models.audit import AuditLog
 from app.models.clinic import Clinic
 from app.models.medical_attachment import MedicalAttachment
 from app.models.medical_record import MedicalRecord
+from app.models.patient_dependent import PatientDependent
 from app.models.prescription import Prescription
 from app.models.user import User
 from app.schemas.medical_record import (
@@ -91,6 +92,7 @@ class MedicalRecordService:
                 selectinload(Appointment.doctor),
                 selectinload(Appointment.patient),
                 selectinload(Appointment.clinic),
+                selectinload(Appointment.dependent),
             )
             .where(Appointment.id == data.appointment_id)
         )
@@ -193,6 +195,7 @@ class MedicalRecordService:
         await self.db.commit()
 
         # Retornar objeto publico descifrado
+        record.dependent = appointment.dependent
         prescriptions = [created_prescription] if created_prescription else []
         return await self._build_public_record(
             record,
@@ -200,6 +203,7 @@ class MedicalRecordService:
             appointment.doctor,
             appointment.patient,
             appointment.clinic,
+            dependent=appointment.dependent,
             prescriptions=prescriptions,
             attachments=[],
         )
@@ -218,7 +222,8 @@ class MedicalRecordService:
                 selectinload(MedicalRecord.doctor),
                 selectinload(MedicalRecord.patient),
                 selectinload(MedicalRecord.clinic),
-                selectinload(MedicalRecord.prescriptions),
+                selectinload(MedicalRecord.dependent),
+                selectinload(MedicalRecord.prescriptions).selectinload(Prescription.dependent),
                 selectinload(MedicalRecord.attachments),
             )
             .where(MedicalRecord.appointment_id == appointment_id)
@@ -258,10 +263,15 @@ class MedicalRecordService:
         patient_id: str,
         current_user: User,
         dependent_id: str | None = None,
+        include_dependents: bool = False,
         client_ip: str | None = None,
         user_agent: str | None = None,
     ) -> list[MedicalRecordPublic]:
-        """Lista el historial clinico de un paciente (o familiar), registrando auditoria por cada acceso."""
+        """Lista el historial clinico de un paciente (o familiar), registrando auditoria por cada acceso.
+        
+        Garantiza separacion estricta: si es dependiente solo retorna sus consultas; si no se especifica dependiente
+        y no se fuerza include_dependents, retorna unica y exclusivamente las consultas del titular.
+        """
         # Control de acceso: paciente consultando su historial o medico consultando a su paciente
         if current_user.role == "PATIENT" and current_user.id != patient_id:
             raise HTTPException(
@@ -275,7 +285,8 @@ class MedicalRecordService:
                 selectinload(MedicalRecord.doctor),
                 selectinload(MedicalRecord.patient),
                 selectinload(MedicalRecord.clinic),
-                selectinload(MedicalRecord.prescriptions),
+                selectinload(MedicalRecord.dependent),
+                selectinload(MedicalRecord.prescriptions).selectinload(Prescription.dependent),
                 selectinload(MedicalRecord.attachments),
             )
             .where(MedicalRecord.patient_id == patient_id)
@@ -283,6 +294,9 @@ class MedicalRecordService:
         )
         if dependent_id:
             stmt = stmt.where(MedicalRecord.dependent_id == dependent_id)
+        elif not include_dependents:
+            # Separacion estricta: solo consultas del paciente titular directo
+            stmt = stmt.where(MedicalRecord.dependent_id.is_(None))
 
         records = list((await self.db.execute(stmt)).scalars().all())
 
@@ -314,6 +328,7 @@ class MedicalRecordService:
                 selectinload(Prescription.doctor),
                 selectinload(Prescription.patient),
                 selectinload(Prescription.clinic),
+                selectinload(Prescription.dependent),
             )
             .where(Prescription.id == prescription_id)
         )
@@ -325,6 +340,15 @@ class MedicalRecordService:
         if current_user.role == "PATIENT" and prescription.patient_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No puedes descargar recetas de otros pacientes.")
 
+        # Si la receta es para un dependiente familiar, plasmar su nombre en el PDF
+        if prescription.dependent:
+            rel_label = f" ({prescription.dependent.relationship})" if prescription.dependent.relationship else ""
+            patient_display_name = f"{prescription.dependent.full_name}{rel_label} • Titular: {prescription.patient.full_name if prescription.patient else 'Responsable'}"
+        elif prescription.patient:
+            patient_display_name = prescription.patient.full_name or prescription.patient.email or "Paciente Titular"
+        else:
+            patient_display_name = "Paciente Titular"
+
         pdf_bytes = generate_prescription_pdf(
             prescription_code=prescription.prescription_code,
             verification_hash=prescription.verification_hash,
@@ -333,7 +357,7 @@ class MedicalRecordService:
             doctor_name=prescription.doctor.full_name if prescription.doctor else "Médico Especialista",
             doctor_specialty=prescription.doctor.specialty if prescription.doctor else "Especialista",
             doctor_license="MPPS Verificado",
-            patient_name=(prescription.patient.full_name or prescription.patient.email) if prescription.patient else "Paciente Titular",
+            patient_name=patient_display_name,
             issued_date_str=prescription.issued_at.strftime("%d/%m/%Y"),
             expires_date_str=prescription.expires_at.strftime("%d/%m/%Y"),
             diagnosis_summary=prescription.diagnosis_summary,
@@ -397,15 +421,18 @@ class MedicalRecordService:
         doctor: User | None,
         patient: User | None,
         clinic: Clinic | None,
+        dependent: PatientDependent | None = None,
         prescriptions: list[Prescription] | None = None,
         attachments: list[MedicalAttachment] | None = None,
     ) -> MedicalRecordPublic:
         """Descifra los campos y ensambla el modelo de salida."""
+        rec_dep = dependent if dependent is not None else record.__dict__.get("dependent")
         prescriptions_list = prescriptions if prescriptions is not None else (
             record.__dict__.get("prescriptions") or []
         )
         prescriptions_pub = []
         for p in prescriptions_list:
+            dep = p.__dict__.get("dependent") or rec_dep
             prescriptions_pub.append(
                 PrescriptionPublic(
                     id=p.id,
@@ -426,6 +453,8 @@ class MedicalRecordService:
                     doctor_name=doctor.full_name if doctor else None,
                     doctor_specialty=doctor.specialty if doctor else None,
                     patient_name=patient.full_name if patient else None,
+                    dependent_name=dep.full_name if dep else None,
+                    dependent_relationship=dep.relationship if dep else None,
                     clinic_name=clinic.name if clinic else None,
                 )
             )
@@ -463,6 +492,8 @@ class MedicalRecordService:
             doctor_name=doctor.full_name if doctor else None,
             doctor_specialty=doctor.specialty if doctor else None,
             patient_name=patient.full_name if patient else None,
+            dependent_name=rec_dep.full_name if rec_dep else None,
+            dependent_relationship=rec_dep.relationship if rec_dep else None,
             clinic_name=clinic.name if clinic else None,
             prescriptions=prescriptions_pub,
             attachments=attachments_pub,

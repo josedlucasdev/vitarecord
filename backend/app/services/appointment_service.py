@@ -934,6 +934,8 @@ class AppointmentService:
             patient_name=app.patient.full_name if app.patient else None,
             patient_email=app.patient.email if app.patient else None,
             patient_phone=app.patient.phone if app.patient else None,
+            dependent_name=app.dependent.full_name if app.dependent else None,
+            dependent_relationship=app.dependent.relationship if app.dependent else None,
             clinic_name=app.clinic.name if app.clinic else None,
             room_name=app.room.name if app.room else None,
             payment_status=pay.status if pay else "UNPAID",

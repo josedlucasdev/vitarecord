@@ -234,8 +234,8 @@ function formatDate (iso) {
 
 async function fetchDependents () {
   try {
-    const { data } = await api.get('/dependents')
-    dependents.value = data
+    const { data } = await api.get('/patients/me/dependents')
+    dependents.value = Array.isArray(data) ? data : []
   } catch {
     // Si no es paciente o falla, lista vacía
     dependents.value = []

@@ -48,6 +48,9 @@ class MedicalRecordPublic(BaseModel):
     doctor_name: str | None = None
     doctor_specialty: str | None = None
     patient_name: str | None = None
+    dependent_name: str | None = None
+    dependent_relationship: str | None = None
     clinic_name: str | None = None
     prescriptions: list[PrescriptionPublic] = []
     attachments: list[MedicalAttachmentPublic] = []
+
