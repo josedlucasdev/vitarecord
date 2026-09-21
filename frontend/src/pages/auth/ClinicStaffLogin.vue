@@ -138,48 +138,12 @@
           />
         </q-form>
 
-        <!-- Accesos directos para pruebas locales de staff -->
-        <div class="pt-3 border-t border-slate-100 text-caption">
-          <div class="text-2xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-            Perfiles de prueba clínica:
-          </div>
-          <div class="grid grid-cols-3 gap-1.5">
-            <button
-              type="button"
-              class="px-2 py-1.5 text-2xs font-semibold rounded-lg bg-sky-50 text-sky-700 border border-sky-200/60 hover:bg-sky-100 transition-colors"
-              @click="fillCreds('clinic.admin@intimasalud.com')"
-            >
-              Admin Clínica
-            </button>
-            <button
-              type="button"
-              class="px-2 py-1.5 text-2xs font-semibold rounded-lg bg-teal-50 text-teal-700 border border-teal-200/60 hover:bg-teal-100 transition-colors"
-              @click="fillCreds('doctor@intimasalud.com')"
-            >
-              Médico
-            </button>
-            <button
-              type="button"
-              class="px-2 py-1.5 text-2xs font-semibold rounded-lg bg-amber-50 text-amber-800 border border-amber-200/60 hover:bg-amber-100 transition-colors"
-              @click="fillCreds('recepcion@intimasalud.com')"
-            >
-              Recepción
-            </button>
-          </div>
-        </div>
-
-        <!-- Enlaces cruzados hacia los otros portales -->
-        <div class="pt-3 border-t border-slate-100 text-center space-y-1.5 text-xs text-slate-500">
+        <!-- Enlace hacia portal de pacientes -->
+        <div class="pt-3 border-t border-slate-100 text-center text-xs text-slate-500">
           <div>
             ¿Eres paciente y buscas tus citas?
             <router-link to="/patient/login" class="text-teal-700 font-bold hover:underline ml-1">
               Portal de Pacientes
-            </router-link>
-          </div>
-          <div>
-            ¿Superadministrador del sistema?
-            <router-link to="/admin/login" class="text-slate-600 font-semibold hover:underline ml-1">
-              Portal Super Administrador
             </router-link>
           </div>
         </div>
@@ -238,13 +202,6 @@ function checkClinicStaffRoleAndRedirect (accessToken, refreshToken) {
     router.push({ name: 'home' })
   }
   return true
-}
-
-function fillCreds (userEmail) {
-  email.value = userEmail
-  password.value = 'Password123!'
-  mfaCode.value = ''
-  errorMessage.value = ''
 }
 
 async function onSubmit () {

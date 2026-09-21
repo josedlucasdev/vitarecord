@@ -141,29 +141,6 @@
           />
         </q-form>
 
-        <!-- Accesos directos para pruebas locales de administración -->
-        <div class="pt-3 border-t border-slate-800 text-caption">
-          <div class="text-2xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-            Perfiles de prueba administrativa:
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              class="px-2 py-1.5 text-2xs font-semibold rounded-lg bg-indigo-950/80 text-indigo-300 border border-indigo-700/60 hover:bg-indigo-900 transition-colors"
-              @click="fillCreds('admin@intimasalud.com')"
-            >
-              SuperAdmin
-            </button>
-            <button
-              type="button"
-              class="px-2 py-1.5 text-2xs font-semibold rounded-lg bg-purple-950/80 text-purple-300 border border-purple-700/60 hover:bg-purple-900 transition-colors"
-              @click="fillCreds('moderador@intimasalud.com')"
-            >
-              Compliance / Auditor
-            </button>
-          </div>
-        </div>
-
         <!-- Enlaces cruzados hacia los otros portales -->
         <div class="pt-3 border-t border-slate-800 text-center space-y-1.5 text-xs text-slate-400">
           <div>
@@ -232,13 +209,6 @@ function checkSuperAdminRoleAndRedirect (accessToken, refreshToken) {
     router.push({ name: 'clinics-management' })
   }
   return true
-}
-
-function fillCreds (userEmail) {
-  email.value = userEmail
-  password.value = 'Password123!'
-  mfaCode.value = ''
-  errorMessage.value = ''
 }
 
 async function onSubmit () {

@@ -177,36 +177,6 @@
             </template>
           </q-btn>
         </q-form>
-
-        <!-- Acceso rápido para pruebas de paciente -->
-        <div class="pt-3 border-t border-slate-100 text-caption">
-          <div class="flex items-center justify-between">
-            <span class="text-2xs font-bold uppercase tracking-wider text-slate-400">Prueba rápida:</span>
-            <button
-              type="button"
-              class="px-2.5 py-1 text-2xs font-semibold rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/70 hover:bg-emerald-100 transition-colors"
-              @click="fillCreds('paciente@intimasalud.com')"
-            >
-              Cargar Paciente Demo
-            </button>
-          </div>
-        </div>
-
-        <!-- Enlaces cruzados hacia los otros portales -->
-        <div class="pt-3 border-t border-slate-100 text-center space-y-1.5 text-xs text-slate-500">
-          <div>
-            ¿Eres personal de una clínica o médico?
-            <router-link to="/clinic/login" class="text-teal-700 font-bold hover:underline ml-1">
-              Portal Clínico
-            </router-link>
-          </div>
-          <div>
-            ¿Administrador global del sistema?
-            <router-link to="/admin/login" class="text-slate-600 font-semibold hover:underline ml-1">
-              Portal Super Administrador
-            </router-link>
-          </div>
-        </div>
       </q-card-section>
     </q-card>
   </div>
@@ -381,12 +351,6 @@ async function submitFacebookToken (token) {
   } finally {
     fbLoading.value = false
   }
-}
-
-function fillCreds (userEmail) {
-  email.value = userEmail
-  password.value = 'Password123!'
-  errorMessage.value = ''
 }
 
 async function onSubmit () {
