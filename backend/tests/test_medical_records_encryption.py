@@ -22,19 +22,34 @@ from app.models.medical_record import MedicalRecord
 @pytest.mark.asyncio
 async def test_envelope_encryption_aes_gcm_and_kek_rotation(client: AsyncClient):
     """Criterio de Aceptacion (DoD): Cifrado AES-256-GCM en reposo y rotacion de KEK sin perdida de acceso."""
+    clinic_id = "c9999999-9999-9999-9999-999999999999"
+    appointment_id = "a6666666-6666-6666-6666-666666666666"
+    secret_text = "SECRET_PHI_CONFIDENCIAL_HALLAZGO_GINECOLOGICO_999"
+
     doctor_token = create_access_token(
         subject="u2222222-2222-2222-2222-222222222222",
-        clinic_id="c1111111-1111-1111-1111-111111111111",
+        clinic_id=clinic_id,
         role="DOCTOR",
         email="doctor@intimasalud.com",
     )
 
-    appointment_id = "a6666666-6666-6666-6666-666666666666"
-    clinic_id = "c1111111-1111-1111-1111-111111111111"
-    secret_text = "SECRET_PHI_CONFIDENCIAL_HALLAZGO_GINECOLOGICO_999"
-
     async with AsyncSessionLocal() as db:
-        # Limpiar
+        # Asegurar clínica aislada para la prueba
+        from app.models.clinic import Clinic
+        test_clinic = await db.get(Clinic, clinic_id)
+        if not test_clinic:
+            test_clinic = Clinic(
+                id=clinic_id,
+                name="Clínica Test Cifrado Aislada",
+                slug="clinica-test-cifrado-aislada",
+                timezone="America/Caracas",
+                country_code="VE",
+                is_active=True,
+            )
+            db.add(test_clinic)
+            await db.flush()
+
+        # Limpiar datos solo de esta prueba y clínica aislada
         existing_rec = (await db.execute(select(MedicalRecord).where(MedicalRecord.appointment_id == appointment_id))).scalar_one_or_none()
         if existing_rec:
             await db.delete(existing_rec)
@@ -104,4 +119,13 @@ async def test_envelope_encryption_aes_gcm_and_kek_rotation(client: AsyncClient)
         # Y que los historiales existentes siguen siendo descifrables sin perdida
         decrypted_after = decrypt_field(rec.encrypted_anamnesis, raw_dek_after_rotation)
         assert decrypted_after == secret_text
+
+        # 4. Limpieza final de la cita y claves de la clínica de prueba
+        await db.delete(rec)
+        app_to_del = (await db.execute(select(Appointment).where(Appointment.id == appointment_id))).scalar_one_or_none()
+        if app_to_del:
+            await db.delete(app_to_del)
+        for k in (await db.execute(select(ClinicEncryptionKey).where(ClinicEncryptionKey.clinic_id == clinic_id))).scalars().all():
+            await db.delete(k)
+        await db.commit()
 

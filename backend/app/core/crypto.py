@@ -21,7 +21,31 @@ logger = logging.getLogger("crypto")
 
 # Ruta en Vault para la KEK maestra
 VAULT_KEK_PATH = "kms/kek"
-DEFAULT_FALLBACK_KEK = b"IntimaSalud_Master_KEK_32B_Key!"  # 32 bytes
+DEFAULT_FALLBACK_KEK = b"IntimaSalud_Master_KEK_32B_Key!!"  # exactly 32 bytes
+
+
+def _get_all_historical_keks() -> list[bytes]:
+    """Obtiene todas las versiones históricas de la KEK desde Vault y fallback."""
+    keks = []
+    try:
+        from app.core.secrets import get_vault_client
+        client = get_vault_client()
+        meta = client.secrets.kv.v2.read_secret_metadata(path=VAULT_KEK_PATH)
+        versions = list(meta.get("data", {}).get("versions", {}).keys())
+        versions.sort(key=lambda x: int(x), reverse=True)
+        for v in versions:
+            try:
+                sec = client.secrets.kv.v2.read_secret_version(
+                    path=VAULT_KEK_PATH, version=int(v), raise_on_deleted_version=False
+                )
+                if sec and "data" in sec and "data" in sec["data"] and "kek_hex" in sec["data"]["data"]:
+                    keks.append(bytes.fromhex(sec["data"]["data"]["kek_hex"]))
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.debug("No se pudieron leer versiones históricas de Vault: %s", exc)
+    keks.append(DEFAULT_FALLBACK_KEK)
+    return keks
 
 
 def get_or_create_kek() -> bytes:
@@ -72,8 +96,22 @@ async def get_or_create_clinic_dek(db: AsyncSession, clinic_id: str, version: in
         )
         row = (await db.execute(stmt)).scalar_one_or_none()
         if row:
-            raw_dek = _decrypt_dek_with_kek(row.encrypted_dek, kek)
-            return raw_dek, row.key_version
+            try:
+                raw_dek = _decrypt_dek_with_kek(row.encrypted_dek, kek)
+                return raw_dek, row.key_version
+            except Exception:
+                # Fallback a KEKs históricas si hubo rotación sin re-wrap
+                for hist_kek in _get_all_historical_keks():
+                    try:
+                        raw_dek = _decrypt_dek_with_kek(row.encrypted_dek, hist_kek)
+                        # Auto-sanación: re-wrap con la KEK activa
+                        row.encrypted_dek = _encrypt_dek_with_kek(raw_dek, kek)
+                        await db.flush()
+                        logger.info("Auto-sanada DEK para clínica %s versión %s", clinic_id, row.key_version)
+                        return raw_dek, row.key_version
+                    except Exception:
+                        pass
+                raise
 
     # Buscar la llave activa mas reciente
     stmt = (
@@ -88,7 +126,17 @@ async def get_or_create_clinic_dek(db: AsyncSession, clinic_id: str, version: in
             raw_dek = _decrypt_dek_with_kek(row.encrypted_dek, kek)
             return raw_dek, row.key_version
         except Exception:
-            pass
+            # Fallback a KEKs históricas si hubo rotación sin re-wrap
+            for hist_kek in _get_all_historical_keks():
+                try:
+                    raw_dek = _decrypt_dek_with_kek(row.encrypted_dek, hist_kek)
+                    # Auto-sanación: re-wrap con la KEK activa
+                    row.encrypted_dek = _encrypt_dek_with_kek(raw_dek, kek)
+                    await db.flush()
+                    logger.info("Auto-sanada DEK activa para clínica %s", clinic_id)
+                    return raw_dek, row.key_version
+                except Exception:
+                    pass
 
     # Generar nueva DEK para esta clinica (version subsiguiente o version 1)
     next_ver = (row.key_version + 1) if row else 1
@@ -170,13 +218,24 @@ async def rewrap_deks_with_new_kek(db: AsyncSession, old_kek: bytes, new_kek: by
     stmt = select(ClinicEncryptionKey)
     keys = list((await db.execute(stmt)).scalars().all())
     count = 0
+    hist_keks = None
     for k in keys:
+        raw_dek = None
         try:
             raw_dek = _decrypt_dek_with_kek(k.encrypted_dek, old_kek)
+        except Exception:
+            if hist_keks is None:
+                hist_keks = _get_all_historical_keks()
+            for hk in hist_keks:
+                try:
+                    raw_dek = _decrypt_dek_with_kek(k.encrypted_dek, hk)
+                    break
+                except Exception:
+                    pass
+
+        if raw_dek:
             k.encrypted_dek = _encrypt_dek_with_kek(raw_dek, new_kek)
             count += 1
-        except Exception:
-            pass
     await db.flush()
     return count
 
