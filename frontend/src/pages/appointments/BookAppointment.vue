@@ -552,15 +552,15 @@
 
       <q-separator />
 
-      <!-- SECCIÓN 5: Desglose de Honorarios y Procedimientos Médicos Opcionales -->
+      <!-- SECCIÓN 5: Honorarios de Consulta Médica -->
       <div class="space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-100 pb-2">
           <label class="block text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center">
             <q-icon name="payments" size="16px" class="mr-1.5 text-teal-600" />
-            5. Honorarios Médicos y Procedimientos Especializados
+            5. Honorarios de Consulta Médica
           </label>
           <span class="text-2xs text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full font-semibold border border-teal-200">
-            Pago manual en caja de la sede el día de la cita
+            Pago en taquilla / recepción el día de la cita
           </span>
         </div>
 
@@ -573,82 +573,41 @@
             <div>
               <div class="text-sm font-bold text-slate-900">Consulta Médica Especializada</div>
               <div class="text-xs text-slate-500">
-                Atención clínica presencial, evaluación física, diagnóstico y prescripción digital.
+                Atención clínica presencial, anamnesis, evaluación médica integral, diagnóstico y receta digital.
               </div>
             </div>
           </div>
           <div class="text-right sm:border-l sm:border-teal-200 sm:pl-4">
-            <div class="text-2xs text-slate-500 uppercase font-semibold">Tarifa Consulta Base</div>
+            <div class="text-2xs text-slate-500 uppercase font-semibold">Tarifa Consulta</div>
             <div class="text-xl font-black text-teal-800">${{ Number(doctorConsultationFee).toFixed(2) }} <span class="text-xs font-normal text-slate-500">USD</span></div>
           </div>
         </div>
 
-        <!-- Procedimientos adicionales opcionales -->
-        <div v-if="availableProcedures.length > 0" class="space-y-3 pt-1">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-slate-700">Procedimientos Clínicos Complementarios (Opcionales):</span>
-            <span class="text-2xs text-slate-400">Marca los estudios que requieras realizarte</span>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div
-              v-for="proc in availableProcedures"
-              :key="proc.id"
-              :class="[
-                'p-3.5 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3',
-                selectedProcedureIds.includes(proc.id)
-                  ? 'bg-teal-50/90 border-teal-500 ring-2 ring-teal-400 ring-offset-1 shadow-xs'
-                  : 'bg-white border-slate-200 hover:border-teal-300 shadow-2xs'
-              ]"
-              @click="toggleProcedure(proc.id)"
-            >
-              <div class="flex items-start space-x-2.5">
-                <q-checkbox
-                  :model-value="selectedProcedureIds.includes(proc.id)"
-                  color="teal"
-                  dense
-                  @update:model-value="toggleProcedure(proc.id)"
-                />
-                <div>
-                  <div class="text-xs font-bold text-slate-900">{{ proc.name }}</div>
-                  <div v-if="proc.description" class="text-2xs text-slate-500 mt-0.5 leading-snug">{{ proc.description }}</div>
-                  <div class="flex items-center gap-2 mt-1">
-                    <span v-if="proc.category" class="text-2xs px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
-                      {{ proc.category }}
-                    </span>
-                    <span v-if="proc.duration_minutes" class="text-2xs text-slate-400 flex items-center">
-                      <q-icon name="schedule" size="11px" class="mr-0.5" /> {{ proc.duration_minutes }} min
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <div class="text-right whitespace-nowrap pl-2">
-                <div class="text-sm font-black text-teal-800">+${{ Number(proc.price).toFixed(2) }}</div>
-                <div class="text-2xs text-slate-400">USD</div>
-              </div>
-            </div>
+        <!-- Mensaje Informativo sobre Procedimientos Extra en Consulta -->
+        <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-2.5 text-xs text-slate-600">
+          <q-icon name="info" color="teal" size="18px" class="mt-0.5 shrink-0" />
+          <div class="leading-relaxed">
+            <strong class="text-slate-800">Procedimientos Especializados:</strong>
+            Si durante la consulta el especialista determina que requieres estudios o procedimientos adicionales (ecografía, citología, colposcopia, etc.), el médico los indicará y agregará directamente a tu atención para su liquidación en caja.
           </div>
         </div>
 
-        <!-- Desglose Total en Vivo -->
+        <!-- Total Estimado en Caja -->
         <div class="p-4 bg-slate-900 text-white rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
           <div>
             <div class="text-2xs uppercase tracking-wider text-slate-400 font-bold flex items-center">
               <q-icon name="receipt_long" size="14px" class="mr-1 text-emerald-400" />
-              Presupuesto Estimado para Recepción y Caja
+              Monto a Liquidar en Sede
             </div>
-            <div class="text-xs text-slate-300 mt-1">
-              Consulta Base (${{ Number(doctorConsultationFee).toFixed(2) }} USD)
-              <span v-if="proceduresTotal > 0" class="text-emerald-300 font-semibold">
-                + {{ selectedProcedureIds.length }} procedimiento(s) (+${{ Number(proceduresTotal).toFixed(2) }} USD)
-              </span>
+            <div class="text-xs text-slate-300 mt-0.5">
+              Consulta Médica con el especialista seleccionado
             </div>
           </div>
           <div class="text-right sm:border-l sm:border-slate-800 sm:pl-4">
             <div class="text-2xl font-black text-emerald-400">
               ${{ Number(grandTotal).toFixed(2) }} <span class="text-xs font-normal text-slate-400">USD</span>
             </div>
-            <div class="text-2xs text-slate-400">Total a liquidar en sede</div>
+            <div class="text-2xs text-slate-400">Total consulta base</div>
           </div>
         </div>
       </div>
@@ -812,45 +771,19 @@ const depForm = reactive({
   gender: 'FEMENINO'
 })
 
-// Catálogo de Procedimientos y Honorarios
-const availableProcedures = ref([])
-const selectedProcedureIds = ref([])
-const loadingProcedures = ref(false)
+// Honorarios de Consulta Médica
 const doctorConsultationFee = ref(30.00)
 
-function toggleProcedure (procId) {
-  const idx = selectedProcedureIds.value.indexOf(procId)
-  if (idx > -1) {
-    selectedProcedureIds.value.splice(idx, 1)
-  } else {
-    selectedProcedureIds.value.push(procId)
-  }
-}
-
-const proceduresTotal = computed(() => {
-  if (!availableProcedures.value.length || !selectedProcedureIds.value.length) return 0
-  return availableProcedures.value
-    .filter(p => selectedProcedureIds.value.includes(p.id))
-    .reduce((sum, p) => sum + parseFloat(p.price || 0), 0)
-})
-
 const grandTotal = computed(() => {
-  return (doctorConsultationFee.value || 30.00) + proceduresTotal.value
+  return Number(doctorConsultationFee.value || 30.00)
 })
 
-async function loadProceduresAndFees () {
+async function loadDoctorFee () {
   if (!selectedClinicId.value || !selectedDoctorId.value) {
-    availableProcedures.value = []
-    selectedProcedureIds.value = []
+    doctorConsultationFee.value = 30.00
     return
   }
-  loadingProcedures.value = true
   try {
-    const { data: procs } = await api.get(`/clinics/${selectedClinicId.value}/procedures`, {
-      params: { doctor_id: selectedDoctorId.value }
-    })
-    availableProcedures.value = procs || []
-
     const { data: clinicDocs } = await api.get(`/clinics/${selectedClinicId.value}/doctors`)
     const docInfo = (clinicDocs || []).find(d => d.id === selectedDoctorId.value)
     if (docInfo && docInfo.consultation_fee != null) {
@@ -859,9 +792,7 @@ async function loadProceduresAndFees () {
       doctorConsultationFee.value = 30.00
     }
   } catch (err) {
-    console.warn('Error al cargar procedimientos u honorarios:', err)
-  } finally {
-    loadingProcedures.value = false
+    console.warn('Error al cargar honorarios de consulta:', err)
   }
 }
 
@@ -1023,7 +954,7 @@ async function onClinicChanged (newClinicId) {
       selectedDoctorId.value = doctorOptions.value[0].value
     }
   }
-  await Promise.all([loadAvailableSlots(), loadProceduresAndFees()])
+  await Promise.all([loadAvailableSlots(), loadDoctorFee()])
 }
 
 async function onDoctorChanged (newDoctorId) {
@@ -1037,7 +968,7 @@ async function onDoctorChanged (newDoctorId) {
       }
     }
   }
-  await Promise.all([loadAvailableSlots(), loadProceduresAndFees()])
+  await Promise.all([loadAvailableSlots(), loadDoctorFee()])
 }
 
 async function loadInitialData () {
@@ -1085,7 +1016,7 @@ async function loadInitialData () {
   } finally {
     loadingClinics.value = false
     loadingDoctors.value = false
-    await Promise.all([loadAvailableSlots(), loadProceduresAndFees()])
+    await Promise.all([loadAvailableSlots(), loadDoctorFee()])
   }
 }
 
@@ -1178,7 +1109,7 @@ async function submitBooking () {
         chronic_conditions: patientForm.chronic_conditions || undefined,
         current_medications: patientForm.current_medications || undefined,
         reason: patientForm.reason || undefined,
-        procedure_ids: selectedProcedureIds.value,
+        procedure_ids: [],
         estimated_amount: grandTotal.value
       }
 
@@ -1203,7 +1134,7 @@ async function submitBooking () {
           chronic_conditions: patientForm.chronic_conditions,
           current_medications: patientForm.current_medications
         },
-        procedure_ids: selectedProcedureIds.value,
+        procedure_ids: [],
         estimated_amount: grandTotal.value
       }
 
