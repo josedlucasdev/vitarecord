@@ -132,14 +132,14 @@
         </div>
 
         <!-- Acceso a Mi Núcleo Familiar -->
-        <div class="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
-          <div class="flex items-center space-x-3.5">
+        <div class="bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 p-5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+          <div class="flex items-center space-x-3.5 flex-1 min-w-0">
             <div class="w-11 h-11 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold text-lg shadow-xs shrink-0">
               <q-icon name="family_restroom" size="24px" />
             </div>
-            <div>
-              <h3 class="text-sm font-bold text-slate-900 leading-tight">¿Tienes familiares o personas a tu cargo?</h3>
-              <p class="text-xs text-slate-600 mt-0.5 leading-relaxed">
+            <div class="flex-1 min-w-0 flex flex-col justify-center">
+              <h3 class="text-sm font-bold text-slate-900 leading-tight m-0">¿Tienes familiares o personas a tu cargo?</h3>
+              <p class="text-xs text-slate-600 leading-tight mt-0.5 m-0">
                 Gestiona a tus dependientes (hijos, cónyuge, padres). Podrás subir sus fotografías individuales y registrar sus fichas médicas permanentes para que sus citas se agenden sin repetir datos.
               </p>
             </div>
@@ -158,15 +158,15 @@
         <!-- 3. SECCIÓN: Ficha Clínica Basal (Datos Inmutables en el Tiempo) -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border-2 border-teal-500/60 space-y-4">
           <div class="flex items-center justify-between border-b border-teal-100 pb-2.5">
-            <div class="flex items-center space-x-2">
-              <div class="w-8 h-8 rounded-lg bg-teal-50 text-teal-800 flex items-center justify-center font-bold">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-8 h-8 rounded-lg bg-teal-50 text-teal-800 flex items-center justify-center font-bold shrink-0">
                 <q-icon name="monitor_heart" size="20px" color="teal" />
               </div>
-              <div>
-                <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">
+              <div class="flex flex-col justify-center">
+                <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider leading-tight m-0">
                   Ficha Clínica Basal (Datos Permanentes)
                 </h3>
-                <p class="text-2xs text-slate-500">
+                <p class="text-2xs text-slate-500 leading-tight mt-0.5 m-0">
                   Estos datos no cambian con frecuencia y no tendrás que volver a llenarlos en cada cita.
                 </p>
               </div>
@@ -277,15 +277,15 @@
 
         <!-- 4. SECCIÓN: Datos Personales y Demográficos -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div class="flex items-center space-x-2 border-b border-slate-100 pb-2.5">
-            <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
+          <div class="flex items-center space-x-2.5 border-b border-slate-100 pb-2.5">
+            <div class="w-8 h-8 rounded-lg bg-slate-100 text-slate-700 flex items-center justify-center font-bold shrink-0">
               <q-icon name="badge" size="20px" />
             </div>
-            <div>
-              <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">
+            <div class="flex flex-col justify-center">
+              <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider leading-tight m-0">
                 Datos Personales & Identificación
               </h3>
-              <p class="text-2xs text-slate-500">
+              <p class="text-2xs text-slate-500 leading-tight mt-0.5 m-0">
                 Información oficial del paciente para expedientes y emisión de recetas.
               </p>
             </div>
@@ -365,15 +365,15 @@
 
         <!-- 5. SECCIÓN: Contacto de Emergencia -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-          <div class="flex items-center space-x-2 border-b border-slate-100 pb-2.5">
-            <div class="w-8 h-8 rounded-lg bg-red-50 text-red-700 flex items-center justify-center font-bold">
+          <div class="flex items-center space-x-2.5 border-b border-slate-100 pb-2.5">
+            <div class="w-8 h-8 rounded-lg bg-red-50 text-red-700 flex items-center justify-center font-bold shrink-0">
               <q-icon name="emergency" size="20px" color="red-7" />
             </div>
-            <div>
-              <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">
+            <div class="flex flex-col justify-center">
+              <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider leading-tight m-0">
                 Contacto de Emergencia
               </h3>
-              <p class="text-2xs text-slate-500">
+              <p class="text-2xs text-slate-500 leading-tight mt-0.5 m-0">
                 Persona de contacto en caso de imprevistos durante tu consulta médica.
               </p>
             </div>
