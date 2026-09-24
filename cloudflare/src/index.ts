@@ -44,24 +44,9 @@ export default {
       });
     }
 
-    // 3. Reenviar petición hacia el origen backend en Docker (VPS Contabo)
-    const backendOrigin = (env.BACKEND_ORIGIN_URL || "http://5.189.141.101:8000").replace(/\/$/, "");
-    const targetUrl = new URL(url.pathname + url.search, backendOrigin);
-
-    // Clonar cabeceras y añadir metadatos de Cloudflare para el backend
-    const forwardHeaders = new Headers(request.headers);
-    forwardHeaders.set("X-Forwarded-Host", url.host);
-    forwardHeaders.set("X-Forwarded-Proto", url.protocol.replace(":", ""));
-    forwardHeaders.set("X-Real-IP", request.headers.get("CF-Connecting-IP") || "");
-    forwardHeaders.set("Host", targetUrl.host);
-
+    // 3. Reenviar petición hacia el origen backend configurado en Cloudflare DNS (VPS)
     try {
-      const response = await fetch(targetUrl.toString(), {
-        method: request.method,
-        headers: forwardHeaders,
-        body: ["GET", "HEAD"].includes(request.method) ? undefined : request.body,
-        redirect: "follow",
-      });
+      const response = await fetch(request);
 
       // Añadir cabeceras de seguridad a la respuesta
       const responseHeaders = new Headers(response.headers);
@@ -78,7 +63,7 @@ export default {
       return new Response(
         JSON.stringify({
           error: "BackendUnavailable",
-          message: "No se pudo establecer conexión con el backend en contenedor.",
+          message: "No se pudo establecer conexión con el backend en el VPS.",
           detail: err?.message || String(err),
         }),
         {
