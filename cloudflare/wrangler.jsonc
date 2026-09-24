@@ -13,7 +13,7 @@
     }
   ],
   "vars": {
-    "BACKEND_ORIGIN_URL": "https://vitarecord-backend.onrender.com",
+    "BACKEND_ORIGIN_URL": "https://vitarecord-d8gf.onrender.com",
     "ENVIRONMENT": "production"
   }
 }

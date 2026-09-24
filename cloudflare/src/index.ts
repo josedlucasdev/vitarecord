@@ -45,7 +45,7 @@ export default {
     }
 
     // 3. Reenviar petición hacia el origen backend en Docker (Render o servidor propio)
-    const backendOrigin = (env.BACKEND_ORIGIN_URL || "https://vitarecord-backend.onrender.com").replace(/\/$/, "");
+    const backendOrigin = (env.BACKEND_ORIGIN_URL || "https://vitarecord-d8gf.onrender.com").replace(/\/$/, "");
     const targetUrl = new URL(url.pathname + url.search, backendOrigin);
 
     // Clonar cabeceras y añadir metadatos de Cloudflare para el backend
@@ -53,6 +53,7 @@ export default {
     forwardHeaders.set("X-Forwarded-Host", url.host);
     forwardHeaders.set("X-Forwarded-Proto", url.protocol.replace(":", ""));
     forwardHeaders.set("X-Real-IP", request.headers.get("CF-Connecting-IP") || "");
+    forwardHeaders.set("Host", targetUrl.host);
 
     try {
       const response = await fetch(targetUrl.toString(), {
