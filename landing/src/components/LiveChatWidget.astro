@@ -448,15 +448,25 @@
     }
 
     function openRatingModal() {
-      if (isModalOpen) return;
       isModalOpen = true;
       modalOverlay.classList.remove("hidden");
       modalRatingForm.classList.remove("hidden");
       modalFinishedState.classList.add("hidden");
       modalRatingError.classList.add("hidden");
+      modalSubmitBtn.disabled = false;
+      modalSubmitBtn.innerHTML = `
+        <span>Enviar Calificación</span>
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      `;
       selectedRating = 0;
       highlightStars(0);
       modalRatingComment.value = "";
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
     }
 
     function showModalFinishedState(message) {
@@ -813,6 +823,13 @@
         return;
       }
 
+      const token = currentSession ? currentSession.session_token : (JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}").session_token);
+      if (!token) {
+        modalRatingError.textContent = "No se encontró sesión activa. Por favor recarga la página.";
+        modalRatingError.classList.remove("hidden");
+        return;
+      }
+
       modalRatingError.classList.add("hidden");
       modalSubmitBtn.disabled = true;
       modalSubmitBtn.innerHTML = `
@@ -824,28 +841,37 @@
       `;
 
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
         const resp = await fetch(`${API_BASE}/rate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
           body: JSON.stringify({
-            session_token: currentSession.session_token,
+            session_token: token,
             rating: selectedRating,
             comment: modalRatingComment.value.trim() || null,
           }),
         });
+        clearTimeout(timeoutId);
 
         if (!resp.ok) {
           const errData = await resp.json().catch(() => ({}));
           throw new Error(errData.detail || "Error al enviar la calificación.");
         }
 
-        currentSession.rating = selectedRating;
-        currentSession.status = "closed";
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+        if (currentSession) {
+          currentSession.rating = selectedRating;
+          currentSession.status = "closed";
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+        }
 
         showModalFinishedState("¡Muchas gracias por tu calificación! Nos alegra haberte atendido.");
       } catch (err) {
-        modalRatingError.textContent = err.message || "Error al enviar la calificación.";
+        modalRatingError.textContent = err.name === "AbortError" 
+          ? "El servidor tardó en responder. Por favor intenta nuevamente." 
+          : (err.message || "Error al enviar la calificación.");
         modalRatingError.classList.remove("hidden");
         modalSubmitBtn.disabled = false;
         modalSubmitBtn.innerHTML = `

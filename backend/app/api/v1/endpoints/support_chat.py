@@ -300,7 +300,8 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
             f"📱 <b>Teléfono:</b> <code>{html.escape(session.phone)}</code>\n\n"
             f"<i>El usuario decidió cerrar la conversación sin calificar.</i>"
         )
-        await telegram_service.send_message(tg_text)
+        import asyncio
+        asyncio.create_task(telegram_service.send_message(tg_text))
         return {"status": "success", "rating": 0, "comment": None}
 
     stars = "⭐" * data.rating
@@ -316,7 +317,7 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
     db.add(sys_msg)
     await db.commit()
 
-    # Enviar notificación a Telegram
+    # Enviar notificación a Telegram en segundo plano (respuesta instantánea al usuario)
     tg_text = (
         f"🌟 <b>¡Nueva Calificación de Atención Recibida!</b>\n\n"
         f"👤 <b>Usuario:</b> {html.escape(session.full_name)}\n"
@@ -330,7 +331,8 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
     else:
         tg_text += f"💬 <b>Comentario:</b> <i>(Sin comentario adicional)</i>"
 
-    await telegram_service.send_message(tg_text)
+    import asyncio
+    asyncio.create_task(telegram_service.send_message(tg_text))
 
     return {"status": "success", "rating": data.rating, "comment": session.rating_comment}
 
