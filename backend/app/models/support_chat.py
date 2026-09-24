@@ -15,6 +15,11 @@ class SupportChatSession(Base):
     phone: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     full_name: Mapped[str] = mapped_column(String(128), nullable=False)
     
+    status: Mapped[str] = mapped_column(String(16), default="active", server_default="active", nullable=False)
+    rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    rating_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, server_default=func.now(), nullable=False)
 

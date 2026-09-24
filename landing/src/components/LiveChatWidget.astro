@@ -1,5 +1,5 @@
 ---
-// LiveChatWidget.astro - Soporte en Vivo con Telegram para VitaRecord
+// LiveChatWidget.astro - Soporte en Vivo con Telegram para VitaRecord y Calificación de Atención
 ---
 
 <div id="vr-chat-widget" class="relative z-50">
@@ -36,7 +36,7 @@
   <!-- Ventana Flotante del Chat -->
   <div
     id="vr-chat-window"
-    class="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[400px] h-[550px] max-h-[calc(100vh-7.5rem)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden transition-all duration-300 opacity-0 pointer-events-none translate-y-4 scale-95 z-50"
+    class="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[410px] h-[580px] max-h-[calc(100vh-7.5rem)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden transition-all duration-300 opacity-0 pointer-events-none translate-y-4 scale-95 z-50"
   >
     <!-- Encabezado del Chat -->
     <div class="bg-gradient-to-r from-brand-600 via-brand-500 to-brand-700 text-white p-4 sm:p-5 flex items-center justify-between shrink-0 shadow-md">
@@ -158,9 +158,9 @@
           id="vr-chat-logout-btn"
           type="button"
           class="text-slate-400 hover:text-rose-500 text-[11px] font-medium transition-colors shrink-0 ml-2 cursor-pointer"
-          title="Cambiar datos de identificación"
+          title="Iniciar con otros datos"
         >
-          Cambiar datos
+          Nueva consulta
         </button>
       </div>
 
@@ -169,8 +169,81 @@
         <!-- Los mensajes se renderizan dinámicamente aquí -->
       </div>
 
+      <!-- TARJETA DE CALIFICACIÓN (Visible cuando el asesor cierra la conversación) -->
+      <div id="vr-rating-card" class="hidden p-4 bg-white border-t border-slate-200/80 shrink-0 animate-fadeIn">
+        <div id="vr-rating-form-wrapper" class="space-y-3">
+          <div class="text-center">
+            <h5 class="text-sm font-bold text-slate-800 flex items-center justify-center gap-1.5">
+              <span>⭐</span> ¿Cómo calificarías la atención?
+            </h5>
+            <p class="text-xs text-slate-500 mt-0.5">Tu opinión nos ayuda a brindarte el mejor servicio</p>
+          </div>
+
+          <!-- Selector de Estrellas -->
+          <div id="vr-star-selector" class="flex items-center justify-center gap-2 py-1">
+            <button type="button" data-star="1" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
+              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+            <button type="button" data-star="2" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
+              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+            <button type="button" data-star="3" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
+              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+            <button type="button" data-star="4" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
+              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+            <button type="button" data-star="5" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
+              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+          </div>
+
+          <!-- Comentario Opcional -->
+          <div>
+            <input
+              id="vr-rating-comment"
+              type="text"
+              placeholder="¿Algún comentario adicional? (Opcional)"
+              class="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800 placeholder-slate-400"
+            />
+          </div>
+
+          <div id="vr-rating-error" class="hidden text-xs text-rose-600 text-center font-medium"></div>
+
+          <!-- Botón Enviar Calificación -->
+          <button
+            id="vr-rating-submit-btn"
+            type="button"
+            class="w-full py-2.5 px-4 text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl shadow-md shadow-brand-500/20 transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 disabled:opacity-50"
+          >
+            <span>Enviar Calificación</span>
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Mensaje de Agradecimiento por Calificación -->
+        <div id="vr-rating-thanks" class="hidden text-center py-2 space-y-2.5">
+          <div class="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h5 class="text-sm font-bold text-slate-800">¡Gracias por tu calificación!</h5>
+          <p class="text-xs text-slate-500">Tu retroalimentación fue enviada directamente al equipo asesor.</p>
+          <button
+            id="vr-new-consult-btn"
+            type="button"
+            class="mt-2 inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-xl transition-colors cursor-pointer"
+          >
+            Iniciar una nueva consulta
+          </button>
+        </div>
+      </div>
+
       <!-- Barra de Envío de Mensaje -->
-      <div class="p-3 bg-white border-t border-slate-100 shrink-0">
+      <div id="vr-chat-input-bar" class="p-3 bg-white border-t border-slate-100 shrink-0">
         <form id="vr-chat-message-form" class="flex items-center gap-2">
           <input
             id="vr-chat-input"
@@ -225,9 +298,20 @@
     const userBadge = document.getElementById("vr-user-badge");
     const logoutBtn = document.getElementById("vr-chat-logout-btn");
     const messagesContainer = document.getElementById("vr-chat-messages");
+    const inputBar = document.getElementById("vr-chat-input-bar");
     const messageForm = document.getElementById("vr-chat-message-form");
     const chatInput = document.getElementById("vr-chat-input");
     const sendBtn = document.getElementById("vr-chat-send-btn");
+
+    // Elementos Calificación
+    const ratingCard = document.getElementById("vr-rating-card");
+    const ratingFormWrapper = document.getElementById("vr-rating-form-wrapper");
+    const ratingThanks = document.getElementById("vr-rating-thanks");
+    const starButtons = document.querySelectorAll(".vr-star-btn");
+    const ratingComment = document.getElementById("vr-rating-comment");
+    const ratingError = document.getElementById("vr-rating-error");
+    const ratingSubmitBtn = document.getElementById("vr-rating-submit-btn");
+    const newConsultBtn = document.getElementById("vr-new-consult-btn");
 
     // Estado local
     let isOpen = false;
@@ -235,6 +319,7 @@
     let lastMessageId = 0;
     let pollInterval = null;
     let unreadCount = 0;
+    let selectedRating = 0;
     const knownMessageIds = new Set();
 
     // Cargar sesión previa desde localStorage
@@ -247,7 +332,7 @@
       }
     }
 
-    // Función para alternar visibilidad de la ventana de chat
+    // Alternar visibilidad de la ventana de chat
     function toggleChat(forceOpen = null) {
       isOpen = forceOpen !== null ? forceOpen : !isOpen;
 
@@ -265,7 +350,9 @@
         if (currentSession) {
           showActiveView();
           scrollToBottom();
-          setTimeout(() => chatInput && chatInput.focus(), 200);
+          if (currentSession.status !== "closed") {
+            setTimeout(() => chatInput && chatInput.focus(), 200);
+          }
         } else {
           showAuthView();
           setTimeout(() => inputName && inputName.focus(), 200);
@@ -296,7 +383,31 @@
       activeView.classList.remove("hidden");
       if (currentSession) {
         userBadge.textContent = `${currentSession.full_name} (${currentSession.id_card})`;
+        if (currentSession.status === "closed") {
+          applyClosedState(currentSession.rating !== null && currentSession.rating !== undefined);
+        } else {
+          applyActiveState();
+        }
       }
+    }
+
+    function applyActiveState() {
+      inputBar.classList.remove("hidden");
+      ratingCard.classList.add("hidden");
+    }
+
+    function applyClosedState(alreadyRated = false) {
+      inputBar.classList.add("hidden");
+      ratingCard.classList.remove("hidden");
+
+      if (alreadyRated) {
+        ratingFormWrapper.classList.add("hidden");
+        ratingThanks.classList.remove("hidden");
+      } else {
+        ratingFormWrapper.classList.remove("hidden");
+        ratingThanks.classList.add("hidden");
+      }
+      scrollToBottom();
     }
 
     function formatTime(isoString) {
@@ -314,6 +425,35 @@
 
       if (msg.id > lastMessageId) {
         lastMessageId = msg.id;
+      }
+
+      if (msg.sender_type === "system") {
+        // Mensaje de sistema (finalización o calificación)
+        const sysWrapper = document.createElement("div");
+        sysWrapper.className = "flex justify-center my-3";
+        const pill = document.createElement("div");
+        pill.className = "max-w-[90%] bg-amber-50/90 text-amber-900 border border-amber-200/80 rounded-2xl px-4 py-2 text-xs text-center font-medium shadow-xs";
+        pill.innerHTML = `
+          <div class="flex items-center justify-center gap-1.5 font-bold mb-0.5">
+            <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Aviso del Sistema
+          </div>
+          <div>${msg.content}</div>
+        `;
+        sysWrapper.appendChild(pill);
+        messagesContainer.appendChild(sysWrapper);
+
+        // Si el sistema avisa de cierre, activar formulario de calificación
+        if (currentSession && currentSession.rating === null) {
+          currentSession.status = "closed";
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+          applyClosedState(false);
+        }
+
+        scrollToBottom();
+        return;
       }
 
       const isVisitor = msg.sender_type === "visitor";
@@ -407,6 +547,8 @@
           id_card: data.id_card,
           phone: data.phone,
           full_name: data.full_name,
+          status: data.status,
+          rating: data.rating,
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
 
@@ -418,8 +560,14 @@
           data.messages.forEach((m) => appendMessage(m, true));
         }
 
+        if (data.status === "closed") {
+          applyClosedState(data.rating !== null && data.rating !== undefined);
+        } else {
+          applyActiveState();
+          setTimeout(() => chatInput && chatInput.focus(), 200);
+        }
+
         startPolling();
-        setTimeout(() => chatInput && chatInput.focus(), 200);
       } catch (err) {
         authError.textContent = err.message || "No se pudo iniciar la sesión. Revisa tu conexión.";
         authError.classList.remove("hidden");
@@ -447,25 +595,32 @@
             id_card: data.id_card,
             phone: data.phone,
             full_name: data.full_name,
+            status: data.status,
+            rating: data.rating,
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
           renderWelcomeMessage();
           if (data.messages && data.messages.length > 0) {
             data.messages.forEach((m) => appendMessage(m, true));
           }
+
+          if (data.status === "closed") {
+            applyClosedState(data.rating !== null && data.rating !== undefined);
+          } else {
+            applyActiveState();
+          }
+
           startPolling();
         } else {
-          // Sesión no encontrada en backend, pedir registro
           localStorage.removeItem(STORAGE_KEY);
           currentSession = null;
         }
       } catch (e) {
-        // En caso de fallo de red al inicio, mantener sesión local
         startPolling();
       }
     }
 
-    // Polling de nuevos mensajes
+    // Polling de nuevos mensajes y detección de cierre
     async function pollNewMessages() {
       if (!currentSession || !currentSession.session_token) return;
 
@@ -475,13 +630,21 @@
         }`;
         const resp = await fetch(url);
         if (resp.ok) {
+          // Detectar cierre vía header HTTP
+          const sessionStatus = resp.headers.get("X-Session-Status");
+          if (sessionStatus === "closed" && currentSession.status !== "closed") {
+            currentSession.status = "closed";
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+            applyClosedState(currentSession.rating !== null && currentSession.rating !== undefined);
+          }
+
           const msgs = await resp.json();
           if (Array.isArray(msgs) && msgs.length > 0) {
             msgs.forEach((m) => appendMessage(m, false));
           }
         }
       } catch (err) {
-        // Silencio en polling para no molestar la UI
+        // Silencio en polling
       }
     }
 
@@ -490,9 +653,14 @@
       pollInterval = setInterval(pollNewMessages, 3000);
     }
 
-    // Enviar mensaje
+    // Enviar mensaje del usuario
     async function sendMessage(text) {
       if (!currentSession || !currentSession.session_token) return;
+      if (currentSession.status === "closed") {
+        alert("La conversación ha concluido. Por favor califica la atención.");
+        return;
+      }
+
       const clean = text.trim();
       if (!clean) return;
 
@@ -513,7 +681,8 @@
           const newMsg = await resp.json();
           appendMessage(newMsg);
         } else {
-          alert("Hubo un problema al enviar el mensaje. Intenta de nuevo.");
+          const errData = await resp.json().catch(() => ({}));
+          alert(errData.detail || "Hubo un problema al enviar el mensaje. Intenta de nuevo.");
         }
       } catch (err) {
         alert("Error de conexión al enviar el mensaje.");
@@ -523,7 +692,115 @@
       }
     }
 
-    // Listeners del formulario de autenticación
+    // Manejo del selector de estrellas para la calificación
+    starButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const starVal = parseInt(btn.getAttribute("data-star"), 10);
+        selectedRating = starVal;
+        highlightStars(starVal);
+      });
+
+      btn.addEventListener("mouseenter", () => {
+        const starVal = parseInt(btn.getAttribute("data-star"), 10);
+        highlightStars(starVal);
+      });
+    });
+
+    const starSelector = document.getElementById("vr-star-selector");
+    starSelector.addEventListener("mouseleave", () => {
+      highlightStars(selectedRating);
+    });
+
+    function highlightStars(val) {
+      starButtons.forEach((b) => {
+        const num = parseInt(b.getAttribute("data-star"), 10);
+        if (num <= val) {
+          b.classList.remove("text-slate-300");
+          b.classList.add("text-amber-400");
+        } else {
+          b.classList.remove("text-amber-400");
+          b.classList.add("text-slate-300");
+        }
+      });
+    }
+
+    // Enviar Calificación al backend
+    ratingSubmitBtn.addEventListener("click", async () => {
+      if (!selectedRating || selectedRating < 1 || selectedRating > 5) {
+        ratingError.textContent = "Por favor selecciona al menos una estrella.";
+        ratingError.classList.remove("hidden");
+        return;
+      }
+
+      ratingError.classList.add("hidden");
+      ratingSubmitBtn.disabled = true;
+      ratingSubmitBtn.innerHTML = `
+        <svg class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Enviando...</span>
+      `;
+
+      try {
+        const resp = await fetch(`${API_BASE}/rate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_token: currentSession.session_token,
+            rating: selectedRating,
+            comment: ratingComment.value.trim() || null,
+          }),
+        });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({}));
+          throw new Error(errData.detail || "Error al enviar la calificación.");
+        }
+
+        currentSession.rating = selectedRating;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+
+        // Transición a vista de agradecimiento
+        applyClosedState(true);
+      } catch (err) {
+        ratingError.textContent = err.message || "Error al enviar la calificación.";
+        ratingError.classList.remove("hidden");
+        ratingSubmitBtn.disabled = false;
+        ratingSubmitBtn.innerHTML = `
+          <span>Enviar Calificación</span>
+          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+          </svg>
+        `;
+      }
+    });
+
+    // Iniciar nueva consulta (limpia sesión para que el usuario pueda empezar de nuevo)
+    function startNewInquiry() {
+      localStorage.removeItem(STORAGE_KEY);
+      currentSession = null;
+      lastMessageId = 0;
+      selectedRating = 0;
+      highlightStars(0);
+      ratingComment.value = "";
+      knownMessageIds.clear();
+      messagesContainer.innerHTML = "";
+      if (pollInterval) clearInterval(pollInterval);
+      showAuthView();
+    }
+
+    logoutBtn.addEventListener("click", () => {
+      if (confirm("¿Deseas iniciar una nueva consulta con otros datos?")) {
+        startNewInquiry();
+      }
+    });
+
+    newConsultBtn.addEventListener("click", () => {
+      startNewInquiry();
+    });
+
+    // Formulario de autenticación
     authForm.addEventListener("submit", (e) => {
       e.preventDefault();
       const name = inputName.value.trim();
@@ -542,19 +819,6 @@
       e.preventDefault();
       const text = chatInput.value;
       sendMessage(text);
-    });
-
-    // Cerrar sesión / Cambiar datos
-    logoutBtn.addEventListener("click", () => {
-      if (confirm("¿Deseas cerrar esta conversación e identificarte con otros datos?")) {
-        localStorage.removeItem(STORAGE_KEY);
-        currentSession = null;
-        lastMessageId = 0;
-        knownMessageIds.clear();
-        messagesContainer.innerHTML = "";
-        if (pollInterval) clearInterval(pollInterval);
-        showAuthView();
-      }
     });
 
     // Intentar restaurar sesión si ya existe en localStorage
