@@ -1,25 +1,27 @@
 ---
+import { Star } from '@lucide/astro';
+
 const testimonials = [
   {
     quote: "VitaRecord nos cambió completamente la organización del consultorio. Los pacientes ya no llaman para confirmar: el recordatorio por WhatsApp hace todo solo.",
     author: "Dra. Carmen Solís",
     role: "Especialista en Ginecología & Obstetricia",
     clinic: "Centro Médico Santa Fe",
-    avatar: "👩‍⚕️"
+    initials: "CS"
   },
   {
     quote: "Tener la historia clínica y las recetas en PDF con mi firma digital desde el iPad o la laptop es una maravilla. El sistema es rápido, limpio y muy intuitivo.",
     author: "Dr. Alejandro Méndez",
     role: "Médico Pediatra",
     clinic: "Consulta Médica Pediátrica",
-    avatar: "👨‍⚕️"
+    initials: "AM"
   },
   {
     quote: "Administro una clínica con 8 consultorios. La torre de control y la gestión de permisos entre secretarias y médicos nos ahorró horas de trabajo diario.",
     author: "Lic. Valeria Rosas",
     role: "Directora Administrativa",
     clinic: "Clínica Salud Integral",
-    avatar: "👩‍💼"
+    initials: "VR"
   }
 ];
 ---
@@ -42,8 +44,12 @@ const testimonials = [
       {testimonials.map((item) => (
         <div class="rounded-3xl bg-white p-8 border border-slate-200/80 shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between">
           <div class="space-y-4">
-            <div class="flex text-amber-400 gap-1 text-sm">
-              <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+            <div class="flex text-amber-400 gap-1">
+              <Star class="w-4 h-4 fill-amber-400 text-amber-400" />
+              <Star class="w-4 h-4 fill-amber-400 text-amber-400" />
+              <Star class="w-4 h-4 fill-amber-400 text-amber-400" />
+              <Star class="w-4 h-4 fill-amber-400 text-amber-400" />
+              <Star class="w-4 h-4 fill-amber-400 text-amber-400" />
             </div>
             <p class="text-slate-600 text-sm sm:text-base leading-relaxed italic">
               "{item.quote}"
@@ -51,8 +57,8 @@ const testimonials = [
           </div>
 
           <div class="pt-6 mt-6 border-t border-slate-100 flex items-center gap-3">
-            <div class="w-11 h-11 rounded-full bg-brand-50 flex items-center justify-center text-xl">
-              {item.avatar}
+            <div class="w-11 h-11 rounded-full bg-brand-50 border border-brand-200/80 text-brand-700 font-bold text-sm flex items-center justify-center tracking-wide">
+              {item.initials}
             </div>
             <div>
               <p class="text-sm font-bold text-slate-900">{item.author}</p>

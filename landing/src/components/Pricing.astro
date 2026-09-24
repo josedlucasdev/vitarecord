@@ -1,4 +1,6 @@
 ---
+import { Check } from '@lucide/astro';
+
 const plans = [
   {
     name: "Consultorio Pro",
@@ -117,7 +119,7 @@ const plans = [
             <ul class="space-y-3.5 mb-8">
               {plan.features.map((feat) => (
                 <li class="flex items-start gap-3 text-sm">
-                  <span class={`font-bold mt-0.5 ${plan.featured ? "text-brand-300" : "text-brand-500"}`}>✓</span>
+                  <Check class={`w-4 h-4 shrink-0 mt-0.5 ${plan.featured ? "text-brand-300" : "text-brand-500"}`} />
                   <span class={plan.featured ? "text-slate-200" : "text-slate-600"}>{feat}</span>
                 </li>
               ))}

@@ -1,4 +1,5 @@
 ---
+import { ShieldCheck, Check, KeyRound, Database, UserCheck, HardDriveDownload } from '@lucide/astro';
 ---
 
 <section id="seguridad" class="py-20 md:py-28 bg-brand-50/40 relative border-b border-brand-100/60">
@@ -11,8 +12,8 @@
           
           <!-- Shield Card Effect -->
           <div class="rounded-3xl bg-white p-8 border border-brand-200/80 shadow-xl shadow-brand-500/5 space-y-6">
-            <div class="w-16 h-16 rounded-2xl bg-brand-500 text-white flex items-center justify-center text-3xl shadow-lg shadow-brand-500/25">
-              🛡️
+            <div class="w-16 h-16 rounded-2xl bg-brand-500 text-white flex items-center justify-center shadow-lg shadow-brand-500/25">
+              <ShieldCheck class="w-9 h-9" />
             </div>
             <div>
               <h3 class="text-2xl font-bold text-slate-900">Protección de Datos Médicos</h3>
@@ -23,19 +24,27 @@
             
             <div class="space-y-3 pt-2">
               <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span class="text-brand-500 font-bold">✓</span>
+                <div class="w-6 h-6 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center shrink-0">
+                  <KeyRound class="w-3.5 h-3.5" />
+                </div>
                 <span class="text-xs font-semibold text-slate-700">Cifrado de claves con HashiCorp Vault</span>
               </div>
               <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span class="text-brand-500 font-bold">✓</span>
+                <div class="w-6 h-6 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center shrink-0">
+                  <Database class="w-3.5 h-3.5" />
+                </div>
                 <span class="text-xs font-semibold text-slate-700">Almacenamiento privado Cloudflare R2</span>
               </div>
               <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span class="text-brand-500 font-bold">✓</span>
+                <div class="w-6 h-6 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center shrink-0">
+                  <UserCheck class="w-3.5 h-3.5" />
+                </div>
                 <span class="text-xs font-semibold text-slate-700">Acceso restringido por roles médicos (RBAC)</span>
               </div>
               <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span class="text-brand-500 font-bold">✓</span>
+                <div class="w-6 h-6 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center shrink-0">
+                  <HardDriveDownload class="w-3.5 h-3.5" />
+                </div>
                 <span class="text-xs font-semibold text-slate-700">Copias de seguridad continuas y automáticas</span>
               </div>
             </div>
