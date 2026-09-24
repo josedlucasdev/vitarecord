@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     payments,
     procedures,
     rooms,
+    support_chat,
     webhooks,
 )
 
@@ -39,5 +40,6 @@ api_router.include_router(emergencies.router, prefix="/emergencies", tags=["emer
 api_router.include_router(medical_records.router, prefix="/medical-records", tags=["medical-records"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["webhooks"])
+api_router.include_router(support_chat.router, prefix="/support-chat", tags=["support-chat"])
 
 

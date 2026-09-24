@@ -17,8 +17,8 @@ const plans = [
       "Recordatorios básicos por email",
       "Soporte por WhatsApp y correo"
     ],
-    cta: "Comenzar Ahora",
-    link: "https://app.vitarecord.com"
+    cta: "Solicitar Acceso",
+    link: "#"
   },
   {
     name: "Clínica & Centro Médico",
@@ -37,8 +37,8 @@ const plans = [
       "Almacenamiento seguro Cloudflare R2",
       "Soporte prioritario 24/7"
     ],
-    cta: "Probar Gratis 14 Días",
-    link: "https://app.vitarecord.com"
+    cta: "Solicitar Acceso / Demo",
+    link: "#"
   },
   {
     name: "Red Hospitalaria",
@@ -55,8 +55,8 @@ const plans = [
       "Acuerdo de Nivel de Servicio (SLA 99.9%)",
       "Gerente de cuenta exclusivo"
     ],
-    cta: "Contactar a Ventas",
-    link: "https://app.vitarecord.com"
+    cta: "Hablar con un Asesor",
+    link: "#"
   }
 ];
 ---
@@ -73,7 +73,7 @@ const plans = [
         Elige el plan ideal para tu <span class="text-gradient">práctica médica</span>
       </h2>
       <p class="text-base sm:text-lg text-slate-600 font-normal">
-        Sin contratos forzosos. Cancela o cambia de plan en cualquier momento.
+        Atención personalizada previa para configurar tu consultorio o clínica a la medida.
       </p>
     </div>
 
@@ -127,18 +127,17 @@ const plans = [
           </div>
 
           <!-- CTA Button -->
-          <a
-            href={plan.link}
-            target="_blank"
-            rel="noopener noreferrer"
-            class={`w-full py-4 rounded-xl text-sm font-bold text-center transition-all duration-200 block ${
+          <button
+            type="button"
+            onclick="window.openSupportChat ? window.openSupportChat() : null"
+            class={`w-full py-4 rounded-xl text-sm font-bold text-center transition-all duration-200 block cursor-pointer active:scale-95 ${
               plan.featured
                 ? "bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/30"
                 : "bg-slate-100 hover:bg-brand-50 hover:text-brand-700 text-slate-800"
             }`}
           >
             {plan.cta}
-          </a>
+          </button>
 
         </div>
       ))}

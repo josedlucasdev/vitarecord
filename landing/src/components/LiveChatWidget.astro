@@ -1,0 +1,565 @@
+---
+// LiveChatWidget.astro - Soporte en Vivo con Telegram para VitaRecord
+---
+
+<div id="vr-chat-widget" class="relative z-50">
+  <!-- Botón Flotante del Chat -->
+  <button
+    id="vr-chat-toggle-btn"
+    type="button"
+    aria-label="Abrir chat de soporte"
+    class="fixed bottom-6 right-6 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-brand-500 hover:bg-brand-600 text-white shadow-2xl shadow-brand-500/40 hover:shadow-brand-500/60 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none cursor-pointer z-50 group"
+  >
+    <!-- Icono Chat Cerrado -->
+    <svg id="vr-icon-open" class="w-7 h-7 sm:w-8 sm:h-8 transition-transform duration-300 group-hover:rotate-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+    </svg>
+
+    <!-- Icono Chat Abierto (Cerrar) -->
+    <svg id="vr-icon-close" class="w-7 h-7 hidden transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+
+    <!-- Indicador de estado en línea -->
+    <span class="absolute top-1 right-1 flex h-4 w-4">
+      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+      <span class="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white"></span>
+    </span>
+
+    <!-- Badge de mensajes no leídos -->
+    <span
+      id="vr-unread-badge"
+      class="hidden absolute -top-1.5 -left-1.5 bg-rose-500 text-white text-[11px] font-bold h-6 min-w-6 px-1.5 rounded-full border-2 border-white flex items-center justify-center shadow"
+    >0</span>
+  </button>
+
+  <!-- Ventana Flotante del Chat -->
+  <div
+    id="vr-chat-window"
+    class="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[400px] h-[550px] max-h-[calc(100vh-7.5rem)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden transition-all duration-300 opacity-0 pointer-events-none translate-y-4 scale-95 z-50"
+  >
+    <!-- Encabezado del Chat -->
+    <div class="bg-gradient-to-r from-brand-600 via-brand-500 to-brand-700 text-white p-4 sm:p-5 flex items-center justify-between shrink-0 shadow-md">
+      <div class="flex items-center gap-3">
+        <div class="relative">
+          <div class="w-10 h-10 rounded-full bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center text-white font-bold shadow-inner">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+            </svg>
+          </div>
+          <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-brand-600 rounded-full"></span>
+        </div>
+        <div>
+          <h3 class="font-bold text-sm sm:text-base leading-tight">Asesor VitaRecord</h3>
+          <p class="text-xs text-brand-100 flex items-center gap-1.5 mt-0.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            En línea • Vía Telegram
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <button
+          id="vr-chat-minimize-btn"
+          type="button"
+          class="p-2 rounded-xl hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
+          aria-label="Cerrar chat"
+        >
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- VISTA 1: Formulario de Identificación (Cédula, Teléfono, Nombre) -->
+    <div id="vr-chat-auth-view" class="flex-1 p-6 flex flex-col justify-between overflow-y-auto bg-slate-50/50">
+      <div>
+        <div class="text-center mb-5">
+          <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-brand-50 border border-brand-100 text-brand-500 flex items-center justify-center">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+          </div>
+          <h4 class="text-base font-bold text-slate-800">Solicita Acceso o Información</h4>
+          <p class="text-xs text-slate-500 mt-1">
+            Identifícate para conversar directamente con nuestro equipo de admisiones por Telegram.
+          </p>
+        </div>
+
+        <form id="vr-chat-auth-form" class="space-y-3.5">
+          <div>
+            <label for="vr-input-name" class="block text-xs font-semibold text-slate-700 mb-1">Nombre Completo</label>
+            <input
+              id="vr-input-name"
+              type="text"
+              required
+              placeholder="Ej. Dr. Carlos Mendoza"
+              class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-slate-800 placeholder-slate-400"
+            />
+          </div>
+
+          <div>
+            <label for="vr-input-id" class="block text-xs font-semibold text-slate-700 mb-1">Cédula / Documento de Identidad</label>
+            <input
+              id="vr-input-id"
+              type="text"
+              required
+              placeholder="Ej. V-18456789 o 18456789"
+              class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-slate-800 placeholder-slate-400"
+            />
+          </div>
+
+          <div>
+            <label for="vr-input-phone" class="block text-xs font-semibold text-slate-700 mb-1">Teléfono / WhatsApp</label>
+            <input
+              id="vr-input-phone"
+              type="tel"
+              required
+              placeholder="Ej. +58 412 3456789"
+              class="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-slate-800 placeholder-slate-400"
+            />
+          </div>
+
+          <div id="vr-auth-error" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-100 rounded-lg p-2.5 font-medium"></div>
+
+          <button
+            type="submit"
+            id="vr-auth-submit-btn"
+            class="w-full py-3 px-4 text-sm font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl shadow-lg shadow-brand-500/25 transition-all duration-200 cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+          >
+            <span>Iniciar Chat con Asesor</span>
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+            </svg>
+          </button>
+        </form>
+      </div>
+
+      <div class="mt-4 pt-3 border-t border-slate-200/60 text-center">
+        <p class="text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-brand-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+          Tus datos se usan únicamente para coordinar tu acceso.
+        </p>
+      </div>
+    </div>
+
+    <!-- VISTA 2: Conversación en Vivo -->
+    <div id="vr-chat-active-view" class="hidden flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50">
+      <!-- Sub-barra con datos de usuario -->
+      <div class="bg-slate-100/90 border-b border-slate-200/80 px-4 py-2 flex items-center justify-between text-xs text-slate-600 shrink-0">
+        <div class="flex items-center gap-1.5 truncate">
+          <span class="w-2 h-2 rounded-full bg-brand-500 shrink-0"></span>
+          <span id="vr-user-badge" class="font-medium truncate text-slate-700">Usuario</span>
+        </div>
+        <button
+          id="vr-chat-logout-btn"
+          type="button"
+          class="text-slate-400 hover:text-rose-500 text-[11px] font-medium transition-colors shrink-0 ml-2 cursor-pointer"
+          title="Cambiar datos de identificación"
+        >
+          Cambiar datos
+        </button>
+      </div>
+
+      <!-- Contenedor de Mensajes -->
+      <div id="vr-chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3 scroll-smooth">
+        <!-- Los mensajes se renderizan dinámicamente aquí -->
+      </div>
+
+      <!-- Barra de Envío de Mensaje -->
+      <div class="p-3 bg-white border-t border-slate-100 shrink-0">
+        <form id="vr-chat-message-form" class="flex items-center gap-2">
+          <input
+            id="vr-chat-input"
+            type="text"
+            placeholder="Escribe tu consulta aquí..."
+            autocomplete="off"
+            class="flex-1 px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-slate-800 placeholder-slate-400"
+          />
+          <button
+            id="vr-chat-send-btn"
+            type="submit"
+            aria-label="Enviar mensaje"
+            class="p-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white shadow-md shadow-brand-500/20 transition-all active:scale-95 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        </form>
+        <p class="text-[10px] text-slate-400 mt-1 text-center">
+          Respuesta instantánea a través del asesor en Telegram
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (() => {
+    // Configuración de API
+    const API_BASE = "https://api.vitarecord.com/api/v1/support-chat";
+    const STORAGE_KEY = "vitarecord_support_session";
+
+    // Elementos DOM
+    const widget = document.getElementById("vr-chat-widget");
+    const toggleBtn = document.getElementById("vr-chat-toggle-btn");
+    const iconOpen = document.getElementById("vr-icon-open");
+    const iconClose = document.getElementById("vr-icon-close");
+    const chatWindow = document.getElementById("vr-chat-window");
+    const minimizeBtn = document.getElementById("vr-chat-minimize-btn");
+    const unreadBadge = document.getElementById("vr-unread-badge");
+
+    const authView = document.getElementById("vr-chat-auth-view");
+    const authForm = document.getElementById("vr-chat-auth-form");
+    const inputName = document.getElementById("vr-input-name");
+    const inputId = document.getElementById("vr-input-id");
+    const inputPhone = document.getElementById("vr-input-phone");
+    const authError = document.getElementById("vr-auth-error");
+    const authSubmitBtn = document.getElementById("vr-auth-submit-btn");
+
+    const activeView = document.getElementById("vr-chat-active-view");
+    const userBadge = document.getElementById("vr-user-badge");
+    const logoutBtn = document.getElementById("vr-chat-logout-btn");
+    const messagesContainer = document.getElementById("vr-chat-messages");
+    const messageForm = document.getElementById("vr-chat-message-form");
+    const chatInput = document.getElementById("vr-chat-input");
+    const sendBtn = document.getElementById("vr-chat-send-btn");
+
+    // Estado local
+    let isOpen = false;
+    let currentSession = null;
+    let lastMessageId = 0;
+    let pollInterval = null;
+    let unreadCount = 0;
+    const knownMessageIds = new Set();
+
+    // Cargar sesión previa desde localStorage
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        currentSession = JSON.parse(saved);
+      } catch (e) {
+        currentSession = null;
+      }
+    }
+
+    // Función para alternar visibilidad de la ventana de chat
+    function toggleChat(forceOpen = null) {
+      isOpen = forceOpen !== null ? forceOpen : !isOpen;
+
+      if (isOpen) {
+        chatWindow.classList.remove("opacity-0", "pointer-events-none", "translate-y-4", "scale-95");
+        chatWindow.classList.add("opacity-100", "pointer-events-auto", "translate-y-0", "scale-100");
+        iconOpen.classList.add("hidden");
+        iconClose.classList.remove("hidden");
+
+        // Limpiar contador de no leídos
+        unreadCount = 0;
+        unreadBadge.classList.add("hidden");
+        unreadBadge.textContent = "0";
+
+        if (currentSession) {
+          showActiveView();
+          scrollToBottom();
+          setTimeout(() => chatInput && chatInput.focus(), 200);
+        } else {
+          showAuthView();
+          setTimeout(() => inputName && inputName.focus(), 200);
+        }
+      } else {
+        chatWindow.classList.add("opacity-0", "pointer-events-none", "translate-y-4", "scale-95");
+        chatWindow.classList.remove("opacity-100", "pointer-events-auto", "translate-y-0", "scale-100");
+        iconOpen.classList.remove("hidden");
+        iconClose.classList.add("hidden");
+      }
+    }
+
+    // Exponer globalmente para los botones "Solicitar Acceso"
+    window.openSupportChat = () => {
+      toggleChat(true);
+    };
+
+    toggleBtn.addEventListener("click", () => toggleChat());
+    minimizeBtn.addEventListener("click", () => toggleChat(false));
+
+    function showAuthView() {
+      authView.classList.remove("hidden");
+      activeView.classList.add("hidden");
+    }
+
+    function showActiveView() {
+      authView.classList.add("hidden");
+      activeView.classList.remove("hidden");
+      if (currentSession) {
+        userBadge.textContent = `${currentSession.full_name} (${currentSession.id_card})`;
+      }
+    }
+
+    function formatTime(isoString) {
+      try {
+        const d = new Date(isoString);
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      } catch {
+        return "";
+      }
+    }
+
+    function appendMessage(msg, isHistoric = false) {
+      if (knownMessageIds.has(msg.id)) return;
+      knownMessageIds.add(msg.id);
+
+      if (msg.id > lastMessageId) {
+        lastMessageId = msg.id;
+      }
+
+      const isVisitor = msg.sender_type === "visitor";
+      const bubbleWrapper = document.createElement("div");
+      bubbleWrapper.className = `flex flex-col ${isVisitor ? "items-end" : "items-start"} mb-3`;
+
+      const bubble = document.createElement("div");
+      bubble.className = isVisitor
+        ? "max-w-[85%] bg-brand-500 text-white rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm text-sm break-words leading-relaxed"
+        : "max-w-[85%] bg-white text-slate-800 border border-slate-200/80 rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm text-sm break-words leading-relaxed";
+
+      if (!isVisitor) {
+        const agentTag = document.createElement("div");
+        agentTag.className = "text-[10px] font-bold text-brand-600 mb-1 flex items-center gap-1";
+        agentTag.innerHTML = `
+          <svg class="w-3 h-3 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+          </svg>
+          Asesor VitaRecord (Telegram)
+        `;
+        bubble.appendChild(agentTag);
+      }
+
+      const textNode = document.createElement("div");
+      textNode.textContent = msg.content;
+      bubble.appendChild(textNode);
+
+      const timeSpan = document.createElement("span");
+      timeSpan.className = `text-[10px] mt-1 block text-right ${isVisitor ? "text-brand-100" : "text-slate-400"}`;
+      timeSpan.textContent = formatTime(msg.created_at);
+      bubble.appendChild(timeSpan);
+
+      bubbleWrapper.appendChild(bubble);
+      messagesContainer.appendChild(bubbleWrapper);
+
+      if (!isHistoric && !isOpen && !isVisitor) {
+        unreadCount++;
+        unreadBadge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
+        unreadBadge.classList.remove("hidden");
+      }
+
+      scrollToBottom();
+    }
+
+    function scrollToBottom() {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function renderWelcomeMessage() {
+      messagesContainer.innerHTML = "";
+      const welcome = document.createElement("div");
+      welcome.className = "p-3.5 bg-brand-50/70 border border-brand-100/80 rounded-2xl text-xs text-slate-700 leading-relaxed mb-4 text-center";
+      welcome.innerHTML = `
+        <span class="font-bold text-brand-700 block mb-1">¡Bienvenido a VitaRecord! 👋</span>
+        Un asesor recibirá tus consultas en su Telegram y te responderá por aquí en tiempo real.
+      `;
+      messagesContainer.appendChild(welcome);
+    }
+
+    // Inicializar o reanudar sesión en backend
+    async function initSession(idCard, phone, fullName) {
+      authError.classList.add("hidden");
+      authSubmitBtn.disabled = true;
+      authSubmitBtn.innerHTML = `
+        <svg class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span>Conectando...</span>
+      `;
+
+      try {
+        const resp = await fetch(`${API_BASE}/session`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id_card: idCard,
+            phone: phone,
+            full_name: fullName,
+          }),
+        });
+
+        if (!resp.ok) {
+          const errData = await resp.json().catch(() => ({}));
+          throw new Error(errData.detail || "Error al conectar con el servidor.");
+        }
+
+        const data = await resp.json();
+        currentSession = {
+          session_token: data.session_token,
+          id_card: data.id_card,
+          phone: data.phone,
+          full_name: data.full_name,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+
+        showActiveView();
+        renderWelcomeMessage();
+
+        // Cargar historial previo de mensajes
+        if (data.messages && data.messages.length > 0) {
+          data.messages.forEach((m) => appendMessage(m, true));
+        }
+
+        startPolling();
+        setTimeout(() => chatInput && chatInput.focus(), 200);
+      } catch (err) {
+        authError.textContent = err.message || "No se pudo iniciar la sesión. Revisa tu conexión.";
+        authError.classList.remove("hidden");
+      } finally {
+        authSubmitBtn.disabled = false;
+        authSubmitBtn.innerHTML = `
+          <span>Iniciar Chat con Asesor</span>
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        `;
+      }
+    }
+
+    // Reanudar sesión activa existente
+    async function restoreSession() {
+      if (!currentSession || !currentSession.session_token) return;
+
+      try {
+        const resp = await fetch(`${API_BASE}/session?token=${encodeURIComponent(currentSession.session_token)}`);
+        if (resp.ok) {
+          const data = await resp.json();
+          currentSession = {
+            session_token: data.session_token,
+            id_card: data.id_card,
+            phone: data.phone,
+            full_name: data.full_name,
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+          renderWelcomeMessage();
+          if (data.messages && data.messages.length > 0) {
+            data.messages.forEach((m) => appendMessage(m, true));
+          }
+          startPolling();
+        } else {
+          // Sesión no encontrada en backend, pedir registro
+          localStorage.removeItem(STORAGE_KEY);
+          currentSession = null;
+        }
+      } catch (e) {
+        // En caso de fallo de red al inicio, mantener sesión local
+        startPolling();
+      }
+    }
+
+    // Polling de nuevos mensajes
+    async function pollNewMessages() {
+      if (!currentSession || !currentSession.session_token) return;
+
+      try {
+        const url = `${API_BASE}/messages?session_token=${encodeURIComponent(currentSession.session_token)}${
+          lastMessageId > 0 ? `&after_id=${lastMessageId}` : ""
+        }`;
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const msgs = await resp.json();
+          if (Array.isArray(msgs) && msgs.length > 0) {
+            msgs.forEach((m) => appendMessage(m, false));
+          }
+        }
+      } catch (err) {
+        // Silencio en polling para no molestar la UI
+      }
+    }
+
+    function startPolling() {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(pollNewMessages, 3000);
+    }
+
+    // Enviar mensaje
+    async function sendMessage(text) {
+      if (!currentSession || !currentSession.session_token) return;
+      const clean = text.trim();
+      if (!clean) return;
+
+      chatInput.value = "";
+      sendBtn.disabled = true;
+
+      try {
+        const resp = await fetch(`${API_BASE}/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_token: currentSession.session_token,
+            content: clean,
+          }),
+        });
+
+        if (resp.ok) {
+          const newMsg = await resp.json();
+          appendMessage(newMsg);
+        } else {
+          alert("Hubo un problema al enviar el mensaje. Intenta de nuevo.");
+        }
+      } catch (err) {
+        alert("Error de conexión al enviar el mensaje.");
+      } finally {
+        sendBtn.disabled = false;
+        chatInput.focus();
+      }
+    }
+
+    // Listeners del formulario de autenticación
+    authForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = inputName.value.trim();
+      const id = inputId.value.trim();
+      const phone = inputPhone.value.trim();
+      if (!name || !id || !phone) {
+        authError.textContent = "Por favor completa todos los campos requeridos.";
+        authError.classList.remove("hidden");
+        return;
+      }
+      initSession(id, phone, name);
+    });
+
+    // Enviar mensaje
+    messageForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = chatInput.value;
+      sendMessage(text);
+    });
+
+    // Cerrar sesión / Cambiar datos
+    logoutBtn.addEventListener("click", () => {
+      if (confirm("¿Deseas cerrar esta conversación e identificarte con otros datos?")) {
+        localStorage.removeItem(STORAGE_KEY);
+        currentSession = null;
+        lastMessageId = 0;
+        knownMessageIds.clear();
+        messagesContainer.innerHTML = "";
+        if (pollInterval) clearInterval(pollInterval);
+        showAuthView();
+      }
+    });
+
+    // Intentar restaurar sesión si ya existe en localStorage
+    if (currentSession) {
+      restoreSession();
+    }
+  })();
+</script>

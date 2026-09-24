@@ -121,6 +121,10 @@ class Settings(BaseSettings):
     # Recordatorios automáticos
     REMINDER_CHECK_INTERVAL_SECONDS: int = 60
 
+    # Telegram Support Bot
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_ADMIN_CHAT_ID: str = ""
+
     SENTRY_DSN: str | None = None
 
 

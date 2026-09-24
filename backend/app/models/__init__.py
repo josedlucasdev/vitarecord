@@ -14,6 +14,7 @@ from app.models.payment_record import PaymentRecord
 from app.models.prescription import Prescription
 from app.models.procedure import AppointmentProcedure, MedicalProcedure
 from app.models.schedule import DoctorWeeklySchedule
+from app.models.support_chat import SupportChatMessage, SupportChatSession
 from app.models.user import DoctorScheduleLock, RefreshToken, User
 from app.models.user_device_token import UserDeviceToken
 
@@ -42,5 +43,7 @@ __all__ = [
     "MedicalRecord",
     "Prescription",
     "MedicalAttachment",
+    "SupportChatSession",
+    "SupportChatMessage",
 ]
 
