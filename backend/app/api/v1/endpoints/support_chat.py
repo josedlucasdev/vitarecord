@@ -80,8 +80,8 @@ async def get_or_create_session(data: StartSessionRequest, db: AsyncSession = De
     res = await db.execute(stmt)
     session = res.scalar_one_or_none()
 
-    # Si la sesión anterior ya fue cerrada y calificada, crear una nueva sesión para nueva consulta
-    if session and session.status == "closed" and session.rating is not None:
+    # Si la sesión anterior ya fue cerrada (calificada o no), crear una nueva sesión para nueva consulta
+    if session and session.status == "closed":
         session = None
 
     if session:
@@ -268,8 +268,8 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
     Registra la calificación (1 a 5 estrellas) y comentario del visitante sobre la atención,
     y notifica inmediatamente al administrador en Telegram.
     """
-    if data.rating < 1 or data.rating > 5:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La calificación debe estar entre 1 y 5 estrellas.")
+    if data.rating < 0 or data.rating > 5:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La calificación debe estar entre 0 y 5 estrellas.")
 
     stmt = select(SupportChatSession).where(SupportChatSession.session_token == data.session_token.strip())
     res = await db.execute(stmt)
@@ -283,6 +283,25 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
     session.status = "closed"
     if not session.closed_at:
         session.closed_at = datetime.utcnow()
+
+    if data.rating == 0:
+        sys_msg = SupportChatMessage(
+            session_id=session.id,
+            sender_type="system",
+            content="Conversación cerrada por el usuario sin calificar.",
+        )
+        db.add(sys_msg)
+        await db.commit()
+
+        tg_text = (
+            f"ℹ️ <b>Conversación #{session.id} Finalizada</b>\n\n"
+            f"👤 <b>Usuario:</b> {html.escape(session.full_name)}\n"
+            f"🪪 <b>Cédula:</b> <code>{html.escape(session.id_card)}</code>\n"
+            f"📱 <b>Teléfono:</b> <code>{html.escape(session.phone)}</code>\n\n"
+            f"<i>El usuario decidió cerrar la conversación sin calificar.</i>"
+        )
+        await telegram_service.send_message(tg_text)
+        return {"status": "success", "rating": 0, "comment": None}
 
     stars = "⭐" * data.rating
     sys_content = f"Has calificado la atención con {stars} ({data.rating}/5)."

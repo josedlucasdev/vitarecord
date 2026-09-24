@@ -1,5 +1,5 @@
 ---
-// LiveChatWidget.astro - Soporte en Vivo con Telegram para VitaRecord y Calificación de Atención
+// LiveChatWidget.astro - Soporte en Vivo con Telegram para VitaRecord, Modal de Calificación y Cierre
 ---
 
 <div id="vr-chat-widget" class="relative z-50">
@@ -36,8 +36,107 @@
   <!-- Ventana Flotante del Chat -->
   <div
     id="vr-chat-window"
-    class="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[410px] h-[580px] max-h-[calc(100vh-7.5rem)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden transition-all duration-300 opacity-0 pointer-events-none translate-y-4 scale-95 z-50"
+    class="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[410px] h-[580px] max-h-[calc(100vh-7.5rem)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden transition-all duration-300 opacity-0 pointer-events-none translate-y-4 scale-95 z-50 relative"
   >
+    <!-- MODAL OVERLAY DE CALIFICACIÓN (Aparece SOBRE el chat cuando el asesor cierra la conversación) -->
+    <div
+      id="vr-rating-modal-overlay"
+      class="hidden absolute inset-0 bg-slate-900/60 backdrop-blur-xs z-30 flex items-center justify-center p-4 transition-all duration-300"
+    >
+      <div class="bg-white w-full max-w-[340px] rounded-3xl p-5 shadow-2xl border border-slate-100 text-center animate-scaleIn space-y-4">
+        
+        <!-- ESTADO 1: Formulario con estrellas y comentarios -->
+        <div id="vr-modal-rating-form" class="space-y-3.5">
+          <div class="w-12 h-12 mx-auto rounded-2xl bg-amber-50 border border-amber-100 text-amber-500 flex items-center justify-center text-xl shadow-xs">
+            ⭐
+          </div>
+          <div>
+            <h4 class="text-base font-bold text-slate-800 leading-tight">Conversación Finalizada</h4>
+            <p class="text-xs text-slate-500 mt-1">¿Cómo calificarías la atención de nuestro asesor?</p>
+          </div>
+
+          <!-- Selector de Estrellas -->
+          <div id="vr-modal-star-selector" class="flex items-center justify-center gap-1.5 py-1">
+            <button type="button" data-star="1" class="vr-modal-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-125 cursor-pointer">
+              <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+            <button type="button" data-star="2" class="vr-modal-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-125 cursor-pointer">
+              <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+            <button type="button" data-star="3" class="vr-modal-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-125 cursor-pointer">
+              <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+            <button type="button" data-star="4" class="vr-modal-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-125 cursor-pointer">
+              <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+            <button type="button" data-star="5" class="vr-modal-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-125 cursor-pointer">
+              <svg class="w-8 h-8 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+            </button>
+          </div>
+
+          <!-- Comentario Opcional -->
+          <div>
+            <textarea
+              id="vr-modal-rating-comment"
+              rows="2"
+              placeholder="Escribe un comentario u opinión (opcional)..."
+              class="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800 placeholder-slate-400 resize-none"
+            ></textarea>
+          </div>
+
+          <div id="vr-modal-rating-error" class="hidden text-xs text-rose-600 font-medium"></div>
+
+          <!-- Botones de Acción -->
+          <div class="space-y-2 pt-1">
+            <button
+              id="vr-modal-submit-btn"
+              type="button"
+              class="w-full py-2.5 px-4 text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl shadow-md shadow-brand-500/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 disabled:opacity-50"
+            >
+              <span>Enviar Calificación</span>
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+
+            <button
+              id="vr-modal-skip-btn"
+              type="button"
+              class="w-full py-2 text-slate-400 hover:text-slate-600 text-xs font-semibold cursor-pointer transition-colors"
+            >
+              No calificar / Cerrar conversación
+            </button>
+          </div>
+        </div>
+
+        <!-- ESTADO 2: Confirmación y Botón Iniciar Nueva Conversación -->
+        <div id="vr-modal-finished-state" class="hidden space-y-3.5 py-2">
+          <div class="w-12 h-12 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div>
+            <h4 class="text-base font-bold text-slate-800">¡Conversación Finalizada!</h4>
+            <p id="vr-modal-finished-text" class="text-xs text-slate-500 mt-1">
+              Gracias por comunicarte con VitaRecord.
+            </p>
+          </div>
+          <button
+            id="vr-modal-new-chat-btn"
+            type="button"
+            class="w-full py-3 px-4 text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl shadow-md shadow-brand-500/25 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-98"
+          >
+            <span>Iniciar Nueva Conversación</span>
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+        </div>
+
+      </div>
+    </div>
+
     <!-- Encabezado del Chat -->
     <div class="bg-gradient-to-r from-brand-600 via-brand-500 to-brand-700 text-white p-4 sm:p-5 flex items-center justify-between shrink-0 shadow-md">
       <div class="flex items-center gap-3">
@@ -169,79 +268,6 @@
         <!-- Los mensajes se renderizan dinámicamente aquí -->
       </div>
 
-      <!-- TARJETA DE CALIFICACIÓN (Visible cuando el asesor cierra la conversación) -->
-      <div id="vr-rating-card" class="hidden p-4 bg-white border-t border-slate-200/80 shrink-0 animate-fadeIn">
-        <div id="vr-rating-form-wrapper" class="space-y-3">
-          <div class="text-center">
-            <h5 class="text-sm font-bold text-slate-800 flex items-center justify-center gap-1.5">
-              <span>⭐</span> ¿Cómo calificarías la atención?
-            </h5>
-            <p class="text-xs text-slate-500 mt-0.5">Tu opinión nos ayuda a brindarte el mejor servicio</p>
-          </div>
-
-          <!-- Selector de Estrellas -->
-          <div id="vr-star-selector" class="flex items-center justify-center gap-2 py-1">
-            <button type="button" data-star="1" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
-              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-            </button>
-            <button type="button" data-star="2" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
-              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-            </button>
-            <button type="button" data-star="3" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
-              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-            </button>
-            <button type="button" data-star="4" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
-              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-            </button>
-            <button type="button" data-star="5" class="vr-star-btn p-1 text-slate-300 hover:text-amber-400 focus:outline-none transition-colors transform hover:scale-110 cursor-pointer">
-              <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-            </button>
-          </div>
-
-          <!-- Comentario Opcional -->
-          <div>
-            <input
-              id="vr-rating-comment"
-              type="text"
-              placeholder="¿Algún comentario adicional? (Opcional)"
-              class="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800 placeholder-slate-400"
-            />
-          </div>
-
-          <div id="vr-rating-error" class="hidden text-xs text-rose-600 text-center font-medium"></div>
-
-          <!-- Botón Enviar Calificación -->
-          <button
-            id="vr-rating-submit-btn"
-            type="button"
-            class="w-full py-2.5 px-4 text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl shadow-md shadow-brand-500/20 transition-all duration-200 cursor-pointer flex items-center justify-center gap-1.5 active:scale-98 disabled:opacity-50"
-          >
-            <span>Enviar Calificación</span>
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </button>
-        </div>
-
-        <!-- Mensaje de Agradecimiento por Calificación -->
-        <div id="vr-rating-thanks" class="hidden text-center py-2 space-y-2.5">
-          <div class="w-10 h-10 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h5 class="text-sm font-bold text-slate-800">¡Gracias por tu calificación!</h5>
-          <p class="text-xs text-slate-500">Tu retroalimentación fue enviada directamente al equipo asesor.</p>
-          <button
-            id="vr-new-consult-btn"
-            type="button"
-            class="mt-2 inline-flex items-center justify-center px-4 py-2 text-xs font-bold text-brand-600 hover:text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-xl transition-colors cursor-pointer"
-          >
-            Iniciar una nueva consulta
-          </button>
-        </div>
-      </div>
-
       <!-- Barra de Envío de Mensaje -->
       <div id="vr-chat-input-bar" class="p-3 bg-white border-t border-slate-100 shrink-0">
         <form id="vr-chat-message-form" class="flex items-center gap-2">
@@ -303,15 +329,18 @@
     const chatInput = document.getElementById("vr-chat-input");
     const sendBtn = document.getElementById("vr-chat-send-btn");
 
-    // Elementos Calificación
-    const ratingCard = document.getElementById("vr-rating-card");
-    const ratingFormWrapper = document.getElementById("vr-rating-form-wrapper");
-    const ratingThanks = document.getElementById("vr-rating-thanks");
-    const starButtons = document.querySelectorAll(".vr-star-btn");
-    const ratingComment = document.getElementById("vr-rating-comment");
-    const ratingError = document.getElementById("vr-rating-error");
-    const ratingSubmitBtn = document.getElementById("vr-rating-submit-btn");
-    const newConsultBtn = document.getElementById("vr-new-consult-btn");
+    // Modal de Calificación dentro del Chat
+    const modalOverlay = document.getElementById("vr-rating-modal-overlay");
+    const modalRatingForm = document.getElementById("vr-modal-rating-form");
+    const modalStarButtons = document.querySelectorAll(".vr-modal-star-btn");
+    const modalStarSelector = document.getElementById("vr-modal-star-selector");
+    const modalRatingComment = document.getElementById("vr-modal-rating-comment");
+    const modalRatingError = document.getElementById("vr-modal-rating-error");
+    const modalSubmitBtn = document.getElementById("vr-modal-submit-btn");
+    const modalSkipBtn = document.getElementById("vr-modal-skip-btn");
+    const modalFinishedState = document.getElementById("vr-modal-finished-state");
+    const modalFinishedText = document.getElementById("vr-modal-finished-text");
+    const modalNewChatBtn = document.getElementById("vr-modal-new-chat-btn");
 
     // Estado local
     let isOpen = false;
@@ -320,6 +349,7 @@
     let pollInterval = null;
     let unreadCount = 0;
     let selectedRating = 0;
+    let isModalOpen = false;
     const knownMessageIds = new Set();
 
     // Cargar sesión previa desde localStorage
@@ -376,6 +406,7 @@
     function showAuthView() {
       authView.classList.remove("hidden");
       activeView.classList.add("hidden");
+      closeRatingModal();
     }
 
     function showActiveView() {
@@ -384,30 +415,51 @@
       if (currentSession) {
         userBadge.textContent = `${currentSession.full_name} (${currentSession.id_card})`;
         if (currentSession.status === "closed") {
-          applyClosedState(currentSession.rating !== null && currentSession.rating !== undefined);
+          disableChatInput();
+          if (currentSession.rating === null || currentSession.rating === undefined) {
+            openRatingModal();
+          }
         } else {
-          applyActiveState();
+          enableChatInput();
         }
       }
     }
 
-    function applyActiveState() {
-      inputBar.classList.remove("hidden");
-      ratingCard.classList.add("hidden");
+    function disableChatInput() {
+      chatInput.disabled = true;
+      chatInput.placeholder = "Esta conversación ha finalizado.";
+      sendBtn.disabled = true;
+      inputBar.classList.add("opacity-50", "pointer-events-none");
     }
 
-    function applyClosedState(alreadyRated = false) {
-      inputBar.classList.add("hidden");
-      ratingCard.classList.remove("hidden");
+    function enableChatInput() {
+      chatInput.disabled = false;
+      chatInput.placeholder = "Escribe tu consulta aquí...";
+      sendBtn.disabled = false;
+      inputBar.classList.remove("opacity-50", "pointer-events-none");
+    }
 
-      if (alreadyRated) {
-        ratingFormWrapper.classList.add("hidden");
-        ratingThanks.classList.remove("hidden");
-      } else {
-        ratingFormWrapper.classList.remove("hidden");
-        ratingThanks.classList.add("hidden");
-      }
-      scrollToBottom();
+    function openRatingModal() {
+      if (isModalOpen) return;
+      isModalOpen = true;
+      modalOverlay.classList.remove("hidden");
+      modalRatingForm.classList.remove("hidden");
+      modalFinishedState.classList.add("hidden");
+      modalRatingError.classList.add("hidden");
+      selectedRating = 0;
+      highlightStars(0);
+      modalRatingComment.value = "";
+    }
+
+    function showModalFinishedState(message) {
+      modalRatingForm.classList.add("hidden");
+      modalFinishedState.classList.remove("hidden");
+      modalFinishedText.textContent = message || "Gracias por comunicarte con VitaRecord.";
+    }
+
+    function closeRatingModal() {
+      isModalOpen = false;
+      modalOverlay.classList.add("hidden");
     }
 
     function formatTime(isoString) {
@@ -427,29 +479,36 @@
         lastMessageId = msg.id;
       }
 
-      if (msg.sender_type === "system") {
-        // Mensaje de sistema (finalización o calificación)
+      // Comprobar si es mensaje de sistema o cierre
+      const isSystem = msg.sender_type === "system" || 
+                       msg.content.toLowerCase().includes("ha dado por terminada la conversación") ||
+                       msg.content.toLowerCase().includes("el asesor ha finalizado");
+
+      if (isSystem) {
         const sysWrapper = document.createElement("div");
         sysWrapper.className = "flex justify-center my-3";
         const pill = document.createElement("div");
-        pill.className = "max-w-[90%] bg-amber-50/90 text-amber-900 border border-amber-200/80 rounded-2xl px-4 py-2 text-xs text-center font-medium shadow-xs";
+        pill.className = "max-w-[90%] bg-amber-50 text-amber-900 border border-amber-200/80 rounded-2xl px-4 py-2.5 text-xs text-center font-medium shadow-xs";
         pill.innerHTML = `
-          <div class="flex items-center justify-center gap-1.5 font-bold mb-0.5">
-            <svg class="w-3.5 h-3.5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div class="flex items-center justify-center gap-1.5 font-bold mb-1 text-amber-800">
+            <svg class="w-4 h-4 text-amber-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Aviso del Sistema
+            Aviso de Finalización
           </div>
-          <div>${msg.content}</div>
+          <div class="leading-relaxed">${msg.content}</div>
         `;
         sysWrapper.appendChild(pill);
         messagesContainer.appendChild(sysWrapper);
 
-        // Si el sistema avisa de cierre, activar formulario de calificación
-        if (currentSession && currentSession.rating === null) {
+        // Bloquear campo de entrada y abrir modal de calificación
+        disableChatInput();
+        if (currentSession) {
           currentSession.status = "closed";
           localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
-          applyClosedState(false);
+          if (currentSession.rating === null || currentSession.rating === undefined) {
+            setTimeout(() => openRatingModal(), 300);
+          }
         }
 
         scrollToBottom();
@@ -561,9 +620,12 @@
         }
 
         if (data.status === "closed") {
-          applyClosedState(data.rating !== null && data.rating !== undefined);
+          disableChatInput();
+          if (data.rating === null || data.rating === undefined) {
+            openRatingModal();
+          }
         } else {
-          applyActiveState();
+          enableChatInput();
           setTimeout(() => chatInput && chatInput.focus(), 200);
         }
 
@@ -605,9 +667,12 @@
           }
 
           if (data.status === "closed") {
-            applyClosedState(data.rating !== null && data.rating !== undefined);
+            disableChatInput();
+            if (data.rating === null || data.rating === undefined) {
+              openRatingModal();
+            }
           } else {
-            applyActiveState();
+            enableChatInput();
           }
 
           startPolling();
@@ -620,7 +685,7 @@
       }
     }
 
-    // Polling de nuevos mensajes y detección de cierre
+    // Polling de nuevos mensajes y detección de cierre en tiempo real
     async function pollNewMessages() {
       if (!currentSession || !currentSession.session_token) return;
 
@@ -632,10 +697,14 @@
         if (resp.ok) {
           // Detectar cierre vía header HTTP
           const sessionStatus = resp.headers.get("X-Session-Status");
-          if (sessionStatus === "closed" && currentSession.status !== "closed") {
+          if (sessionStatus === "closed") {
             currentSession.status = "closed";
             localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
-            applyClosedState(currentSession.rating !== null && currentSession.rating !== undefined);
+            disableChatInput();
+            const sessionRated = resp.headers.get("X-Session-Rated") === "true";
+            if (!sessionRated && !isModalOpen) {
+              openRatingModal();
+            }
           }
 
           const msgs = await resp.json();
@@ -657,7 +726,7 @@
     async function sendMessage(text) {
       if (!currentSession || !currentSession.session_token) return;
       if (currentSession.status === "closed") {
-        alert("La conversación ha concluido. Por favor califica la atención.");
+        openRatingModal();
         return;
       }
 
@@ -682,7 +751,12 @@
           appendMessage(newMsg);
         } else {
           const errData = await resp.json().catch(() => ({}));
-          alert(errData.detail || "Hubo un problema al enviar el mensaje. Intenta de nuevo.");
+          if (errData.detail && errData.detail.includes("finalizada")) {
+            disableChatInput();
+            openRatingModal();
+          } else {
+            alert(errData.detail || "Hubo un problema al enviar el mensaje. Intenta de nuevo.");
+          }
         }
       } catch (err) {
         alert("Error de conexión al enviar el mensaje.");
@@ -692,8 +766,8 @@
       }
     }
 
-    // Manejo del selector de estrellas para la calificación
-    starButtons.forEach((btn) => {
+    // Manejo de Estrellas en Modal
+    modalStarButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
         const starVal = parseInt(btn.getAttribute("data-star"), 10);
         selectedRating = starVal;
@@ -706,13 +780,12 @@
       });
     });
 
-    const starSelector = document.getElementById("vr-star-selector");
-    starSelector.addEventListener("mouseleave", () => {
+    modalStarSelector.addEventListener("mouseleave", () => {
       highlightStars(selectedRating);
     });
 
     function highlightStars(val) {
-      starButtons.forEach((b) => {
+      modalStarButtons.forEach((b) => {
         const num = parseInt(b.getAttribute("data-star"), 10);
         if (num <= val) {
           b.classList.remove("text-slate-300");
@@ -724,18 +797,18 @@
       });
     }
 
-    // Enviar Calificación al backend
-    ratingSubmitBtn.addEventListener("click", async () => {
+    // Enviar Calificación desde Modal
+    modalSubmitBtn.addEventListener("click", async () => {
       if (!selectedRating || selectedRating < 1 || selectedRating > 5) {
-        ratingError.textContent = "Por favor selecciona al menos una estrella.";
-        ratingError.classList.remove("hidden");
+        modalRatingError.textContent = "Por favor selecciona al menos una estrella para calificar.";
+        modalRatingError.classList.remove("hidden");
         return;
       }
 
-      ratingError.classList.add("hidden");
-      ratingSubmitBtn.disabled = true;
-      ratingSubmitBtn.innerHTML = `
-        <svg class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+      modalRatingError.classList.add("hidden");
+      modalSubmitBtn.disabled = true;
+      modalSubmitBtn.innerHTML = `
+        <svg class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
@@ -749,7 +822,7 @@
           body: JSON.stringify({
             session_token: currentSession.session_token,
             rating: selectedRating,
-            comment: ratingComment.value.trim() || null,
+            comment: modalRatingComment.value.trim() || null,
           }),
         });
 
@@ -759,48 +832,83 @@
         }
 
         currentSession.rating = selectedRating;
+        currentSession.status = "closed";
         localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
 
-        // Transición a vista de agradecimiento
-        applyClosedState(true);
+        showModalFinishedState("¡Muchas gracias por tu calificación! Nos alegra haberte atendido.");
       } catch (err) {
-        ratingError.textContent = err.message || "Error al enviar la calificación.";
-        ratingError.classList.remove("hidden");
-        ratingSubmitBtn.disabled = false;
-        ratingSubmitBtn.innerHTML = `
+        modalRatingError.textContent = err.message || "Error al enviar la calificación.";
+        modalRatingError.classList.remove("hidden");
+        modalSubmitBtn.disabled = false;
+        modalSubmitBtn.innerHTML = `
           <span>Enviar Calificación</span>
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
           </svg>
         `;
       }
     });
 
-    // Iniciar nueva consulta (limpia sesión para que el usuario pueda empezar de nuevo)
+    // Omitir Calificación
+    modalSkipBtn.addEventListener("click", async () => {
+      try {
+        await fetch(`${API_BASE}/rate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_token: currentSession.session_token,
+            rating: 0,
+            comment: null,
+          }),
+        });
+      } catch (e) {
+        // continuar
+      }
+
+      currentSession.rating = 0;
+      currentSession.status = "closed";
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+      showModalFinishedState("La conversación ha sido cerrada.");
+    });
+
+    // Iniciar Nueva Consulta (resetea para comenzar otra conversación)
     function startNewInquiry() {
+      // Guardar datos de usuario para prellenar el formulario
+      const prevName = currentSession ? currentSession.full_name : "";
+      const prevId = currentSession ? currentSession.id_card : "";
+      const prevPhone = currentSession ? currentSession.phone : "";
+
       localStorage.removeItem(STORAGE_KEY);
       currentSession = null;
       lastMessageId = 0;
       selectedRating = 0;
+      isModalOpen = false;
       highlightStars(0);
-      ratingComment.value = "";
+      modalRatingComment.value = "";
       knownMessageIds.clear();
       messagesContainer.innerHTML = "";
       if (pollInterval) clearInterval(pollInterval);
+
+      // Prellenar inputs para agilizar al usuario
+      if (prevName) inputName.value = prevName;
+      if (prevId) inputId.value = prevId;
+      if (prevPhone) inputPhone.value = prevPhone;
+
+      closeRatingModal();
       showAuthView();
     }
 
+    modalNewChatBtn.addEventListener("click", () => {
+      startNewInquiry();
+    });
+
     logoutBtn.addEventListener("click", () => {
-      if (confirm("¿Deseas iniciar una nueva consulta con otros datos?")) {
+      if (confirm("¿Deseas iniciar una nueva consulta?")) {
         startNewInquiry();
       }
     });
 
-    newConsultBtn.addEventListener("click", () => {
-      startNewInquiry();
-    });
-
-    // Formulario de autenticación
+    // Listeners del Formulario de autenticación
     authForm.addEventListener("submit", (e) => {
       e.preventDefault();
       const name = inputName.value.trim();
