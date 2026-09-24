@@ -77,13 +77,65 @@ import {
             Reduce el ausentismo hasta en un 65% enviando recordatorios automáticos por WhatsApp con la fecha, hora y ubicación de la consulta.
           </p>
         </div>
-        <div class="mt-6 p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-100 flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">
-            WA
+        <!-- Animated WhatsApp Chat Mockup -->
+        <div class="mt-6 rounded-2xl bg-[#efeae2] border border-[#e1dcd5] p-3.5 overflow-hidden shadow-inner flex flex-col gap-2.5 text-[11px] font-sans">
+          
+          <!-- WhatsApp Chat Header -->
+          <div class="flex items-center justify-between pb-2 border-b border-black/5">
+            <div class="flex items-center gap-2">
+              <div class="w-6 h-6 rounded-full bg-[#25d366] text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                VR
+              </div>
+              <div class="leading-none">
+                <p class="font-bold text-slate-800 text-[11px] flex items-center gap-1">
+                  <span>VitaRecord</span>
+                  <span class="w-3 h-3 rounded-full bg-emerald-500 text-white text-[8px] flex items-center justify-center">✓</span>
+                </p>
+                <span class="text-[9px] text-emerald-700 font-medium">Cuenta de Empresa</span>
+              </div>
+            </div>
+            <span class="text-[9px] text-slate-400 font-mono">10:00 AM</span>
           </div>
-          <p class="text-xs text-emerald-900 font-medium leading-tight">
-            "Hola María, te recordamos tu cita mañana a las 3:00 PM."
-          </p>
+
+          <!-- Message 1: Bot Reminder -->
+          <div class="bg-white rounded-xl rounded-tl-none p-2.5 shadow-xs max-w-[95%] space-y-1.5 border border-black/5">
+            <p class="text-slate-800 font-medium leading-tight">
+              Hola María, te recordamos tu cita médica de mañana:
+            </p>
+            <div class="p-1.5 rounded-lg bg-emerald-50/80 border border-emerald-100 text-emerald-900 text-[10px] space-y-0.5">
+              <p>• <strong>Dra. Elena Morales</strong> (Ginecología)</p>
+              <p>• <strong>3:00 PM</strong> - Consultorio 204</p>
+            </div>
+            <p class="text-slate-600 text-[10px]">Responde con el número de tu opción:</p>
+            <div class="flex gap-1.5 pt-0.5">
+              <span class="px-2 py-0.5 rounded bg-emerald-100/70 text-emerald-800 text-[9.5px] font-bold">1. Confirmar</span>
+              <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[9.5px] font-medium">2. Reagendar</span>
+            </div>
+            <div class="flex justify-end text-[8px] text-slate-400">10:00 AM</div>
+          </div>
+
+          <!-- Message 2: Patient Confirmation Response (Animated) -->
+          <div class="self-end bg-[#d9fdd3] rounded-xl rounded-tr-none p-2 shadow-xs max-w-[85%] border border-black/5 animate-chat-patient">
+            <div class="flex items-center justify-between gap-2.5">
+              <span class="text-slate-800 font-medium text-[10.5px]">1. Sí, confirmo asistencia</span>
+              <div class="flex items-center gap-0.5 text-[8px] text-slate-500 shrink-0">
+                <span>10:02</span>
+                <span class="text-sky-500 font-bold">✓✓</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Message 3: Bot Final Verification (Animated) -->
+          <div class="bg-white rounded-xl rounded-tl-none p-2 shadow-xs max-w-[95%] border border-black/5 animate-chat-bot">
+            <div class="flex items-start gap-1.5">
+              <span class="text-emerald-500 text-xs font-bold shrink-0">✓</span>
+              <p class="text-slate-800 font-medium text-[10px] leading-tight">
+                ¡Gracias María! Tu cita quedó <strong>confirmada</strong> en tiempo real en la agenda clínica.
+              </p>
+            </div>
+            <div class="flex justify-end text-[8px] text-slate-400">10:02 AM</div>
+          </div>
+
         </div>
       </div>
 
@@ -148,3 +200,43 @@ import {
 
   </div>
 </section>
+
+<style>
+  @keyframes chatPatient {
+    0%, 15% {
+      opacity: 0;
+      transform: translateY(10px) scale(0.96);
+    }
+    22%, 85% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    92%, 100% {
+      opacity: 0;
+      transform: translateY(6px) scale(0.96);
+    }
+  }
+
+  @keyframes chatBot {
+    0%, 42% {
+      opacity: 0;
+      transform: translateY(10px) scale(0.96);
+    }
+    50%, 85% {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    92%, 100% {
+      opacity: 0;
+      transform: translateY(6px) scale(0.96);
+    }
+  }
+
+  .animate-chat-patient {
+    animation: chatPatient 7.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+
+  .animate-chat-bot {
+    animation: chatBot 7.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+</style>
