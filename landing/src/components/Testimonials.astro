@@ -1,0 +1,68 @@
+---
+const testimonials = [
+  {
+    quote: "VitaRecord nos cambió completamente la organización del consultorio. Los pacientes ya no llaman para confirmar: el recordatorio por WhatsApp hace todo solo.",
+    author: "Dra. Carmen Solís",
+    role: "Especialista en Ginecología & Obstetricia",
+    clinic: "Centro Médico Santa Fe",
+    avatar: "👩‍⚕️"
+  },
+  {
+    quote: "Tener la historia clínica y las recetas en PDF con mi firma digital desde el iPad o la laptop es una maravilla. El sistema es rápido, limpio y muy intuitivo.",
+    author: "Dr. Alejandro Méndez",
+    role: "Médico Pediatra",
+    clinic: "Consulta Médica Pediátrica",
+    avatar: "👨‍⚕️"
+  },
+  {
+    quote: "Administro una clínica con 8 consultorios. La torre de control y la gestión de permisos entre secretarias y médicos nos ahorró horas de trabajo diario.",
+    author: "Lic. Valeria Rosas",
+    role: "Directora Administrativa",
+    clinic: "Clínica Salud Integral",
+    avatar: "👩‍💼"
+  }
+];
+---
+
+<section class="py-20 md:py-28 bg-slate-50 border-t border-slate-200/70">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    
+    <!-- Title -->
+    <div class="text-center max-w-2xl mx-auto space-y-3 mb-16">
+      <span class="text-xs sm:text-sm font-bold tracking-widest text-brand-600 uppercase">
+        Testimonios Reales
+      </span>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+        Respaldado por profesionales de la salud
+      </h2>
+    </div>
+
+    <!-- Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      {testimonials.map((item) => (
+        <div class="rounded-3xl bg-white p-8 border border-slate-200/80 shadow-xs hover:shadow-lg transition-all duration-300 flex flex-col justify-between">
+          <div class="space-y-4">
+            <div class="flex text-amber-400 gap-1 text-sm">
+              <span>★</span><span>★</span><span>★</span><span>★</span><span>★</span>
+            </div>
+            <p class="text-slate-600 text-sm sm:text-base leading-relaxed italic">
+              "{item.quote}"
+            </p>
+          </div>
+
+          <div class="pt-6 mt-6 border-t border-slate-100 flex items-center gap-3">
+            <div class="w-11 h-11 rounded-full bg-brand-50 flex items-center justify-center text-xl">
+              {item.avatar}
+            </div>
+            <div>
+              <p class="text-sm font-bold text-slate-900">{item.author}</p>
+              <p class="text-xs text-slate-500">{item.role}</p>
+              <p class="text-[11px] text-brand-600 font-semibold">{item.clinic}</p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+  </div>
+</section>

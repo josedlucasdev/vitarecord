@@ -5,10 +5,11 @@ __pycache__/
 venv/
 *.egg-info/
 
-# Frontend
+# Frontend & Landing
 node_modules/
 dist/
 .quasar/
+.astro/
 
 # Entorno
 .env

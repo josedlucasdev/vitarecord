@@ -1,0 +1,100 @@
+---
+const steps = [
+  {
+    step: "01",
+    title: "Agendamiento en 30 Segundos",
+    desc: "El paciente o la recepcionista selecciona la especialidad, el doctor, la fecha y el horario disponible en la plataforma.",
+    icon: "🗓️",
+    badge: "Fácil e Intuitivo"
+  },
+  {
+    step: "02",
+    title: "Recordatorio Automático WhatsApp",
+    desc: "VitaRecord envía un mensaje con los detalles de la consulta para confirmar asistencia y evitar citas perdidas.",
+    icon: "🔔",
+    badge: "Cero Ausentismo"
+  },
+  {
+    step: "03",
+    title: "Consulta y Ficha Clínica Inmediata",
+    desc: "El médico accede a los antecedentes del paciente, documenta la evolución clínica y genera recetas oficiales en PDF.",
+    icon: "🩺",
+    badge: "100% Digital"
+  }
+];
+---
+
+<section id="como-funciona" class="py-20 md:py-32 bg-slate-900 text-white relative overflow-hidden">
+  
+  <!-- Ambient background glow in dark theme -->
+  <div class="absolute -top-40 right-1/4 w-[600px] h-[600px] bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute bottom-0 left-10 w-[500px] h-[500px] bg-teal-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+    
+    <!-- Section Title -->
+    <div class="text-center max-w-3xl mx-auto space-y-4 mb-16 md:mb-20">
+      <span class="text-xs sm:text-sm font-bold tracking-widest text-brand-300 uppercase bg-brand-900/60 px-3.5 py-1.5 rounded-full border border-brand-700/50">
+        Flujo de atención simple y rápido
+      </span>
+      <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight">
+        ¿Cómo transforma <span class="text-gradient-light">VitaRecord</span> tu día a día?
+      </h2>
+      <p class="text-base sm:text-lg text-slate-400 font-normal">
+        Diseñado para eliminar el papeleo y permitir que el personal de salud se enfoque en lo más importante: la salud del paciente.
+      </p>
+    </div>
+
+    <!-- Steps Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
+      {steps.map((item, idx) => (
+        <div class="relative rounded-3xl bg-slate-800/60 border border-slate-700/70 p-8 hover:border-brand-400/50 hover:bg-slate-800/90 transition-all duration-300 group">
+          
+          <!-- Top step row -->
+          <div class="flex items-center justify-between mb-6">
+            <span class="text-4xl font-black text-brand-400/40 group-hover:text-brand-400 transition-colors font-mono">
+              {item.step}
+            </span>
+            <span class="text-xs font-semibold px-3 py-1 rounded-full bg-slate-700 text-brand-300 border border-slate-600">
+              {item.badge}
+            </span>
+          </div>
+
+          <!-- Step Icon -->
+          <div class="w-14 h-14 rounded-2xl bg-brand-500/20 text-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+            {item.icon}
+          </div>
+
+          <!-- Content -->
+          <h3 class="text-xl font-bold text-white mb-3">
+            {item.title}
+          </h3>
+          <p class="text-slate-400 text-sm leading-relaxed">
+            {item.desc}
+          </p>
+
+        </div>
+      ))}
+    </div>
+
+    <!-- Bottom interactive CTA strip -->
+    <div class="mt-16 p-8 rounded-3xl bg-gradient-to-r from-brand-900/90 via-slate-800/90 to-brand-950 border border-brand-500/30 flex flex-col sm:flex-row items-center justify-between gap-6">
+      <div class="space-y-1 text-center sm:text-left">
+        <h4 class="text-xl font-bold text-white">¿Listo para modernizar tu consulta?</h4>
+        <p class="text-sm text-slate-400">Accede ahora mismo a la plataforma sin costo de instalación.</p>
+      </div>
+      <a
+        href="https://app.vitarecord.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center justify-center px-7 py-3.5 text-sm font-bold text-slate-900 bg-brand-300 hover:bg-brand-200 rounded-xl shadow-lg transition-all duration-200 active:scale-95"
+      >
+        <span>Probar Plataforma</span>
+        <svg class="w-4 h-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+        </svg>
+      </a>
+    </div>
+
+  </div>
+</section>

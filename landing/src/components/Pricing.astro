@@ -1,0 +1,146 @@
+---
+const plans = [
+  {
+    name: "Consultorio Pro",
+    desc: "Ideal para médicos especialistas independientes y consultorios privados.",
+    price: "29",
+    period: "/mes",
+    featured: false,
+    badge: null,
+    features: [
+      "1 Profesional de la Salud",
+      "Citas y reservas ilimitadas",
+      "Historias clínicas digitales completas",
+      "Recetas electrónicas en PDF",
+      "Recordatorios básicos por email",
+      "Soporte por WhatsApp y correo"
+    ],
+    cta: "Comenzar Ahora",
+    link: "https://app.vitarecord.com"
+  },
+  {
+    name: "Clínica & Centro Médico",
+    desc: "Para clínicas con varios especialistas, recepción central y múltiples salas.",
+    price: "79",
+    period: "/mes",
+    featured: true,
+    badge: "Más Popular",
+    features: [
+      "Hasta 5 Doctores o Especialistas",
+      "Recepcionistas y secretarias ilimitadas",
+      "Citas y reservas online 24/7",
+      "Recordatorios automáticos por WhatsApp",
+      "Historias clínicas y fichas especializadas",
+      "Control Tower: Reportes de atención y métricas",
+      "Almacenamiento seguro Cloudflare R2",
+      "Soporte prioritario 24/7"
+    ],
+    cta: "Probar Gratis 14 Días",
+    link: "https://app.vitarecord.com"
+  },
+  {
+    name: "Red Hospitalaria",
+    desc: "Diseñado para instituciones de salud de gran escala con requerimientos a medida.",
+    price: "Personalizado",
+    period: "",
+    featured: false,
+    badge: "Empresarial",
+    features: [
+      "Especialistas y sedes ilimitadas",
+      "Servidor dedicado o despliegue privado",
+      "Integración API personalizada (ERP / Facturación)",
+      "Capacitación presencial o virtual a personal",
+      "Acuerdo de Nivel de Servicio (SLA 99.9%)",
+      "Gerente de cuenta exclusivo"
+    ],
+    cta: "Contactar a Ventas",
+    link: "https://app.vitarecord.com"
+  }
+];
+---
+
+<section id="planes" class="py-20 md:py-32 bg-white relative">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    
+    <!-- Section Title -->
+    <div class="text-center max-w-3xl mx-auto space-y-4 mb-16 md:mb-20">
+      <span class="text-xs sm:text-sm font-bold tracking-widest text-brand-500 uppercase bg-brand-50 px-3.5 py-1.5 rounded-full border border-brand-200">
+        Planes transparentes
+      </span>
+      <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight">
+        Elige el plan ideal para tu <span class="text-gradient">práctica médica</span>
+      </h2>
+      <p class="text-base sm:text-lg text-slate-600 font-normal">
+        Sin contratos forzosos. Cancela o cambia de plan en cualquier momento.
+      </p>
+    </div>
+
+    <!-- Pricing Cards Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch">
+      {plans.map((plan) => (
+        <div class={`relative rounded-3xl p-8 sm:p-10 flex flex-col justify-between transition-all duration-300 ${
+          plan.featured 
+            ? "bg-slate-900 text-white shadow-2xl shadow-brand-900/20 border-2 border-brand-400 scale-100 lg:-translate-y-4" 
+            : "bg-white text-slate-900 border border-slate-200 shadow-sm hover:shadow-xl hover:border-brand-200"
+        }`}>
+          
+          {plan.badge && (
+            <div class="absolute -top-4 left-1/2 -translate-x-1/2">
+              <span class="px-4 py-1.5 rounded-full text-xs font-extrabold tracking-wide uppercase bg-brand-500 text-white shadow-md">
+                {plan.badge}
+              </span>
+            </div>
+          )}
+
+          <div>
+            <!-- Header -->
+            <div class="space-y-2 mb-6">
+              <h3 class="text-2xl font-bold">{plan.name}</h3>
+              <p class={`text-sm leading-relaxed ${plan.featured ? "text-slate-300" : "text-slate-500"}`}>
+                {plan.desc}
+              </p>
+            </div>
+
+            <!-- Price -->
+            <div class="flex items-baseline gap-1 pb-6 mb-6 border-b border-slate-100/15">
+              {plan.price !== "Personalizado" ? (
+                <>
+                  <span class="text-4xl sm:text-5xl font-extrabold tracking-tight">${plan.price}</span>
+                  <span class={`text-sm font-semibold ${plan.featured ? "text-slate-400" : "text-slate-500"}`}>{plan.period}</span>
+                </>
+              ) : (
+                <span class="text-3xl font-extrabold tracking-tight">A la medida</span>
+              )}
+            </div>
+
+            <!-- Features list -->
+            <ul class="space-y-3.5 mb-8">
+              {plan.features.map((feat) => (
+                <li class="flex items-start gap-3 text-sm">
+                  <span class={`font-bold mt-0.5 ${plan.featured ? "text-brand-300" : "text-brand-500"}`}>✓</span>
+                  <span class={plan.featured ? "text-slate-200" : "text-slate-600"}>{feat}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <!-- CTA Button -->
+          <a
+            href={plan.link}
+            target="_blank"
+            rel="noopener noreferrer"
+            class={`w-full py-4 rounded-xl text-sm font-bold text-center transition-all duration-200 block ${
+              plan.featured
+                ? "bg-brand-500 hover:bg-brand-400 text-white shadow-lg shadow-brand-500/30"
+                : "bg-slate-100 hover:bg-brand-50 hover:text-brand-700 text-slate-800"
+            }`}
+          >
+            {plan.cta}
+          </a>
+
+        </div>
+      ))}
+    </div>
+
+  </div>
+</section>

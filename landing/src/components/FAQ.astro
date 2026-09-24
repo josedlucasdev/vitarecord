@@ -1,0 +1,61 @@
+---
+const faqs = [
+  {
+    q: "¿Necesito instalar algún programa o servidor en mi consultorio?",
+    a: "No. VitaRecord funciona 100% en la nube. Solo necesitas un navegador web (Chrome, Safari, Edge, Firefox) desde tu computadora, laptop, iPad o smartphone con conexión a internet."
+  },
+  {
+    q: "¿Cómo se envían los recordatorios por WhatsApp?",
+    a: "VitaRecord cuenta con integración directa de mensajería. Cuando se programa o actualiza una cita, el sistema envía automáticamente una confirmación y recordatorios preventivos al número del paciente."
+  },
+  {
+    q: "¿Están seguros los datos de mis pacientes y expedientes?",
+    a: "Totalmente. Utilizamos infraestructura de alta seguridad con HashiCorp Vault para la protección de secretos y cifrado AES-256 en reposo y tránsito. Los documentos y recetas se almacenan con enlaces firmados temporalmente."
+  },
+  {
+    q: "¿Puedo tener múltiples secretarias y varios médicos con diferentes permisos?",
+    a: "Sí. VitaRecord cuenta con Control de Acceso Basado en Roles (RBAC). Las secretarias pueden gestionar citas y registrar pacientes sin acceder a notas médicas confidenciales reservadas exclusivamente para los doctores."
+  },
+  {
+    q: "¿Puedo descargar las historias clínicas y recetas en PDF?",
+    a: "Por supuesto. Cada evolución, receta o prescripción médica puede descargarse en un formato PDF formal, con membrete de tu clínica o consultorio y tu firma digital."
+  }
+];
+---
+
+<section id="faq" class="py-20 md:py-28 bg-white border-t border-slate-100">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    
+    <div class="text-center space-y-3 mb-16">
+      <span class="text-xs sm:text-sm font-bold tracking-widest text-brand-500 uppercase bg-brand-50 px-3.5 py-1.5 rounded-full border border-brand-200">
+        Resolvemos tus dudas
+      </span>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+        Preguntas Frecuentes
+      </h2>
+      <p class="text-slate-600 text-sm sm:text-base">
+        ¿Tienes otra pregunta? Nuestro equipo de soporte está siempre listo para ayudarte.
+      </p>
+    </div>
+
+    <!-- Accordion Items -->
+    <div class="space-y-4">
+      {faqs.map((faq, index) => (
+        <details class="group rounded-2xl bg-slate-50 border border-slate-200/80 p-6 [&_summary::-webkit-details-marker]:hidden transition-all duration-200">
+          <summary class="flex items-center justify-between cursor-pointer list-none">
+            <h3 class="text-base sm:text-lg font-bold text-slate-900 group-open:text-brand-600 transition-colors">
+              {faq.q}
+            </h3>
+            <span class="ml-4 flex-shrink-0 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 group-open:rotate-180 group-open:bg-brand-50 group-open:text-brand-600 transition-transform">
+              ↓
+            </span>
+          </summary>
+          <div class="mt-4 pt-4 border-t border-slate-200/60 text-sm sm:text-base text-slate-600 leading-relaxed">
+            {faq.a}
+          </div>
+        </details>
+      ))}
+    </div>
+
+  </div>
+</section>

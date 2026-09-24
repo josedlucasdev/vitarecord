@@ -1,0 +1,33 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Navbar from '../components/Navbar.astro';
+import Hero from '../components/Hero.astro';
+import Stats from '../components/Stats.astro';
+import Features from '../components/Features.astro';
+import InteractiveFlow from '../components/InteractiveFlow.astro';
+import SecuritySection from '../components/SecuritySection.astro';
+import Pricing from '../components/Pricing.astro';
+import Testimonials from '../components/Testimonials.astro';
+import FAQ from '../components/FAQ.astro';
+import CTA from '../components/CTA.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<Layout 
+  title="VitaRecord - Plataforma de Gestión Médica, Citas y Consulta Clínica"
+  description="Software clínico en la nube para consultorios y clínicas. Agenda de citas online, historias clínicas digitales, recetas en PDF y recordatorios automáticos por WhatsApp."
+>
+  <Navbar />
+  <main>
+    <Hero />
+    <Stats />
+    <Features />
+    <InteractiveFlow />
+    <SecuritySection />
+    <Pricing />
+    <Testimonials />
+    <FAQ />
+    <CTA />
+  </main>
+  <Footer />
+</Layout>

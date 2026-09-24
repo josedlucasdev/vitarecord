@@ -1,0 +1,44 @@
+---
+const stats = [
+  {
+    number: "+50,000",
+    label: "Citas Agendadas",
+    description: "Gestionadas sin cruces de horarios ni llamadas perdidas."
+  },
+  {
+    number: "-65%",
+    label: "Menor Ausentismo",
+    description: "Con confirmaciones y recordatorios por WhatsApp."
+  },
+  {
+    number: "100%",
+    label: "Digital y Seguro",
+    description: "Cero expedientes físicos perdidos con cifrado HashiCorp Vault."
+  },
+  {
+    number: "99.9%",
+    label: "Disponibilidad Cloud",
+    description: "Acceso 24/7 desde cualquier computadora, tablet o móvil."
+  }
+];
+---
+
+<section class="py-12 bg-white border-y border-slate-100">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+      {stats.map((stat) => (
+        <div class="space-y-2 text-center sm:text-left">
+          <p class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-brand-500 tracking-tight">
+            {stat.number}
+          </p>
+          <p class="text-base font-bold text-slate-800">
+            {stat.label}
+          </p>
+          <p class="text-xs sm:text-sm text-slate-500 leading-relaxed">
+            {stat.description}
+          </p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

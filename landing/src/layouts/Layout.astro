@@ -1,0 +1,52 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const {
+  title = "VitaRecord - Plataforma de Gestión Médica y Citas Inteligentes",
+  description = "Simplifica la gestión de tu clínica y consultorio con VitaRecord: Citas online, historias clínicas digitales, recetas electrónicas y recordatorios por WhatsApp."
+} = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="/vitarecord-logo.png" />
+    <meta name="generator" content={Astro.generator} />
+
+    <!-- SEO & OpenGraph -->
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content="/vitarecord-logo.png" />
+    <meta property="og:url" content="https://vitarecord.com" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts: Plus Jakarta Sans -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- DotLottie & Lottie Player Scripts -->
+    <script is:inline type="module" src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs"></script>
+    <script is:inline src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+  </head>
+  <body class="min-h-screen bg-[#fcfdfd] text-slate-800 antialiased selection:bg-brand-500 selection:text-white flex flex-col justify-between overflow-x-hidden">
+    <!-- Background subtle ambient gradients -->
+    <div class="fixed inset-0 pointer-events-none z-[-1] overflow-hidden">
+      <div class="absolute -top-40 left-1/2 -translate-x-1/2 w-[1000px] h-[550px] bg-gradient-to-b from-brand-100/50 via-teal-50/30 to-transparent rounded-full blur-3xl opacity-70"></div>
+      <div class="absolute top-[35%] -right-40 w-[600px] h-[600px] bg-gradient-to-bl from-brand-200/30 via-emerald-100/20 to-transparent rounded-full blur-3xl opacity-50"></div>
+      <div class="absolute top-[65%] -left-40 w-[550px] h-[550px] bg-gradient-to-tr from-cyan-100/30 via-teal-50/20 to-transparent rounded-full blur-3xl opacity-50"></div>
+    </div>
+
+    <slot />
+  </body>
+</html>
