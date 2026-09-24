@@ -44,8 +44,8 @@ export default {
       });
     }
 
-    // 3. Reenviar petición hacia el origen backend en Docker (Render o servidor propio)
-    const backendOrigin = (env.BACKEND_ORIGIN_URL || "https://vitarecord-d8gf.onrender.com").replace(/\/$/, "");
+    // 3. Reenviar petición hacia el origen backend en Docker (VPS Contabo)
+    const backendOrigin = (env.BACKEND_ORIGIN_URL || "http://5.189.141.101:8000").replace(/\/$/, "");
     const targetUrl = new URL(url.pathname + url.search, backendOrigin);
 
     // Clonar cabeceras y añadir metadatos de Cloudflare para el backend

@@ -1,0 +1,32 @@
+name: Deploy Backend to Contabo VPS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'docker-compose.yml'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: 🚀 Deploy Docker to VPS
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔐 Ejecutar despliegue remoto vía SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            echo "🚀 Iniciando despliegue en VPS..."
+            cd /opt/vitarecord
+            git pull origin main
+            docker compose build backend
+            docker compose up -d
+            docker image prune -f
+            echo "✅ Despliegue completado con éxito."

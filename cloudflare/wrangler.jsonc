@@ -13,7 +13,7 @@
     }
   ],
   "vars": {
-    "BACKEND_ORIGIN_URL": "https://vitarecord-d8gf.onrender.com",
+    "BACKEND_ORIGIN_URL": "http://5.189.141.101:8000",
     "ENVIRONMENT": "production"
   }
 }
