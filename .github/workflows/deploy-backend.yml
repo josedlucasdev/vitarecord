@@ -27,6 +27,6 @@ jobs:
             cd /opt/vitarecord
             git pull origin main
             docker compose build backend
-            docker compose up -d backend gateway
+            docker compose up -d backend
             docker image prune -f
             echo "✅ Despliegue completado con éxito."
