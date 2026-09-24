@@ -38,6 +38,7 @@ from app.schemas.prescription import (
     PrescriptionPublic,
     PrescriptionVerificationPublic,
 )
+from app.services.storage_service import storage_service
 from app.services.medical_history_pdf_service import generate_medical_history_pdf
 from app.services.prescription_pdf_service import generate_prescription_pdf
 
@@ -748,12 +749,19 @@ class MedicalRecordService:
         )
         attachments_pub = []
         for a in attachments_list:
+            dl_url = None
+            if getattr(a, "s3_key", None):
+                try:
+                    dl_url = storage_service.generate_presigned_download_url(a.s3_key)
+                except Exception:
+                    pass
             attachments_pub.append(
                 MedicalAttachmentPublic(
                     id=a.id,
                     file_name=a.file_name,
                     content_type=a.content_type,
                     file_size=a.file_size,
+                    download_url=dl_url,
                 )
             )
 

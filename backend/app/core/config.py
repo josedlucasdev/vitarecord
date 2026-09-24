@@ -47,22 +47,48 @@ class Settings(BaseSettings):
     VAULT_ADDR: str = "http://vault:8200"
     VAULT_TOKEN: str = "devroot_dev_only"
 
+    # Configuración de Almacenamiento Compatible con S3 / Cloudflare R2
+    R2_ACCOUNT_ID: str | None = None
+    R2_ACCESS_KEY_ID: str | None = None
+    R2_SECRET_ACCESS_KEY: str | None = None
+    R2_BUCKET_NAME: str | None = None
+    R2_PUBLIC_URL: str | None = None  # Ej: https://media.vitarecord.com o https://pub-xxx.r2.dev
+
     # Endpoint INTERNO: el que usa el backend para hablar con el storage
-    # dentro de la red de Docker (S3Proxy en desarrollo; AWS S3/R2 en
-    # produccion). MinIO se descarto como dependencia de desarrollo porque
-    # dejo de distribuir imagenes Docker gratuitas (oct-2025) - ver
-    # plan/plan.md seccion 0.
+    # dentro de la red de Docker (S3Proxy en desarrollo; AWS S3/R2 en produccion).
     S3_ENDPOINT_URL: str = "http://storage:80"
     # Endpoint PUBLICO: el que debe resolver el NAVEGADOR del usuario para
-    # usar una presigned URL. Con S3-compatible + SigV4, el host forma parte
-    # de la firma, asi que storage_service.py (Modulo 5) debe generar las
-    # presigned URLs con un cliente boto3 configurado con ESTE endpoint,
-    # nunca con S3_ENDPOINT_URL (que solo es alcanzable desde dentro de la
-    # red de Docker, no desde el navegador).
+    # usar una presigned URL.
     S3_PUBLIC_ENDPOINT_URL: str = "http://localhost:9002"
     S3_ACCESS_KEY: str = "devaccesskey"
     S3_SECRET_KEY: str = "devsecretkey_dev_only"
     S3_BUCKET_NAME: str = "appcitas-attachments"
+
+    @property
+    def active_s3_endpoint_url(self) -> str:
+        if self.R2_ACCOUNT_ID:
+            return f"https://{self.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+        return self.S3_ENDPOINT_URL
+
+    @property
+    def active_s3_public_endpoint_url(self) -> str:
+        if self.R2_PUBLIC_URL:
+            return self.R2_PUBLIC_URL.rstrip("/")
+        if self.R2_ACCOUNT_ID:
+            return f"https://{self.R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+        return self.S3_PUBLIC_ENDPOINT_URL
+
+    @property
+    def active_s3_access_key(self) -> str:
+        return self.R2_ACCESS_KEY_ID or self.S3_ACCESS_KEY
+
+    @property
+    def active_s3_secret_key(self) -> str:
+        return self.R2_SECRET_ACCESS_KEY or self.S3_SECRET_KEY
+
+    @property
+    def active_s3_bucket(self) -> str:
+        return self.R2_BUCKET_NAME or self.S3_BUCKET_NAME
 
     SMTP_HOST: str = "mailtrap"
     SMTP_PORT: int = 1025

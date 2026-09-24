@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.patient import PatientProfilePublic, PatientProfileUpdateRequest
+from app.services.storage_service import storage_service
 
 
 logger = logging.getLogger("patients")
@@ -130,17 +131,15 @@ async def upload_my_patient_avatar(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "La imagen no debe superar los 5 MB de tamaño.")
 
-    AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-    # Limpiar posibles avatares previos del paciente
-    for existing in AVATARS_DIR.glob(f"patient_{current_user.id}.*"):
-        try:
-            existing.unlink()
-        except Exception:
-            pass
-
     ext = allowed_types[content_type]
-    file_path = AVATARS_DIR / f"patient_{current_user.id}.{ext}"
-    file_path.write_bytes(content)
+    s3_key = storage_service.build_avatar_key("patients", current_user.id, ext)
+
+    # Limpiar posibles extensiones previas en R2
+    for other_ext in ("jpg", "png", "webp", "jpeg"):
+        if other_ext != ext:
+            storage_service.delete_file(storage_service.build_avatar_key("patients", current_user.id, other_ext))
+
+    storage_service.upload_file(content=content, s3_key=s3_key, content_type=content_type)
 
     avatar_url = f"/api/v1/patients/{current_user.id}/avatar"
     current_user.profile_picture_url = avatar_url
@@ -152,19 +151,25 @@ async def upload_my_patient_avatar(
 
 @router.api_route("/patients/{patient_id}/avatar", methods=["GET", "HEAD"])
 async def get_patient_avatar(patient_id: str):
-    """Sirve la foto de perfil del paciente."""
-    if not AVATARS_DIR.exists():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")
+    """Sirve la foto de perfil del paciente desde Cloudflare R2."""
+    for ext in ("jpg", "png", "webp", "jpeg"):
+        s3_key = storage_service.build_avatar_key("patients", patient_id, ext)
+        res = storage_service.get_file(s3_key)
+        if res:
+            file_bytes, mime = res
+            return Response(content=file_bytes, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
-    matches = list(AVATARS_DIR.glob(f"patient_{patient_id}.*"))
-    if not matches:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")
+    # Fallback temporal si existía en disco local
+    if AVATARS_DIR.exists():
+        matches = list(AVATARS_DIR.glob(f"patient_{patient_id}.*"))
+        if matches:
+            file_path = matches[0]
+            media_types = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".webp": "image/webp",
+            }
+            return FileResponse(file_path, media_type=media_types.get(file_path.suffix.lower(), "image/jpeg"))
 
-    file_path = matches[0]
-    media_types = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-    }
-    return FileResponse(file_path, media_type=media_types.get(file_path.suffix.lower(), "image/jpeg"))
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")

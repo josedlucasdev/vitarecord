@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
@@ -14,6 +14,7 @@ from app.schemas.patient_dependent import (
     PatientDependentUpdate,
 )
 from app.services.dependent_service import DependentService
+from app.services.storage_service import storage_service
 
 router = APIRouter()
 AVATARS_DIR = Path("uploads/avatars")
@@ -73,9 +74,12 @@ async def delete_my_dependent(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    """Elimina un familiar del núcleo del paciente titular."""
+    """Elimina un familiar del núcleo del paciente titular y su avatar en R2."""
     service = DependentService(db)
     await service.delete_dependent(current_user.id, dependent_id)
+    # Limpiar avatar en R2
+    for ext in ("jpg", "png", "webp", "jpeg"):
+        storage_service.delete_file(storage_service.build_avatar_key("dependents", dependent_id, ext))
 
 
 @router.post("/patients/me/dependents/{dependent_id}/avatar")
@@ -85,7 +89,7 @@ async def upload_dependent_avatar(
     current_user: Annotated[User, Depends(get_current_user)],
     file: UploadFile = File(...),
 ):
-    """Sube y almacena la fotografía de perfil de un familiar dependiente."""
+    """Sube y almacena la fotografía de perfil de un familiar dependiente en Cloudflare R2."""
     service = DependentService(db)
     dep = await service.repo.get_by_id_and_guardian(dependent_id, current_user.id)
     if not dep:
@@ -103,16 +107,15 @@ async def upload_dependent_avatar(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "La imagen no debe superar los 5 MB de tamaño.")
 
-    AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-    for existing in AVATARS_DIR.glob(f"dep_{dependent_id}.*"):
-        try:
-            existing.unlink()
-        except Exception:
-            pass
-
     ext = allowed_types[content_type]
-    file_path = AVATARS_DIR / f"dep_{dependent_id}.{ext}"
-    file_path.write_bytes(content)
+    s3_key = storage_service.build_avatar_key("dependents", dependent_id, ext)
+
+    # Limpiar extensiones previas en R2
+    for other_ext in ("jpg", "png", "webp", "jpeg"):
+        if other_ext != ext:
+            storage_service.delete_file(storage_service.build_avatar_key("dependents", dependent_id, other_ext))
+
+    storage_service.upload_file(content=content, s3_key=s3_key, content_type=content_type)
 
     avatar_url = f"/api/v1/patients/dependents/{dependent_id}/avatar"
     dep.profile_picture_url = avatar_url
@@ -124,19 +127,25 @@ async def upload_dependent_avatar(
 
 @router.api_route("/patients/dependents/{dependent_id}/avatar", methods=["GET", "HEAD"])
 async def get_dependent_avatar(dependent_id: str):
-    """Sirve la foto de perfil del familiar."""
-    if not AVATARS_DIR.exists():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")
+    """Sirve la foto de perfil del familiar desde Cloudflare R2."""
+    for ext in ("jpg", "png", "webp", "jpeg"):
+        s3_key = storage_service.build_avatar_key("dependents", dependent_id, ext)
+        res = storage_service.get_file(s3_key)
+        if res:
+            file_bytes, mime = res
+            return Response(content=file_bytes, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
-    matches = list(AVATARS_DIR.glob(f"dep_{dependent_id}.*"))
-    if not matches:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")
+    # Fallback si existía en disco local
+    if AVATARS_DIR.exists():
+        matches = list(AVATARS_DIR.glob(f"dep_{dependent_id}.*"))
+        if matches:
+            file_path = matches[0]
+            media_types = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".webp": "image/webp",
+            }
+            return FileResponse(file_path, media_type=media_types.get(file_path.suffix.lower(), "image/jpeg"))
 
-    file_path = matches[0]
-    media_types = {
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".png": "image/png",
-        ".webp": "image/webp",
-    }
-    return FileResponse(file_path, media_type=media_types.get(file_path.suffix.lower(), "image/jpeg"))
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")

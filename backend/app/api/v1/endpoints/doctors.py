@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from app.models.affiliation import DoctorClinicAffiliation
 from app.models.clinic import Clinic
 from app.models.schedule import DoctorWeeklySchedule
 from app.models.user import User
+from app.services.storage_service import storage_service
 from app.schemas.clinic import (
     AcademicDegree,
     ClinicPublic,
@@ -287,17 +288,15 @@ async def upload_my_doctor_avatar(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "La imagen no debe superar los 5 MB de tamaño.")
 
-    AVATARS_DIR.mkdir(parents=True, exist_ok=True)
-    # Limpiar posibles avatares previos con otras extensiones
-    for existing in AVATARS_DIR.glob(f"{current_user.id}.*"):
-        try:
-            existing.unlink()
-        except Exception:
-            pass
-
     ext = allowed_types[content_type]
-    file_path = AVATARS_DIR / f"{current_user.id}.{ext}"
-    file_path.write_bytes(content)
+    s3_key = storage_service.build_avatar_key("doctors", current_user.id, ext)
+
+    # Limpiar extensiones previas en R2
+    for other_ext in ("jpg", "png", "webp", "jpeg"):
+        if other_ext != ext:
+            storage_service.delete_file(storage_service.build_avatar_key("doctors", current_user.id, other_ext))
+
+    storage_service.upload_file(content=content, s3_key=s3_key, content_type=content_type)
 
     avatar_url = f"/api/v1/doctors/{current_user.id}/avatar"
     current_user.profile_picture_url = avatar_url
@@ -309,22 +308,27 @@ async def upload_my_doctor_avatar(
 
 @router.api_route("/{doctor_id}/avatar", methods=["GET", "HEAD"])
 async def get_doctor_avatar(doctor_id: str):
-    """Sirve la foto de perfil del médico."""
-    if not AVATARS_DIR.exists():
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")
+    """Sirve la foto de perfil del médico desde Cloudflare R2."""
+    for ext in ("jpg", "png", "webp", "jpeg"):
+        s3_key = storage_service.build_avatar_key("doctors", doctor_id, ext)
+        res = storage_service.get_file(s3_key)
+        if res:
+            file_bytes, mime = res
+            return Response(content=file_bytes, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
 
-    matches = list(AVATARS_DIR.glob(f"{doctor_id}.*"))
-    if not matches:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")
+    # Fallback si existía en disco local
+    if AVATARS_DIR.exists():
+        matches = list(AVATARS_DIR.glob(f"{doctor_id}.*"))
+        if matches:
+            file_path = matches[0]
+            media_type = "image/jpeg"
+            if file_path.suffix.lower() == ".png":
+                media_type = "image/png"
+            elif file_path.suffix.lower() == ".webp":
+                media_type = "image/webp"
+            return FileResponse(file_path, media_type=media_type)
 
-    file_path = matches[0]
-    media_type = "image/jpeg"
-    if file_path.suffix.lower() == ".png":
-        media_type = "image/png"
-    elif file_path.suffix.lower() == ".webp":
-        media_type = "image/webp"
-
-    return FileResponse(file_path, media_type=media_type)
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")
 
 
 @router.delete("/me/avatar")
@@ -332,10 +336,14 @@ async def delete_my_doctor_avatar(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Elimina la foto de perfil del médico."""
+    """Elimina la foto de perfil del médico en Cloudflare R2."""
     if current_user.role != "DOCTOR":
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo facultativos médicos pueden eliminar su avatar.")
 
+    for ext in ("jpg", "png", "webp", "jpeg"):
+        storage_service.delete_file(storage_service.build_avatar_key("doctors", current_user.id, ext))
+
+    # Limpieza en disco local si existía
     if AVATARS_DIR.exists():
         for existing in AVATARS_DIR.glob(f"{current_user.id}.*"):
             try:

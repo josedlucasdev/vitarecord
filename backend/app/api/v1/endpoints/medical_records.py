@@ -214,8 +214,8 @@ async def get_presigned_attachment_upload_url(
     current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_WRITE))],
 ):
     """Genera una URL prefirmada PUT para que el navegador suba ecografías o laboratorios directo a S3."""
-    file_ext = payload.file_name.split(".")[-1] if "." in payload.file_name else "dat"
-    s3_key = f"medical_records/{record_id}/{uuid.uuid4().hex}.{file_ext}"
+    clinic_id = getattr(current_user, "clinic_id", None) or "general"
+    s3_key = storage_service.build_medical_record_attachment_key(clinic_id, record_id, payload.file_name)
     presigned = storage_service.generate_presigned_upload_url(
         s3_key=s3_key,
         content_type=payload.content_type,
