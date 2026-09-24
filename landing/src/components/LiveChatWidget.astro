@@ -299,11 +299,47 @@
   </div>
 </div>
 
+<!-- Firebase SDK (App y Realtime Database Compat) -->
+<script is:inline src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script is:inline src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
 <script is:inline>
   (() => {
     // Configuración de API
-    const API_BASE = "https://api.vitarecord.com/api/v1/support-chat";
+    const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+    const API_BASE = isLocal
+      ? "http://localhost:8000/api/v1/support-chat"
+      : "https://api.vitarecord.com/api/v1/support-chat";
     const STORAGE_KEY = "vitarecord_support_session";
+
+    // Configuración Firebase Realtime Database para VitaRecord
+    const firebaseConfig = {
+      apiKey: "AIzaSyB9B72DuC0V3WJiDVFQ2be3aQrcA3XJMhs",
+      authDomain: "vita-record.firebaseapp.com",
+      databaseURL: "https://vita-record-default-rtdb.firebaseio.com",
+      projectId: "vita-record",
+      storageBucket: "vita-record.firebasestorage.app",
+      messagingSenderId: "398180197268",
+      appId: "1:398180197268:web:9d3bf990f78e30aa0b2581",
+    };
+
+    let fbApp = null;
+    let fbDb = null;
+    let currentChatRef = null;
+    let messagesRef = null;
+    let statusRef = null;
+
+    function getFirebaseDb() {
+      if (!fbDb && typeof window.firebase !== "undefined") {
+        if (!window.firebase.apps || !window.firebase.apps.length) {
+          fbApp = window.firebase.initializeApp(firebaseConfig);
+        } else {
+          fbApp = window.firebase.app();
+        }
+        fbDb = window.firebase.database();
+      }
+      return fbDb;
+    }
 
     // Elementos DOM
     const widget = document.getElementById("vr-chat-widget");
@@ -348,11 +384,71 @@
     let isOpen = false;
     let currentSession = null;
     let lastMessageId = 0;
-    let pollInterval = null;
     let unreadCount = 0;
     let selectedRating = 0;
     let isModalOpen = false;
     const knownMessageIds = new Set();
+
+    // Gestión de Conexión en Tiempo Real con Firebase Realtime Database
+    function connectFirebaseChat(sessionToken) {
+      if (!sessionToken) return;
+
+      disconnectFirebaseChat();
+
+      const db = getFirebaseDb();
+      if (!db) {
+        console.warn("Firebase Realtime Database no disponible en window.");
+        return;
+      }
+
+      try {
+        const cleanToken = sessionToken.trim();
+        currentChatRef = db.ref(`support_chats/${cleanToken}`);
+        messagesRef = currentChatRef.child("messages");
+        statusRef = currentChatRef.child("status");
+
+        // Escuchar nuevos mensajes en tiempo real
+        messagesRef.on("child_added", (snapshot) => {
+          const msg = snapshot.val();
+          if (!msg) return;
+          // Evitar duplicar mensajes que ya fueron renderizados localmente
+          if (msg.id && knownMessageIds.has(msg.id)) return;
+          appendMessage(msg, false);
+        });
+
+        // Escuchar finalización de conversación por parte del asesor o sistema
+        statusRef.on("value", (snapshot) => {
+          const data = snapshot.val();
+          if (!data || !currentSession) return;
+          if (data.status === "closed") {
+            currentSession.status = "closed";
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
+            disableChatInput();
+            if (!data.rated && !isModalOpen) {
+              openRatingModal();
+            }
+          }
+        });
+      } catch (err) {
+        console.warn("Error al inicializar suscripción Firebase RTDB:", err);
+      }
+    }
+
+    function disconnectFirebaseChat() {
+      try {
+        if (messagesRef) {
+          messagesRef.off();
+          messagesRef = null;
+        }
+        if (statusRef) {
+          statusRef.off();
+          statusRef = null;
+        }
+        currentChatRef = null;
+      } catch (e) {
+        // ignore
+      }
+    }
 
     // Cargar sesión previa desde localStorage
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -487,10 +583,6 @@
       selectedRating = 5;
       highlightStars(5);
       modalRatingComment.value = "";
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-      }
     }
 
     function showModalFinishedState(message) {
@@ -671,7 +763,7 @@
           setTimeout(() => chatInput && chatInput.focus(), 200);
         }
 
-        startPolling();
+        connectFirebaseChat(data.session_token);
       } catch (err) {
         authError.textContent = err.message || "No se pudo iniciar la sesión. Revisa tu conexión.";
         authError.classList.remove("hidden");
@@ -717,51 +809,14 @@
             enableChatInput();
           }
 
-          startPolling();
+          connectFirebaseChat(currentSession.session_token);
         } else {
           localStorage.removeItem(STORAGE_KEY);
           currentSession = null;
         }
       } catch (e) {
-        startPolling();
+        connectFirebaseChat(currentSession.session_token);
       }
-    }
-
-    // Polling de nuevos mensajes y detección de cierre en tiempo real
-    async function pollNewMessages() {
-      if (!currentSession || !currentSession.session_token) return;
-
-      try {
-        const url = `${API_BASE}/messages?session_token=${encodeURIComponent(currentSession.session_token)}${
-          lastMessageId > 0 ? `&after_id=${lastMessageId}` : ""
-        }`;
-        const resp = await fetch(url);
-        if (resp.ok) {
-          // Detectar cierre vía header HTTP
-          const sessionStatus = resp.headers.get("X-Session-Status");
-          if (sessionStatus === "closed") {
-            currentSession.status = "closed";
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSession));
-            disableChatInput();
-            const sessionRated = resp.headers.get("X-Session-Rated") === "true";
-            if (!sessionRated && !isModalOpen) {
-              openRatingModal();
-            }
-          }
-
-          const msgs = await resp.json();
-          if (Array.isArray(msgs) && msgs.length > 0) {
-            msgs.forEach((m) => appendMessage(m, false));
-          }
-        }
-      } catch (err) {
-        // Silencio en polling
-      }
-    }
-
-    function startPolling() {
-      if (pollInterval) clearInterval(pollInterval);
-      pollInterval = setInterval(pollNewMessages, 3000);
     }
 
     // Enviar mensaje del usuario
@@ -945,7 +1000,7 @@
       modalRatingComment.value = "";
       knownMessageIds.clear();
       messagesContainer.innerHTML = "";
-      if (pollInterval) clearInterval(pollInterval);
+      disconnectFirebaseChat();
 
       // Prellenar inputs para agilizar al usuario
       if (prevName) inputName.value = prevName;

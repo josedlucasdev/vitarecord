@@ -16,6 +16,7 @@ npm run dev             # docker compose up --build
 
 Servicios expuestos en el host:
 
+- Landing (Astro): http://localhost:4321
 - Frontend (Quasar): http://localhost:9000
 - Backend (FastAPI + Swagger): http://localhost:8000/docs
 - Health / readiness: http://localhost:8000/health , http://localhost:8000/readiness

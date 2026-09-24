@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str | list[str] = [
         "http://localhost:9000",
+        "http://localhost:4321",
         "https://app.vitarecord.com",
         "https://vitarecord.com",
     ]
@@ -107,6 +108,7 @@ class Settings(BaseSettings):
 
     # Push FCM (Firebase Cloud Messaging HTTP v1 API)
     FIREBASE_CREDENTIALS_FILE: str | None = "/app/firebase-credentials.json"
+    FCM_SERVICE_ACCOUNT_JSON: str | None = None
     FCM_SERVER_KEY: str | None = "dev_fcm_server_key"
     FCM_PROJECT_ID: str = "vita-record"
     FCM_API_URL: str = "https://fcm.googleapis.com/fcm/send"
@@ -122,8 +124,11 @@ class Settings(BaseSettings):
     REMINDER_CHECK_INTERVAL_SECONDS: int = 60
 
     # Telegram Support Bot
-    TELEGRAM_BOT_TOKEN: str = ""
-    TELEGRAM_ADMIN_CHAT_ID: str = ""
+    TELEGRAM_BOT_TOKEN: str = "8994079460:AAFVfydKdWxdTbXmb2GcSaFYOSXq4ze2MK8"
+    TELEGRAM_ADMIN_CHAT_ID: str = "562067316"
+
+    # Firebase Realtime Database (Chat de soporte en tiempo real)
+    FIREBASE_DATABASE_URL: str = "https://vita-record-default-rtdb.firebaseio.com"
 
     SENTRY_DSN: str | None = None
 

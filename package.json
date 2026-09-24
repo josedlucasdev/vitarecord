@@ -3,9 +3,9 @@
   "private": true,
   "description": "ÍntimaSalud - Orquestador raíz del entorno de desarrollo (ver plan/plan.md)",
   "scripts": {
-    "dev": "docker compose up --build",
-    "dev:observability": "docker compose --profile observability up --build",
-    "down": "docker compose down",
+    "dev": "docker compose --profile dev up --build",
+    "dev:observability": "docker compose --profile dev --profile observability up --build",
+    "down": "docker compose --profile dev down",
     "logs": "docker compose logs -f",
     "migrate": "docker compose exec backend alembic upgrade head",
     "makemigration": "docker compose exec backend alembic revision --autogenerate -m"

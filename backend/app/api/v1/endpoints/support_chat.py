@@ -1,3 +1,4 @@
+import asyncio
 import html
 import logging
 from datetime import datetime
@@ -10,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.core.database import get_db
 from app.models.support_chat import SupportChatMessage, SupportChatSession
 from app.services.telegram_service import telegram_service
+from app.services.firebase_chat_service import firebase_chat_service
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +213,15 @@ async def send_visitor_message(data: SendMessageRequest, db: AsyncSession = Depe
     await db.commit()
     await db.refresh(msg)
 
+    # Notificar por Firebase RTDB en tiempo real
+    msg_payload = {
+        "id": msg.id,
+        "sender_type": msg.sender_type,
+        "content": msg.content,
+        "created_at": msg.created_at.isoformat(),
+    }
+    asyncio.create_task(firebase_chat_service.publish_message(session.session_token, msg_payload))
+
     return MessageOut(
         id=msg.id,
         sender_type=msg.sender_type,
@@ -292,6 +303,15 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
         )
         db.add(sys_msg)
         await db.commit()
+        await db.refresh(sys_msg)
+
+        asyncio.create_task(firebase_chat_service.publish_message(session.session_token, {
+            "id": sys_msg.id,
+            "sender_type": sys_msg.sender_type,
+            "content": sys_msg.content,
+            "created_at": sys_msg.created_at.isoformat(),
+        }))
+        asyncio.create_task(firebase_chat_service.publish_session_status(session.session_token, status="closed", rated=True))
 
         tg_text = (
             f"ℹ️ <b>Conversación #{session.id} Finalizada</b>\n\n"
@@ -300,7 +320,6 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
             f"📱 <b>Teléfono:</b> <code>{html.escape(session.phone)}</code>\n\n"
             f"<i>El usuario decidió cerrar la conversación sin calificar.</i>"
         )
-        import asyncio
         asyncio.create_task(telegram_service.send_message(tg_text))
         return {"status": "success", "rating": 0, "comment": None}
 
@@ -316,6 +335,15 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
     )
     db.add(sys_msg)
     await db.commit()
+    await db.refresh(sys_msg)
+
+    asyncio.create_task(firebase_chat_service.publish_message(session.session_token, {
+        "id": sys_msg.id,
+        "sender_type": sys_msg.sender_type,
+        "content": sys_msg.content,
+        "created_at": sys_msg.created_at.isoformat(),
+    }))
+    asyncio.create_task(firebase_chat_service.publish_session_status(session.session_token, status="closed", rated=True))
 
     # Enviar notificación a Telegram en segundo plano (respuesta instantánea al usuario)
     tg_text = (
@@ -331,7 +359,6 @@ async def rate_support_chat(data: RateSessionRequest, db: AsyncSession = Depends
     else:
         tg_text += f"💬 <b>Comentario:</b> <i>(Sin comentario adicional)</i>"
 
-    import asyncio
     asyncio.create_task(telegram_service.send_message(tg_text))
 
     return {"status": "success", "rating": data.rating, "comment": session.rating_comment}
@@ -424,6 +451,17 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
         )
         db.add(close_msg)
         await db.commit()
+        await db.refresh(close_msg)
+
+        # Emitir eventos de cierre por Firebase RTDB inmediatamente
+        close_payload = {
+            "id": close_msg.id,
+            "sender_type": close_msg.sender_type,
+            "content": close_msg.content,
+            "created_at": close_msg.created_at.isoformat(),
+        }
+        asyncio.create_task(firebase_chat_service.publish_message(session.session_token, close_payload))
+        asyncio.create_task(firebase_chat_service.publish_session_status(session.session_token, status="closed", rated=False))
 
         # Confirmar al asesor en Telegram
         reply_tg_text = (
@@ -446,6 +484,16 @@ async def telegram_webhook(request: Request, db: AsyncSession = Depends(get_db))
     )
     db.add(agent_msg)
     await db.commit()
+    await db.refresh(agent_msg)
+
+    # Emitir mensaje del asesor por Firebase RTDB inmediatamente
+    agent_payload = {
+        "id": agent_msg.id,
+        "sender_type": agent_msg.sender_type,
+        "content": agent_msg.content,
+        "created_at": agent_msg.created_at.isoformat(),
+    }
+    asyncio.create_task(firebase_chat_service.publish_message(session.session_token, agent_payload))
 
     logger.info("Respuesta de Telegram vinculada exitosamente a sesión #%s", session_id)
     return {"status": "success", "session_id": session_id}
