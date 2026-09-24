@@ -2,13 +2,14 @@
 // LiveChatWidget.astro - Soporte en Vivo con Telegram para VitaRecord, Modal de Calificación y Cierre
 ---
 
-<div id="vr-chat-widget" class="relative z-50">
+<div id="vr-chat-widget">
   <!-- Botón Flotante del Chat -->
   <button
     id="vr-chat-toggle-btn"
     type="button"
     aria-label="Abrir chat de soporte"
-    class="fixed bottom-6 right-6 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-brand-500 hover:bg-brand-600 text-white shadow-2xl shadow-brand-500/40 hover:shadow-brand-500/60 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none cursor-pointer z-50 group"
+    style="z-index: 9999 !important; position: fixed !important;"
+    class="fixed bottom-6 right-6 w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-brand-500 hover:bg-brand-600 text-white shadow-2xl shadow-brand-500/40 hover:shadow-brand-500/60 flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 focus:outline-none cursor-pointer z-[9999] group"
   >
     <!-- Icono Chat Cerrado -->
     <svg id="vr-icon-open" class="w-7 h-7 sm:w-8 sm:h-8 transition-transform duration-300 group-hover:rotate-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -36,7 +37,8 @@
   <!-- Ventana Flotante del Chat -->
   <div
     id="vr-chat-window"
-    class="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[410px] h-[580px] max-h-[calc(100vh-7.5rem)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden transition-all duration-300 opacity-0 pointer-events-none translate-y-4 scale-95 z-50 relative"
+    style="z-index: 9998 !important; position: fixed !important;"
+    class="fixed bottom-24 right-4 sm:right-6 w-[calc(100vw-2rem)] sm:w-[410px] h-[580px] max-h-[calc(100vh-7.5rem)] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden transition-all duration-300 opacity-0 pointer-events-none translate-y-4 scale-95 z-[9998]"
   >
     <!-- MODAL OVERLAY DE CALIFICACIÓN (Aparece SOBRE el chat cuando el asesor cierra la conversación) -->
     <div
@@ -369,6 +371,9 @@
       if (isOpen) {
         chatWindow.classList.remove("opacity-0", "pointer-events-none", "translate-y-4", "scale-95");
         chatWindow.classList.add("opacity-100", "pointer-events-auto", "translate-y-0", "scale-100");
+        chatWindow.style.opacity = "1";
+        chatWindow.style.pointerEvents = "auto";
+        chatWindow.style.transform = "translateY(0) scale(1)";
         iconOpen.classList.add("hidden");
         iconClose.classList.remove("hidden");
 
@@ -390,6 +395,9 @@
       } else {
         chatWindow.classList.add("opacity-0", "pointer-events-none", "translate-y-4", "scale-95");
         chatWindow.classList.remove("opacity-100", "pointer-events-auto", "translate-y-0", "scale-100");
+        chatWindow.style.opacity = "0";
+        chatWindow.style.pointerEvents = "none";
+        chatWindow.style.transform = "translateY(1rem) scale(0.95)";
         iconOpen.classList.remove("hidden");
         iconClose.classList.add("hidden");
       }
