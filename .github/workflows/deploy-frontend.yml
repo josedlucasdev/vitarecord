@@ -1,4 +1,4 @@
-name: Deploy Frontend to cPanel - app.vitarecord.com
+name: Deploy Frontend to Contabo VPS
 
 on:
   push:
@@ -6,45 +6,27 @@ on:
       - main
     paths:
       - 'frontend/**'
+      - 'nginx/**'
       - '.github/workflows/deploy-frontend.yml'
   workflow_dispatch:
 
 jobs:
-  build-and-deploy:
-    name: 🚀 Build & Deploy Frontend to cPanel
+  deploy:
+    name: 🚀 Build & Deploy Frontend to VPS
     runs-on: ubuntu-latest
-
     steps:
-      - name: 📥 Clonar repositorio
-        uses: actions/checkout@v4
-
-      - name: 🟢 Configurar Node.js 20
-        uses: actions/setup-node@v4
+      - name: 🔐 Desplegar Frontend en VPS vía SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          node-version: 20
-          cache: 'npm'
-          cache-dependency-path: frontend/package.json
-
-      - name: 📦 Instalar dependencias
-        working-directory: frontend
-        run: npm install --include=optional
-
-      - name: 🏗️ Compilar Quasar SPA para Producción
-        working-directory: frontend
-        env:
-          CLIENT_API_URL: https://api.vitarecord.com
-          API_URL: https://api.vitarecord.com
-          VITE_API_URL: https://api.vitarecord.com
-        run: npm run build
-
-      - name: 🚀 Subir por FTP a cPanel (app.vitarecord.com)
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.CPANEL_FTP_SERVER }}
-          username: ${{ secrets.CPANEL_FTP_USERNAME }}
-          password: ${{ secrets.CPANEL_FTP_PASSWORD }}
-          protocol: ftp
-          log-level: verbose
-          server-dir: app.vitarecord.com/
-          local-dir: ./frontend/dist/spa/
-          dangerous-clean-slate: false
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            echo "🚀 Iniciando despliegue de Frontend en Contabo VPS..."
+            cd /opt/vitarecord
+            git pull origin main
+            docker compose build frontend gateway
+            docker compose up -d frontend gateway
+            docker image prune -f
+            echo "✅ Frontend y Gateway actualizados con éxito en el VPS."

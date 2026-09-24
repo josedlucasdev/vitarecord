@@ -94,12 +94,11 @@ services:
       SMTP_HOST: mailtrap
       SMTP_PORT: 1025
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me}
-      CORS_ORIGINS: '["http://localhost:9000"]'
+      CORS_ORIGINS: '["http://localhost:9000", "http://localhost", "https://app.vitarecord.com", "https://vitarecord.com"]'
     volumes:
       - ./backend:/app
     ports:
       - "8000:8000"
-      - "80:8000"
     depends_on:
       mysql:
         condition: service_healthy
@@ -113,18 +112,27 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: appcitas_frontend
     restart: unless-stopped
-    environment:
-      API_URL: http://backend:8000
-    volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
+    expose:
+      - "80"
     ports:
-      - "9000:9000"
+      - "9000:80"
     depends_on:
       - backend
+
+  gateway:
+    image: nginx:alpine
+    container_name: appcitas_gateway
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
 
   prometheus:
     image: prom/prometheus:latest

@@ -12,7 +12,7 @@ on:
 
 jobs:
   deploy:
-    name: 🚀 Deploy Docker to VPS
+    name: 🚀 Deploy Docker Backend to VPS
     runs-on: ubuntu-latest
     steps:
       - name: 🔐 Ejecutar despliegue remoto vía SSH
@@ -27,6 +27,6 @@ jobs:
             cd /opt/vitarecord
             git pull origin main
             docker compose build backend
-            docker compose up -d
+            docker compose up -d backend gateway
             docker image prune -f
             echo "✅ Despliegue completado con éxito."
