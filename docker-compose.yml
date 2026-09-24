@@ -95,6 +95,8 @@ services:
       SMTP_PORT: 1025
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me}
       CORS_ORIGINS: '["http://localhost:9000", "http://localhost", "https://app.vitarecord.com", "https://vitarecord.com"]'
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ADMIN_CHAT_ID: ${TELEGRAM_ADMIN_CHAT_ID:-}
     volumes:
       - ./backend:/app
     ports:
