@@ -23,6 +23,8 @@ from app.models.user import DoctorScheduleLock, User
 from app.repositories.clinic_repository import ClinicRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.clinic import (
+    ClinicAIModelsQueryRequest,
+    ClinicAIModelsQueryResponse,
     ClinicAISettingsUpdate,
     ClinicCreateRequest,
     ClinicDoctorPublic,
@@ -101,6 +103,7 @@ async def create_clinic(
         ai_enabled=payload.ai_enabled,
         ai_api_url=payload.ai_api_url.strip() if payload.ai_api_url else None,
         ai_api_key=payload.ai_api_key.strip() if payload.ai_api_key else None,
+        ai_model=payload.ai_model.strip() if payload.ai_model else "gpt-4o-mini",
     )
     await repo.create(clinic)
     await db.commit()
@@ -168,6 +171,8 @@ async def update_clinic(
         clinic.ai_api_url = payload.ai_api_url.strip() if payload.ai_api_url else None
     if payload.ai_api_key is not None:
         clinic.ai_api_key = payload.ai_api_key.strip() if payload.ai_api_key else None
+    if payload.ai_model is not None:
+        clinic.ai_model = payload.ai_model.strip() if payload.ai_model else None
 
     await db.commit()
     await db.refresh(clinic)
@@ -181,7 +186,7 @@ async def update_clinic_ai_settings(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Configura el endpoint, API token y estado de activación del servicio de IA de una clínica.
+    """Configura el endpoint, API token, modelo y estado de activación del servicio de IA de una clínica.
     
     Exclusivo para SUPERADMIN del sistema.
     """
@@ -198,12 +203,122 @@ async def update_clinic_ai_settings(
     clinic.ai_enabled = payload.ai_enabled
     if payload.ai_api_url is not None:
         clinic.ai_api_url = payload.ai_api_url.strip() if payload.ai_api_url else None
-    if payload.ai_api_key is not None:
-        clinic.ai_api_key = payload.ai_api_key.strip() if payload.ai_api_key else None
+    if payload.ai_api_key is not None and payload.ai_api_key.strip():
+        clinic.ai_api_key = payload.ai_api_key.strip()
+    if payload.ai_model is not None:
+        clinic.ai_model = payload.ai_model.strip() if payload.ai_model else None
 
     await db.commit()
     await db.refresh(clinic)
     return clinic
+
+
+@router.post("/query-ai-models", response_model=ClinicAIModelsQueryResponse, summary="Consultar modelos disponibles en el proveedor de IA")
+async def query_provider_ai_models(
+    payload: ClinicAIModelsQueryRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Consulta en tiempo real la lista de modelos disponibles en el proveedor de IA configurado."""
+    import httpx
+
+    if current_user.role != "SUPERADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Permisos insuficientes. Solo el SUPERADMIN puede consultar modelos de IA.",
+        )
+
+    api_url = (payload.ai_api_url or "").strip()
+    if not api_url:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La URL del endpoint de la API es requerida.")
+
+    api_key = (payload.ai_api_key or "").strip()
+    if not api_key and payload.clinic_id:
+        clinic = await ClinicRepository(db).get_by_id(payload.clinic_id)
+        if clinic and clinic.ai_api_key:
+            api_key = clinic.ai_api_key.strip()
+
+    if not api_key:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Se requiere el Token / API Key para autenticar la consulta de modelos con el proveedor.",
+        )
+
+    # Derivar la URL de modelos del proveedor
+    models_url = api_url
+    if "/chat/completions" in models_url:
+        models_url = models_url.replace("/chat/completions", "/models")
+    elif "/completions" in models_url:
+        models_url = models_url.replace("/completions", "/models")
+    elif models_url.endswith("/v1") or models_url.endswith("/v1/"):
+        models_url = models_url.rstrip("/") + "/models"
+    elif not models_url.endswith("/models"):
+        models_url = models_url.rstrip("/") + "/models"
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    extracted_models: list[str] = []
+    detected_provider = "openai_compatible"
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(models_url, headers=headers)
+            if resp.status_code == 200:
+                data = resp.json()
+                if "data" in data and isinstance(data["data"], list):
+                    extracted_models = [m["id"] for m in data["data"] if isinstance(m, dict) and "id" in m]
+                elif "models" in data and isinstance(data["models"], list):
+                    detected_provider = "ollama"
+                    for m in data["models"]:
+                        if isinstance(m, dict):
+                            extracted_models.append(m.get("name") or m.get("model") or m.get("id", ""))
+                        elif isinstance(m, str):
+                            extracted_models.append(m)
+            elif "ollama" in api_url or "11434" in api_url:
+                alt_url = api_url.split("/v1")[0] + "/api/tags"
+                resp_alt = await client.get(alt_url)
+                if resp_alt.status_code == 200:
+                    alt_data = resp_alt.json()
+                    detected_provider = "ollama"
+                    extracted_models = [m["name"] for m in alt_data.get("models", []) if "name" in m]
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"No se pudo conectar con el proveedor de IA para listar modelos: {str(exc)}",
+        )
+
+    # Filtrar modelos relevantes para texto clínico (excluir audio, embeddings, moderación, imagen)
+    filtered = []
+    for m in extracted_models:
+        m_lower = m.lower()
+        if any(ign in m_lower for ign in ["whisper", "tts", "dall-e", "embedding", "moderation", "davinci", "babbage", "curie"]):
+            continue
+        filtered.append(m)
+
+    final_list = filtered if filtered else extracted_models
+
+    if not final_list:
+        final_list = [
+            "gpt-4o-mini",
+            "gpt-4o",
+            "gpt-4-turbo",
+            "gpt-3.5-turbo",
+            "claude-3-5-sonnet-20240620",
+            "llama-3.1-70b-versatile",
+            "llama-3.1-8b-instant",
+            "deepseek-chat"
+        ]
+
+    final_list = sorted(list(set(final_list)))
+
+    return ClinicAIModelsQueryResponse(
+        models=final_list,
+        detected_provider=detected_provider
+    )
+
 
 
 @router.put("/{clinic_id}/security-policy", response_model=ClinicPublic)

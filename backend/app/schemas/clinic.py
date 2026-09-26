@@ -13,6 +13,7 @@ class ClinicCreateRequest(BaseModel):
     ai_enabled: bool = False
     ai_api_url: str | None = None
     ai_api_key: str | None = None
+    ai_model: str | None = "gpt-4o-mini"
 
 
 class ClinicUpdateRequest(BaseModel):
@@ -26,6 +27,7 @@ class ClinicUpdateRequest(BaseModel):
     ai_enabled: bool | None = None
     ai_api_url: str | None = None
     ai_api_key: str | None = None
+    ai_model: str | None = None
 
 
 class ClinicPublic(BaseModel):
@@ -41,6 +43,7 @@ class ClinicPublic(BaseModel):
     ai_enabled: bool = False
     ai_api_url: str | None = None
     ai_api_key: str | None = Field(default=None, exclude=True)
+    ai_model: str | None = "gpt-4o-mini"
     created_at: datetime | None = None
 
     @computed_field
@@ -55,6 +58,18 @@ class ClinicAISettingsUpdate(BaseModel):
     ai_enabled: bool
     ai_api_url: str | None = None
     ai_api_key: str | None = None
+    ai_model: str | None = None
+
+
+class ClinicAIModelsQueryRequest(BaseModel):
+    clinic_id: str | None = None
+    ai_api_url: str
+    ai_api_key: str | None = None
+
+
+class ClinicAIModelsQueryResponse(BaseModel):
+    models: list[str]
+    detected_provider: str | None = None
 
 
 class ClinicSecurityPolicyUpdate(BaseModel):

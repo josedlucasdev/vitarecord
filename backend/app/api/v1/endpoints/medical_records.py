@@ -408,7 +408,7 @@ async def enhance_clinical_text(
         "Content-Type": "application/json",
     }
     body = {
-        "model": "gpt-4o-mini",
+        "model": (clinic.ai_model or "").strip() or "gpt-4o-mini",
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}

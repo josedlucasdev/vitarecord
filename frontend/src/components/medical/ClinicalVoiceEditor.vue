@@ -245,18 +245,20 @@ function onEditorChange (val) {
 }
 
 // ----------------------------------------------------
-// Reconocimiento de Voz / Dictado (Web Speech API)
+// Reconocimiento de Voz / Dictado Continuo (Web Speech API)
 // ----------------------------------------------------
 const isRecording = ref(false)
+const shouldKeepRecording = ref(false)
 const interimTranscript = ref('')
 let recognition = null
+let restartTimeout = null
 
 const SpeechRecognition = typeof window !== 'undefined'
   ? (window.SpeechRecognition || window.webkitSpeechRecognition || null)
   : null
 
 function toggleRecording () {
-  if (isRecording.value) {
+  if (shouldKeepRecording.value) {
     stopRecording()
   } else {
     startRecording()
@@ -272,6 +274,15 @@ function startRecording () {
     })
     return
   }
+
+  shouldKeepRecording.value = true
+  initAndStartRecognition()
+}
+
+function initAndStartRecognition () {
+  if (!shouldKeepRecording.value) return
+
+  cleanupRecognition()
 
   try {
     recognition = new SpeechRecognition()
@@ -302,37 +313,72 @@ function startRecording () {
 
     recognition.onerror = (event) => {
       console.warn('SpeechRecognition error:', event.error)
-      if (event.error === 'not-allowed') {
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        shouldKeepRecording.value = false
+        isRecording.value = false
         $q.notify({
           type: 'negative',
           message: 'Permiso de micrófono denegado. Permite el acceso al micrófono en la barra del navegador.',
           position: 'top'
         })
+        cleanupRecognition()
       }
-      stopRecording()
+      // 'no-speech' y pausas del usuario NO detienen la sesión:
+      // se ignora y el evento onend se encarga de reanudar automáticamente
     }
 
     recognition.onend = () => {
-      isRecording.value = false
       interimTranscript.value = ''
+      // Si el médico no ha pulsado detener, reanudar inmediatamente el dictado
+      if (shouldKeepRecording.value) {
+        clearTimeout(restartTimeout)
+        restartTimeout = setTimeout(() => {
+          if (shouldKeepRecording.value) {
+            try {
+              recognition.start()
+            } catch {
+              initAndStartRecognition()
+            }
+          }
+        }, 150)
+      } else {
+        isRecording.value = false
+      }
     }
 
     recognition.start()
   } catch (err) {
     console.error('Error al iniciar SpeechRecognition:', err)
-    isRecording.value = false
+    if (shouldKeepRecording.value) {
+      clearTimeout(restartTimeout)
+      restartTimeout = setTimeout(() => {
+        if (shouldKeepRecording.value) {
+          initAndStartRecognition()
+        }
+      }, 300)
+    }
+  }
+}
+
+function cleanupRecognition () {
+  if (recognition) {
+    try {
+      recognition.onstart = null
+      recognition.onresult = null
+      recognition.onerror = null
+      recognition.onend = null
+      recognition.abort()
+    } catch {}
+    recognition = null
   }
 }
 
 function stopRecording () {
+  shouldKeepRecording.value = false
   isRecording.value = false
   interimTranscript.value = ''
-  if (recognition) {
-    try {
-      recognition.stop()
-    } catch {}
-    recognition = null
-  }
+  clearTimeout(restartTimeout)
+  cleanupRecognition()
 }
 
 function appendDictationText (text) {
@@ -342,8 +388,11 @@ function appendDictationText (text) {
 
   if (!current || current === '<p></p>' || current === '<p><br></p>') {
     editorContent.value = `<p>${formatted}.</p>`
+  } else if (current.endsWith('</p>')) {
+    const withoutClose = current.slice(0, -4)
+    editorContent.value = `${withoutClose} ${formatted}.</p>`
   } else {
-    editorContent.value = `${current}<p>${formatted}.</p>`
+    editorContent.value = `${current} ${formatted}.`
   }
   emit('update:modelValue', editorContent.value)
 }

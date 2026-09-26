@@ -39,13 +39,14 @@ async def test_superadmin_can_configure_clinic_ai_settings(client: AsyncClient):
         assert clinic_data.get("ai_enabled") is False
         assert clinic_data.get("has_ai_key") is False
 
-        # 2. Configurar IA para la clínica
+        # 2. Configurar IA para la clínica con modelo específico
         ai_resp = await client.put(
             f"/api/v1/clinics/{clinic_id}/ai-settings",
             json={
                 "ai_enabled": True,
                 "ai_api_url": "https://api.openai.com/v1/chat/completions",
                 "ai_api_key": "sk-proj-secret-key-test-123456",
+                "ai_model": "gpt-4o",
             },
             headers=admin_headers,
         )
@@ -54,6 +55,7 @@ async def test_superadmin_can_configure_clinic_ai_settings(client: AsyncClient):
         assert ai_data["ai_enabled"] is True
         assert ai_data["ai_api_url"] == "https://api.openai.com/v1/chat/completions"
         assert ai_data["has_ai_key"] is True
+        assert ai_data["ai_model"] == "gpt-4o"
         # El token no debe ser expuesto en el JSON público
         assert "ai_api_key" not in ai_data or ai_data["ai_api_key"] is None
 
@@ -64,6 +66,7 @@ async def test_superadmin_can_configure_clinic_ai_settings(client: AsyncClient):
                 "ai_enabled": True,
                 "ai_api_url": "https://custom-ai-gateway.local/v1/chat/completions",
                 "ai_api_key": None,
+                "ai_model": "claude-3-5-sonnet-20240620",
             },
             headers=admin_headers,
         )
@@ -71,6 +74,7 @@ async def test_superadmin_can_configure_clinic_ai_settings(client: AsyncClient):
         updated_data = ai_update_resp.json()
         assert updated_data["ai_api_url"] == "https://custom-ai-gateway.local/v1/chat/completions"
         assert updated_data["has_ai_key"] is True
+        assert updated_data["ai_model"] == "claude-3-5-sonnet-20240620"
 
     finally:
         async with AsyncSessionLocal() as db:
@@ -248,3 +252,57 @@ async def test_doctor_ai_assist_success_with_mocked_gateway(client: AsyncClient)
             if c_obj:
                 await db.delete(c_obj)
                 await db.commit()
+
+
+@pytest.mark.anyio
+async def test_superadmin_can_query_ai_models(client: AsyncClient):
+    """Verifica que el superadmin puede consultar los modelos disponibles de un proveedor de IA."""
+    from app.core.security import create_access_token
+
+    admin_token = create_access_token(
+        "u1111111-1111-1111-1111-111111111111",
+        role="SUPERADMIN",
+        email="admin@vitarecord.com",
+    )
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    mock_models_response = MagicMock()
+    mock_models_response.status_code = 200
+    mock_models_response.json.return_value = {
+        "data": [
+            {"id": "gpt-4o", "created": 1715368132},
+            {"id": "gpt-4o-mini", "created": 1721172741},
+            {"id": "o1-preview", "created": 1726090400},
+            {"id": "text-embedding-3-small", "created": 1705948997},
+            {"id": "dall-e-3", "created": 1698785189},
+        ]
+    }
+
+    import httpx
+
+    orig_get = httpx.AsyncClient.get
+
+    async def mocked_get(self, url, *args, **kwargs):
+        if "api.openai.com" in str(url):
+            return mock_models_response
+        return await orig_get(self, url, *args, **kwargs)
+
+    with patch.object(httpx.AsyncClient, "get", new=mocked_get):
+        resp = await client.post(
+            "/api/v1/clinics/query-ai-models",
+            json={
+                "ai_api_url": "https://api.openai.com/v1/chat/completions",
+                "ai_api_key": "sk-mock-key-for-listing",
+            },
+            headers=admin_headers,
+        )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "gpt-4o-mini" in data["models"]
+        assert "gpt-4o" in data["models"]
+        assert "o1-preview" in data["models"]
+        # Audio, embeddings and image models should have been filtered out
+        assert "dall-e-3" not in data["models"]
+        assert "text-embedding-3-small" not in data["models"]
+

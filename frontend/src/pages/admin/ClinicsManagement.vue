@@ -71,7 +71,7 @@
                     :class="clinic.ai_enabled ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-slate-100 text-slate-500'"
                   >
                     <q-icon name="auto_awesome" size="12px" />
-                    {{ clinic.ai_enabled ? 'IA Activa' : 'IA Desactivada' }}
+                    {{ clinic.ai_enabled ? `IA Activa (${clinic.ai_model || 'gpt-4o-mini'})` : 'IA Desactivada' }}
                   </span>
                 </div>
 
@@ -447,6 +447,54 @@
                 :hint="selectedClinicForAi?.has_ai_key ? 'Ya existe un token guardado. Ingresa uno nuevo solo si deseas reemplazarlo.' : 'Token secreto del proveedor de IA. Se almacena cifrado en reposo.'"
                 :required="!selectedClinicForAi?.has_ai_key"
               />
+
+              <!-- Selector de Modelos de IA -->
+              <div class="space-y-1.5 pt-1">
+                <div class="flex items-center justify-between">
+                  <label class="text-xs font-bold text-slate-700 flex items-center">
+                    <q-icon name="psychology" size="16px" class="mr-1 text-purple-700" />
+                    Modelo de IA para esta Clínica *
+                  </label>
+                  <q-btn
+                    flat
+                    dense
+                    no-caps
+                    size="sm"
+                    color="purple-8"
+                    icon="sync"
+                    label="Consultar Modelos del Proveedor"
+                    :loading="fetchingModels"
+                    class="font-semibold text-2xs"
+                    @click="fetchProviderModels"
+                  >
+                    <q-tooltip>Conectar con el endpoint del proveedor y obtener los modelos disponibles en vivo</q-tooltip>
+                  </q-btn>
+                </div>
+
+                <q-select
+                  v-model="aiForm.ai_model"
+                  :options="filteredModels"
+                  use-input
+                  fill-input
+                  hide-selected
+                  new-value-mode="add-unique"
+                  filled
+                  dense
+                  options-dense
+                  placeholder="Seleccionar o escribir nombre de modelo..."
+                  hint="Escoge un modelo devuelto por el proveedor o escribe uno personalizado (ej. gpt-4o-mini, gpt-4o, claude-3-5-sonnet, llama3)."
+                  required
+                  @filter="filterModels"
+                >
+                  <template v-slot:no-option>
+                    <q-item>
+                      <q-item-section class="text-slate-400 text-xs">
+                        No hay modelos coincidentes. Presiona Enter para usar el nombre escrito.
+                      </q-item-section>
+                    </q-item>
+                  </template>
+                </q-select>
+              </div>
             </div>
 
             <div v-if="aiError" class="p-3 rounded-lg bg-red-50 text-red-700 text-xs flex items-center">
@@ -496,10 +544,100 @@ const aiForm = reactive({
   clinic_id: '',
   ai_enabled: false,
   ai_api_url: '',
-  ai_api_key: ''
+  ai_api_key: '',
+  ai_model: 'gpt-4o-mini'
 })
 const aiSubmitting = ref(false)
 const aiError = ref('')
+
+const defaultModelOptions = [
+  'gpt-4o-mini',
+  'gpt-4o',
+  'gpt-4-turbo',
+  'gpt-3.5-turbo',
+  'claude-3-5-sonnet-20240620',
+  'llama-3.1-70b-versatile',
+  'llama-3.1-8b-instant',
+  'deepseek-chat'
+]
+const availableModels = ref([...defaultModelOptions])
+const filteredModels = ref([...defaultModelOptions])
+const fetchingModels = ref(false)
+
+function filterModels (val, update) {
+  if (val === '') {
+    update(() => {
+      filteredModels.value = availableModels.value
+    })
+    return
+  }
+  update(() => {
+    const needle = val.toLowerCase()
+    filteredModels.value = availableModels.value.filter(
+      v => v.toLowerCase().indexOf(needle) > -1
+    )
+  })
+}
+
+async function fetchProviderModels () {
+  if (!aiForm.ai_api_url) {
+    $q.notify({
+      type: 'warning',
+      message: 'Ingresa la URL del Endpoint de la API antes de consultar modelos.',
+      position: 'top'
+    })
+    return
+  }
+
+  if (!aiForm.ai_api_key && !selectedClinicForAi.value?.has_ai_key) {
+    $q.notify({
+      type: 'warning',
+      message: 'Ingresa el Token / API Key para autenticar la consulta con el proveedor.',
+      position: 'top'
+    })
+    return
+  }
+
+  fetchingModels.value = true
+  aiError.value = ''
+  try {
+    const token = localStorage.getItem('access_token')
+    const { data } = await api.post(
+      '/clinics/query-ai-models',
+      {
+        clinic_id: aiForm.clinic_id,
+        ai_api_url: aiForm.ai_api_url,
+        ai_api_key: aiForm.ai_api_key || null
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    )
+
+    if (data.models && data.models.length > 0) {
+      availableModels.value = data.models
+      filteredModels.value = data.models
+      if (aiForm.ai_model && !availableModels.value.includes(aiForm.ai_model)) {
+        availableModels.value.unshift(aiForm.ai_model)
+      } else if (!aiForm.ai_model) {
+        aiForm.ai_model = data.models[0]
+      }
+      $q.notify({
+        type: 'positive',
+        message: `Se encontraron ${data.models.length} modelos en el proveedor.`,
+        position: 'top'
+      })
+    }
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err.response?.data?.detail || 'No se pudieron consultar los modelos del proveedor.',
+      position: 'top'
+    })
+  } finally {
+    fetchingModels.value = false
+  }
+}
 
 function openAiModal (clinic) {
   selectedClinicForAi.value = clinic
@@ -507,7 +645,16 @@ function openAiModal (clinic) {
   aiForm.ai_enabled = !!clinic.ai_enabled
   aiForm.ai_api_url = clinic.ai_api_url || 'https://api.openai.com/v1/chat/completions'
   aiForm.ai_api_key = '' // Por seguridad no se reenvía la clave en claro
+  aiForm.ai_model = clinic.ai_model || 'gpt-4o-mini'
   aiError.value = ''
+
+  const preset = [
+    clinic.ai_model || 'gpt-4o-mini',
+    ...defaultModelOptions
+  ].filter((v, i, a) => a.indexOf(v) === i)
+  availableModels.value = preset
+  filteredModels.value = [...preset]
+
   showAiDialog.value = true
 }
 
@@ -521,7 +668,8 @@ async function submitAiSettings () {
       {
         ai_enabled: aiForm.ai_enabled,
         ai_api_url: aiForm.ai_api_url || null,
-        ai_api_key: aiForm.ai_api_key || undefined
+        ai_api_key: aiForm.ai_api_key || undefined,
+        ai_model: aiForm.ai_model || 'gpt-4o-mini'
       },
       {
         headers: { Authorization: `Bearer ${token}` }
