@@ -1,10 +1,11 @@
 from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.tenant import TenantScoped
 from app.models.base import Base, TimestampMixin, generate_uuid
 
 
-class MedicalAttachment(Base, TimestampMixin):
+class MedicalAttachment(Base, TimestampMixin, TenantScoped):
     """Metadatos de anexos y estudios clinicos almacenados en S3 (plan/plan.md 2.B.8)."""
 
     __tablename__ = "medical_attachments"

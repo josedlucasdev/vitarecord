@@ -424,6 +424,21 @@
           <q-item
             clickable
             v-ripple
+            to="/patient/consents"
+            active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600"
+          >
+            <q-item-section avatar>
+              <q-icon name="verified_user" size="20px" color="teal" />
+            </q-item-section>
+            <q-item-section>
+              <q-item-label>Acceso a mi Historia</q-item-label>
+              <q-item-label caption>Autorizar o revocar clínicas</q-item-label>
+            </q-item-section>
+          </q-item>
+
+          <q-item
+            clickable
+            v-ripple
             to="/medical/history"
             active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600"
           >
@@ -893,7 +908,7 @@
     <EmergencySosModal v-model="showEmergencyModal" />
 
     <!-- Modal Global de Seguridad y Segundo Factor MFA (Google Authenticator) -->
-    <MfaSecurityModal v-model="showMfaModal" />
+    <MfaSecurityModal v-model="showMfaModal" @status-changed="onMfaStatusChanged" />
   </q-layout>
 </template>
 
@@ -1336,7 +1351,32 @@ function connectNotificationWebSocket () {
   }
 }
 
+// Politica de MFA obligatorio (plan 2.B.9): el backend responde 403
+// MFA_SETUP_REQUIRED y boot/axios emite este evento; se abre el asistente.
+let mfaRequiredNotified = false
+function onMfaSetupRequired () {
+  showMfaModal.value = true
+  if (!mfaRequiredNotified) {
+    mfaRequiredNotified = true
+    Notify.create({
+      type: 'warning',
+      icon: 'security',
+      message: 'Tu rol exige autenticación de dos factores. Activa Google Authenticator para continuar.',
+      position: 'top',
+      timeout: 6000
+    })
+  }
+}
+
+function onMfaStatusChanged (enabled) {
+  if (enabled && mfaRequiredNotified) {
+    // Recargar para que las vistas que fallaron por la politica se rehidraten.
+    window.location.reload()
+  }
+}
+
 onMounted(() => {
+  window.addEventListener('vitarecord:mfa-setup-required', onMfaSetupRequired)
   if (isLoggedIn.value) {
     fetchInAppNotifications()
     connectNotificationWebSocket()
@@ -1349,6 +1389,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('vitarecord:mfa-setup-required', onMfaSetupRequired)
   if (notifSocket) {
     notifSocket.close()
     notifSocket = null

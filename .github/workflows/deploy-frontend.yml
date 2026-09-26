@@ -7,10 +7,17 @@ on:
     paths:
       - 'frontend/**'
       - '.github/workflows/deploy-frontend.yml'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 jobs:
+  ci:
+    name: Pruebas previas al despliegue
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   build-and-deploy:
+    needs: ci
     name: 🚀 Build & Deploy to Cloudflare Pages
     runs-on: ubuntu-latest
     steps:

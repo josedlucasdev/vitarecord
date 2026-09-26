@@ -10,6 +10,13 @@ export interface Env {
   ENVIRONMENT: string;
 }
 
+const ALLOWED_ORIGIN_RE =
+  /^(https:\/\/([a-z0-9-]+\.)*vitarecord\.com|https:\/\/([a-z0-9-]+\.)?vitarecord-(app|web)\.pages\.dev|http:\/\/localhost(:\d+)?)$/;
+
+function allowedOrigin(origin: string | null): string {
+  return origin && ALLOWED_ORIGIN_RE.test(origin) ? origin : "https://app.vitarecord.com";
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
@@ -35,7 +42,10 @@ export default {
       return new Response(null, {
         status: 204,
         headers: {
-          "Access-Control-Allow-Origin": request.headers.get("Origin") || "*",
+          // Solo se refleja el origen si esta en la lista permitida (mismo
+          // criterio que CORS_ORIGIN_REGEX del backend); nunca "*" con credenciales.
+          "Access-Control-Allow-Origin": allowedOrigin(request.headers.get("Origin")),
+          "Vary": "Origin",
           "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
           "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Clinic-ID, X-Requested-With",
           "Access-Control-Allow-Credentials": "true",

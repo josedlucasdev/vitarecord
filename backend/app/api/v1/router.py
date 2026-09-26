@@ -3,9 +3,11 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     analytics,
     appointments,
+    audit,
     auth,
     availability,
     clinics,
+    consents,
     dependents,
     doctor_verification,
     doctors,
@@ -35,6 +37,8 @@ api_router.include_router(procedures.router, tags=["procedures"])
 api_router.include_router(dependents.router, tags=["dependents"])
 api_router.include_router(patients.router, tags=["patients"])
 api_router.include_router(payments.router, tags=["payments"])
+api_router.include_router(consents.router, prefix="/consents", tags=["consents"])
+api_router.include_router(audit.router, prefix="/audit", tags=["audit"])
 
 api_router.include_router(emergencies.router, prefix="/emergencies", tags=["emergencies"])
 api_router.include_router(medical_records.router, prefix="/medical-records", tags=["medical-records"])

@@ -3,6 +3,7 @@ from sqlalchemy import and_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.tenant import cross_tenant
 from app.models.appointment import Appointment
 from app.models.clinic import Clinic, ClinicRoom
 from app.models.payment_record import PaymentRecord
@@ -15,6 +16,7 @@ NON_CONFLICT_STATUSES = (
     "REJECTED_BY_PATIENT",
     "REJECTED_BY_DOCTOR",
     "RESCHEDULED",
+    "NO_SHOW",
 )
 
 
@@ -74,7 +76,10 @@ class AppointmentRepository:
         if exclude_id:
             conditions.append(Appointment.id != exclude_id)
 
-        stmt = select(Appointment).where(*conditions)
+        # Inter-clinica a proposito: un medico no puede tener citas solapadas en
+        # NINGUNA clinica (plan 2.B.4 Regla 1), aunque quien reserva sea personal
+        # de una sola sede con el filtro de tenant activo.
+        stmt = cross_tenant(select(Appointment).where(*conditions))
         res = await self.db.execute(stmt)
         return list(res.scalars().all())
 

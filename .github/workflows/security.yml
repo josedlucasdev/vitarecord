@@ -1,0 +1,49 @@
+name: Seguridad - auditoria de dependencias
+
+# Plan 2.B.10 / Modulo 7: auditoria de dependencias (pip-audit, npm audit).
+# Configure este workflow como "required status check" en la proteccion de la
+# rama main de GitHub para bloquear el merge ante vulnerabilidades.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 11 * * 1" # lunes 07:17 hora de Caracas
+  workflow_dispatch:
+
+jobs:
+  python-deps:
+    name: pip-audit (backend)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Auditar dependencias de Python
+        run: |
+          pip install pip-audit==2.7.3
+          pip-audit -r backend/requirements.txt --desc
+
+  node-deps:
+    name: npm audit (frontend, landing, worker)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [frontend, landing, cloudflare]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Auditar dependencias de ${{ matrix.project }}
+        working-directory: ${{ matrix.project }}
+        # Solo produccion y severidad critica bloquean (las altas se reportan).
+        run: |
+          if [ -f package-lock.json ]; then
+            npm audit --omit=dev --audit-level=critical
+          else
+            npm install --package-lock-only --ignore-scripts
+            npm audit --omit=dev --audit-level=critical
+          fi

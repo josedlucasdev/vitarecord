@@ -2,10 +2,11 @@ import datetime
 from sqlalchemy import DateTime, ForeignKey, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.tenant import TenantScoped
 from app.models.base import Base, TimestampMixin, generate_uuid
 
 
-class Appointment(Base, TimestampMixin):
+class Appointment(Base, TimestampMixin, TenantScoped):
     """Cita médica programada con soporte de salas físicas y familiares (plan/plan.md 2.B.4 y 2.B.5)."""
 
     __tablename__ = "appointments"

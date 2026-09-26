@@ -51,10 +51,18 @@ class PaymentRepository:
             await self.db.flush()
         return record
 
-    async def get_daily_summary(self, clinic_id: str, target_date: datetime.date) -> dict:
-        """Cuadre de caja diario excluyendo pagos EXEMPT y VOID de los totales recaudados."""
-        start_of_day = datetime.datetime.combine(target_date, datetime.time.min)
-        end_of_day = datetime.datetime.combine(target_date, datetime.time.max)
+    async def get_daily_summary(
+        self, clinic_id: str, target_date: datetime.date, tz_name: str | None = None
+    ) -> dict:
+        """Cuadre de caja diario excluyendo pagos EXEMPT y VOID de los totales recaudados.
+
+        El "día" es el día LOCAL de la clínica (plan 2.B.4): en Caracas un cobro
+        a las 21:00 pertenece al mismo día aunque en UTC ya sea el siguiente.
+        """
+        from app.core.timezones import local_day_bounds_utc
+
+        start_of_day, next_day = local_day_bounds_utc(target_date, tz_name)
+        end_of_day = next_day - datetime.timedelta(microseconds=1)
 
         stmt = (
             select(PaymentRecord)

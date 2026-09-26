@@ -288,7 +288,10 @@ async def upload_my_doctor_avatar(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "La imagen no debe superar los 5 MB de tamaño.")
 
-    ext = allowed_types[content_type]
+    from app.core.image_processing import sanitize_image_exif
+
+    content, content_type = sanitize_image_exif(content, original_content_type=content_type, max_dimension=1024)
+    ext = allowed_types.get(content_type, "png")
     s3_key = storage_service.build_avatar_key("doctors", current_user.id, ext)
 
     # Limpiar extensiones previas en R2

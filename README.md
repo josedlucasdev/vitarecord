@@ -1,11 +1,12 @@
-# appcitas — ÍntimaSalud
+# VitaRecord (anteriormente appcitas) — Plataforma Médica Integral
 
-Implementación en curso según `plan/plan.md`. Estado actual: **Módulo 0 completo
-(infraestructura contenerizada)** + **arranque de Módulo 1** (modelos base,
-autenticación JWT/Argon2/TOTP, health checks). Los módulos 2 en adelante
-(motor de citas con filas mutex, verificación de médicos, emergencias,
-notificaciones multicanal, cifrado PHI, observabilidad completa) están
-en el roadmap de `plan/plan.md` y se implementan de forma incremental.
+Estado actual de implementación: **Módulos 0 al 6 COMPLETADOS** con suite integral de 108 tests pasando al 100%:
+- **Módulo 0 & 1:** Infraestructura contenerizada, modelos SQLAlchemy, autenticación JWT con Argon2id, TOTP MFA, control de acceso RBAC por clínica y health/readiness checks.
+- **Módulo 1.5 & 2:** Directorio médico público, perfiles profesionales, agendamiento de citas con cerrojos distribuidos mutex en Redis (prevención de sobreventa), disponibilidad física de consultorios y reglas de fair-use / ciclo de vida (`CHECKED_IN`, `IN_CONSULTATION`, `NO_SHOW`, `RESCHEDULED`).
+- **Módulo 3:** Dependientes y núcleo familiar, transición legal de minoridad a mayoría de edad (emancipación a los 18 años con suspensión de acceso del titular a nuevas notas clínicas), consentimientos inter-clínica (`patient_consent_grants`) y registro manual de pagos/cuadre de caja.
+- **Módulo 4:** Urgencia médica remota, botón SOS con descargo legal, escalamiento multicanal con SLAs en cascada y WebSockets en tiempo real hacia la Torre de Control.
+- **Módulo 5:** Historias clínicas con Envelope Encryption (AES-256-GCM + DEK por clínica y rotación de KEK en Vault), recetas médicas criptográficas con verificación por código QR, optimización de anexos a WebP con descarte de metadatos EXIF y pistas de auditoría inmutable de toda lectura (`action=READ`).
+- **Módulo 6:** Notificaciones multicanal (WhatsApp Business Cloud API, Twilio SMS/Voz, FCM Push y Email) con fallback automático y reintentos, webhooks bidireccionales y worker dedicado en segundo plano (`appcitas_worker`).
 
 ## Cómo levantar el entorno
 
@@ -29,6 +30,7 @@ Servicios expuestos en el host:
   octubre de 2025 (`docker pull minio/minio` responde `pull access denied`).
 - Mailpit (correo local): http://localhost:8025
 - Vault (modo dev): http://localhost:8200
+- Worker de fondo (`appcitas_worker`): ejecuta schedulers periódicos de recordatorios, escalamiento de urgencias y emancipación de dependientes con cerrojos distribuidos Redis.
 
 Observabilidad opcional (Prometheus/Grafana, no se levanta por defecto):
 

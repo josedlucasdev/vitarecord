@@ -1,7 +1,11 @@
 """Webhooks de Meta WhatsApp Cloud API y Twilio para recepción de estados y respuestas interactivas de pacientes (plan/plan.md Módulo 6 y 2.B.5)."""
 
+import base64
 import datetime
+import hashlib
+import hmac
 import logging
+import secrets
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -40,7 +44,8 @@ async def verify_whatsapp_webhook(
     Verifica que hub.verify_token coincida con WHATSAPP_VERIFY_TOKEN configurado en el servidor
     y devuelve hub.challenge como texto plano con HTTP 200.
     """
-    if hub_mode == "subscribe" and hub_verify_token == settings.WHATSAPP_VERIFY_TOKEN:
+    expected = settings.WHATSAPP_VERIFY_TOKEN
+    if hub_mode == "subscribe" and expected and hub_verify_token and secrets.compare_digest(hub_verify_token, expected):
         logger.info("Webhook de WhatsApp verificado exitosamente por Meta.")
         return PlainTextResponse(content=hub_challenge or "", status_code=200)
 
@@ -49,6 +54,38 @@ async def verify_whatsapp_webhook(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="Token de verificación inválido o modo incorrecto.",
     )
+
+
+def verify_meta_signature(raw_body: bytes, signature_header: str | None) -> None:
+    """Valida X-Hub-Signature-256 (HMAC-SHA256 del cuerpo con el app secret de Meta).
+
+    Sin esta validacion cualquiera podria enviar un "Aceptar/Rechazar" falso y
+    cambiar el estado de una cita. Si WHATSAPP_APP_SECRET no esta configurado
+    (solo permitido fuera de produccion) la validacion se omite.
+    """
+    secret = settings.WHATSAPP_APP_SECRET
+    if not secret:
+        if settings.ENVIRONMENT == "production":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Webhook de WhatsApp sin secreto configurado")
+        return
+    expected = "sha256=" + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    if not signature_header or not hmac.compare_digest(signature_header, expected):
+        logger.warning("Firma invalida en webhook de WhatsApp")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Firma del webhook inválida")
+
+
+def verify_twilio_signature(url: str, params: dict[str, str], signature_header: str | None) -> None:
+    """Valida X-Twilio-Signature (HMAC-SHA1 de URL + parametros ordenados con el auth token)."""
+    token = settings.TWILIO_AUTH_TOKEN
+    if not token or token.startswith("dev_"):
+        if settings.ENVIRONMENT == "production":
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Webhook de Twilio sin credenciales configuradas")
+        return
+    payload = url + "".join(f"{k}{params[k]}" for k in sorted(params))
+    expected = base64.b64encode(hmac.new(token.encode(), payload.encode(), hashlib.sha1).digest()).decode()
+    if not signature_header or not hmac.compare_digest(signature_header, expected):
+        logger.warning("Firma invalida en webhook de Twilio")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Firma del webhook inválida")
 
 
 @router.post("/whatsapp", summary="Recepción de eventos y mensajes de Meta WhatsApp")
@@ -62,6 +99,8 @@ async def receive_whatsapp_event(
     2. Respuestas interactivas con botones [Aceptar] o [Rechazar] -> confirman la cita o liberan
        el slot/consultorio al instante y marcan el cobro como EXEMPT.
     """
+    raw_body = await request.body()
+    verify_meta_signature(raw_body, request.headers.get("X-Hub-Signature-256"))
     try:
         data = await request.json()
     except Exception:
@@ -236,6 +275,11 @@ async def receive_twilio_event(
 ):
     """Callback de estado de entrega de Twilio (Messages y Calls)."""
     form_data = await request.form()
+    verify_twilio_signature(
+        settings.TWILIO_WEBHOOK_URL or str(request.url),
+        {k: str(v) for k, v in form_data.items()},
+        request.headers.get("X-Twilio-Signature"),
+    )
     message_sid = form_data.get("MessageSid") or form_data.get("CallSid")
     message_status = form_data.get("MessageStatus") or form_data.get("CallStatus")
 

@@ -11,7 +11,9 @@ from app.models.user import User
 from app.schemas.appointment import (
     AppointmentCancelRequest,
     AppointmentCreate,
+    AppointmentNoShowRequest,
     AppointmentPublic,
+    AppointmentRescheduleRequest,
     PublicAppointmentCreate,
 )
 from app.schemas.procedure import AppointmentProcedureCreate
@@ -155,4 +157,56 @@ async def add_appointment_procedure(
     """Agrega un procedimiento clínico realizado a una cita (en consulta médica) y recalcula la caja."""
     service = AppointmentService(db)
     return await service.add_procedure_to_appointment(appointment_id, payload, current_user)
+
+
+@router.post("/{appointment_id}/check-in", response_model=AppointmentPublic)
+async def check_in_appointment(
+    appointment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Marca la llegada del paciente a recepción (CHECKED_IN)."""
+    service = AppointmentService(db)
+    return await service.check_in(appointment_id, current_user)
+
+
+@router.post("/{appointment_id}/start-consultation", response_model=AppointmentPublic)
+async def start_consultation_appointment(
+    appointment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """El médico especialista inicia formalmente la consulta médica (IN_CONSULTATION)."""
+    service = AppointmentService(db)
+    return await service.start_consultation(appointment_id, current_user)
+
+
+@router.post("/{appointment_id}/no-show", response_model=AppointmentPublic)
+async def record_no_show_appointment(
+    appointment_id: str,
+    payload: AppointmentNoShowRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Registra la inasistencia del paciente (NO_SHOW), contabiliza strikes y aplica fair use."""
+    service = AppointmentService(db)
+    return await service.record_no_show(appointment_id, payload.reason, current_user)
+
+
+@router.post("/{appointment_id}/reschedule", response_model=AppointmentPublic)
+async def reschedule_appointment(
+    appointment_id: str,
+    payload: AppointmentRescheduleRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Reprograma una cita a un nuevo horario validando disponibilidad de consultorio y médico."""
+    service = AppointmentService(db)
+    return await service.reschedule_appointment(
+        appointment_id=appointment_id,
+        new_start_time=payload.new_start_time,
+        new_end_time=payload.new_end_time,
+        reason=payload.reason,
+        current_user=current_user,
+    )
 

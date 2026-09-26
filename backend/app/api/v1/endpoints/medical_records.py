@@ -2,7 +2,7 @@
 
 import uuid
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from fastapi import APIRouter, Depends, File, Query, Request, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -103,10 +103,15 @@ async def list_doctor_attended_patients(
             detail="Solo los médicos especialistas pueden acceder a su lista de pacientes atendidos.",
         )
     service = MedicalRecordService(db)
+    client_ip = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
     return await service.list_doctor_attended_patients(
         doctor_id=current_user.id,
         query=q,
         filter_type=filter_type,
+        current_user=current_user,
+        client_ip=client_ip,
+        user_agent=user_agent,
     )
 
 
@@ -234,7 +239,7 @@ async def register_attachment(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_WRITE))],
 ):
-    """Guarda los metadatos del anexo una vez subido exitosamente a S3."""
+    """Guarda los metadatos del anexo una vez subido exitosamente a S3, aplicando optimización WebP y eliminación EXIF si es imagen."""
     from sqlalchemy import select
     from app.models.medical_record import MedicalRecord
 
@@ -242,14 +247,90 @@ async def register_attachment(
     if not record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Historia médica no encontrada.")
 
+    file_name = payload.file_name
+    content_type = payload.content_type
+    file_size = payload.file_size
+    s3_key = payload.s3_key
+
+    # Optimización WebP y eliminación EXIF para imágenes (plan 2.B.5 / Módulo 5)
+    is_img = content_type.startswith("image/") or file_name.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
+    if is_img:
+        try:
+            file_data = storage_service.get_file(s3_key)
+            if file_data:
+                raw_bytes, _ = file_data
+                from app.core.image_processing import sanitize_and_convert_to_webp
+
+                webp_bytes, new_content_type = sanitize_and_convert_to_webp(raw_bytes)
+                new_key = s3_key.rsplit(".", 1)[0] + ".webp"
+                storage_service.upload_file(webp_bytes, new_key, content_type=new_content_type)
+                if new_key != s3_key:
+                    storage_service.delete_file(s3_key)
+
+                s3_key = new_key
+                content_type = new_content_type
+                file_size = len(webp_bytes)
+                file_name = file_name.rsplit(".", 1)[0] + ".webp"
+        except Exception:
+            pass
+
     attachment = MedicalAttachment(
         medical_record_id=record.id,
         clinic_id=record.clinic_id,
-        file_name=payload.file_name,
-        content_type=payload.content_type,
-        file_size=payload.file_size,
-        s3_key=payload.s3_key,
+        file_name=file_name,
+        content_type=content_type,
+        file_size=file_size,
+        s3_key=s3_key,
     )
     db.add(attachment)
     await db.commit()
-    return {"id": attachment.id, "file_name": attachment.file_name}
+    return {"id": attachment.id, "file_name": attachment.file_name, "content_type": attachment.content_type, "file_size": attachment.file_size}
+
+
+@router.post(
+    "/{record_id}/attachments/upload",
+    summary="Subida directa de anexo médico con sanitización EXIF y WebP",
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_attachment_direct(
+    record_id: str,
+    file: UploadFile = File(...),
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_WRITE))] = None,
+):
+    """Sube un archivo directamente, convirtiendo imágenes a WebP y eliminando metadatos EXIF."""
+    from sqlalchemy import select
+    from app.models.medical_record import MedicalRecord
+
+    record = (await db.execute(select(MedicalRecord).where(MedicalRecord.id == record_id))).scalar_one_or_none()
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Historia médica no encontrada.")
+
+    raw_bytes = await file.read()
+    orig_name = file.filename or "archivo.dat"
+    content_type = file.content_type or "application/octet-stream"
+
+    is_img = content_type.startswith("image/") or orig_name.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
+    if is_img:
+        from app.core.image_processing import sanitize_and_convert_to_webp
+
+        final_bytes, content_type = sanitize_and_convert_to_webp(raw_bytes)
+        file_name = orig_name.rsplit(".", 1)[0] + ".webp"
+    else:
+        final_bytes = raw_bytes
+        file_name = orig_name
+
+    s3_key = storage_service.build_medical_record_attachment_key(record.clinic_id, record.id, file_name)
+    storage_service.upload_file(final_bytes, s3_key, content_type=content_type)
+
+    attachment = MedicalAttachment(
+        medical_record_id=record.id,
+        clinic_id=record.clinic_id,
+        file_name=file_name,
+        content_type=content_type,
+        file_size=len(final_bytes),
+        s3_key=s3_key,
+    )
+    db.add(attachment)
+    await db.commit()
+    return {"id": attachment.id, "file_name": attachment.file_name, "content_type": attachment.content_type, "file_size": attachment.file_size}

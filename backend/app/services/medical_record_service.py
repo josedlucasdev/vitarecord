@@ -244,6 +244,43 @@ class MedicalRecordService:
                 detail="No tienes autorización para consultar esta historia clínica confidencial.",
             )
 
+        # Regla de Emancipación (Módulo 3): suspensión de acceso del titular a nuevas historias tras 18 años
+        if is_patient and record.dependent_id:
+            dep_res = await self.db.execute(select(PatientDependent).where(PatientDependent.id == record.dependent_id))
+            dep = dep_res.scalar_one_or_none()
+            if dep and dep.guardian_user_id == current_user.id:
+                today = datetime.date.today()
+                age = (
+                    today.year
+                    - dep.birth_date.year
+                    - ((today.month, today.day) < (dep.birth_date.month, dep.birth_date.day))
+                )
+                is_adult = age >= 18 or dep.emancipation_status in ("EMANCIPATION_PENDING_CONSENT", "EMANCIPATED")
+                if is_adult:
+                    try:
+                        majority_date = dep.birth_date.replace(year=dep.birth_date.year + 18)
+                    except ValueError:
+                        majority_date = dep.birth_date.replace(year=dep.birth_date.year + 18, day=28)
+                    majority_dt = datetime.datetime.combine(majority_date, datetime.time.min)
+                    if record.created_at >= majority_dt:
+                        has_consent = False
+                        if dep.linked_user_id:
+                            from app.models.patient_consent_grant import PatientConsentGrant
+                            consent_stmt = select(PatientConsentGrant).where(
+                                PatientConsentGrant.patient_id == dep.linked_user_id,
+                                PatientConsentGrant.granted_by_user_id == dep.linked_user_id,
+                                PatientConsentGrant.is_revoked.is_(False),
+                                PatientConsentGrant.granted_until > datetime.datetime.utcnow(),
+                            )
+                            consent_res = await self.db.execute(consent_stmt)
+                            if consent_res.first():
+                                has_consent = True
+                        if not has_consent:
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail="El acceso del titular a historias clínicas del dependiente emancipado está suspendido por defecto.",
+                            )
+
         # Regla DoD Critica: Auditoria inmutable de TODA lectura de MEDICAL_RECORDS
         await self._audit(
             action="READ",
@@ -281,6 +318,14 @@ class MedicalRecordService:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Solo puedes consultar tu propio historial médico o el de tus dependientes autorizados.",
             )
+        doctor_access = None
+        if current_user.role == "DOCTOR":
+            doctor_access = await self._doctor_history_access(current_user, patient_id)
+        elif current_user.role != "PATIENT":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Rol sin acceso a historias clínicas.",
+            )
 
         stmt = (
             select(MedicalRecord)
@@ -303,9 +348,54 @@ class MedicalRecordService:
 
         records = list((await self.db.execute(stmt)).scalars().all())
 
+        # Regla de Emancipación (Módulo 3): el acceso del titular a nuevas notas clínicas queda suspendido tras los 18 años
+        is_emancipated_minor_history = False
+        if current_user.role == "PATIENT" and dependent_id:
+            dep_res = await self.db.execute(select(PatientDependent).where(PatientDependent.id == dependent_id))
+            dep = dep_res.scalar_one_or_none()
+            if dep and dep.guardian_user_id == current_user.id:
+                today = datetime.date.today()
+                age = (
+                    today.year
+                    - dep.birth_date.year
+                    - ((today.month, today.day) < (dep.birth_date.month, dep.birth_date.day))
+                )
+                is_adult = age >= 18 or dep.emancipation_status in ("EMANCIPATION_PENDING_CONSENT", "EMANCIPATED")
+                if is_adult:
+                    has_consent = False
+                    if dep.linked_user_id:
+                        from app.models.patient_consent_grant import PatientConsentGrant
+                        consent_stmt = select(PatientConsentGrant).where(
+                            PatientConsentGrant.patient_id == dep.linked_user_id,
+                            PatientConsentGrant.granted_by_user_id == dep.linked_user_id,
+                            PatientConsentGrant.is_revoked.is_(False),
+                            PatientConsentGrant.granted_until > datetime.datetime.utcnow(),
+                        )
+                        consent_res = await self.db.execute(consent_stmt)
+                        if consent_res.first():
+                            has_consent = True
+
+                    if not has_consent:
+                        try:
+                            majority_date = dep.birth_date.replace(year=dep.birth_date.year + 18)
+                        except ValueError:
+                            majority_date = dep.birth_date.replace(year=dep.birth_date.year + 18, day=28)
+                        majority_dt = datetime.datetime.combine(majority_date, datetime.time.min)
+                        records = [r for r in records if r.created_at < majority_dt]
+                        is_emancipated_minor_history = True
+
+        if doctor_access is not None:
+            records = [r for r in records if self._doctor_can_read(current_user, r, doctor_access)]
+
         results = []
         for r in records:
             # Auditoria de lectura obligatoria
+            details = {"source": "list_patient_history"}
+            if dependent_id:
+                details["dependent_id"] = dependent_id
+            if is_emancipated_minor_history:
+                details["emancipated_minor_history"] = True
+
             await self._audit(
                 action="READ",
                 entity_type="medical_record",
@@ -314,7 +404,7 @@ class MedicalRecordService:
                 user_id=current_user.id,
                 client_ip=client_ip,
                 user_agent=user_agent,
-                details={"source": "list_patient_history"},
+                details=details,
             )
             dek, _ = await get_or_create_clinic_dek(self.db, r.clinic_id, version=r.encryption_key_version)
             pub = await self._build_public_record(r, dek, r.doctor, r.patient, r.clinic)
@@ -322,6 +412,67 @@ class MedicalRecordService:
 
         await self.db.commit()
         return results
+
+    async def _doctor_history_access(self, doctor: User, patient_id: str) -> dict:
+        """Reglas de lectura de historia clinica para un medico (Principio 3).
+
+        - Siempre puede leer lo que el mismo redacto.
+        - Puede leer lo generado en las clinicas donde ATIENDE al paciente
+          (afiliacion ACTIVE + cita no cancelada/rechazada con el paciente).
+        - Lo generado en OTRAS clinicas solo si el paciente otorgo un
+          consentimiento vigente a alguna de esas clinicas de atencion.
+        Sin ninguna relacion asistencial con el paciente: 403.
+        """
+        from app.core.tenant import cross_tenant
+        from app.models.affiliation import DoctorClinicAffiliation
+        from app.repositories.consent_repository import ConsentRepository
+
+        inactive = (
+            "CANCELLED_BY_PATIENT", "CANCELLED_BY_DOCTOR", "CANCELLED_BY_CLINIC",
+            "REJECTED_BY_PATIENT", "REJECTED_BY_DOCTOR",
+        )
+        care_stmt = (
+            select(Appointment.clinic_id)
+            .join(
+                DoctorClinicAffiliation,
+                (DoctorClinicAffiliation.clinic_id == Appointment.clinic_id)
+                & (DoctorClinicAffiliation.doctor_id == doctor.id),
+            )
+            .where(
+                Appointment.doctor_id == doctor.id,
+                Appointment.patient_id == patient_id,
+                Appointment.status.not_in(inactive),
+                DoctorClinicAffiliation.status == "ACTIVE",
+            )
+            .distinct()
+        )
+        care_clinics = set((await self.db.execute(cross_tenant(care_stmt))).scalars().all())
+
+        authored = (
+            await self.db.execute(
+                cross_tenant(
+                    select(MedicalRecord.id)
+                    .where(MedicalRecord.doctor_id == doctor.id, MedicalRecord.patient_id == patient_id)
+                    .limit(1)
+                )
+            )
+        ).scalar_one_or_none()
+
+        if not care_clinics and authored is None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo puedes consultar la historia clínica de pacientes que atiendes.",
+            )
+        has_consent = await ConsentRepository(self.db).has_active_consent(patient_id, care_clinics)
+        return {"care_clinics": care_clinics, "has_consent": has_consent}
+
+    @staticmethod
+    def _doctor_can_read(doctor: User, record: MedicalRecord, access: dict) -> bool:
+        return (
+            record.doctor_id == doctor.id
+            or record.clinic_id in access["care_clinics"]
+            or access["has_consent"]
+        )
 
     async def get_prescription_pdf_bytes(self, prescription_id: str, current_user: User) -> bytes:
         """Genera y descarga el documento PDF oficial de la receta con codigo QR."""
@@ -422,6 +573,9 @@ class MedicalRecordService:
         doctor_id: str,
         query: str | None = None,
         filter_type: str | None = None,
+        current_user: User | None = None,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
     ) -> list[DoctorAttendedPatientPublic]:
         """Obtiene la lista consolidada de pacientes (titulares o dependientes) atendidos por este médico."""
         # 1. Agrupar pares (patient_id, dependent_id) atendidos en MedicalRecord
@@ -577,6 +731,24 @@ class MedicalRecordService:
             )
 
         results.sort(key=lambda x: x.last_consultation_at or datetime.datetime.min, reverse=True)
+
+        clinic_id = current_user.clinic_id if current_user else None
+        await self._audit(
+            action="SEARCH_PATIENTS",
+            entity_type="patient_search",
+            entity_id=doctor_id,
+            clinic_id=clinic_id,
+            user_id=doctor_id,
+            client_ip=client_ip,
+            user_agent=user_agent,
+            details={
+                "query": query,
+                "filter_type": filter_type,
+                "results_count": len(results),
+            },
+        )
+        await self.db.commit()
+
         return results
 
     async def get_medical_history_pdf_bytes(

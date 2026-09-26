@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Date, Float, ForeignKey, String
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship as sa_relationship
 
 from app.models.base import Base, TimestampMixin, generate_uuid
@@ -26,9 +26,16 @@ class PatientDependent(Base, TimestampMixin):
     chronic_conditions: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Contacto adicional y notas
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     profile_picture_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
-    # Relacion con el paciente titular
-    guardian: Mapped["User"] = sa_relationship("User", backref="dependents")
+    # Emancipación y vinculación a cuenta propia independiente
+    linked_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    emancipated_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Relaciones
+    guardian: Mapped["User"] = sa_relationship("User", foreign_keys=[guardian_user_id], backref="dependents")
+    linked_user: Mapped["User | None"] = sa_relationship("User", foreign_keys=[linked_user_id])
+

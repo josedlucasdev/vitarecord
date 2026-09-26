@@ -16,6 +16,10 @@ class EmergencySosRequest(BaseModel):
     )
 
 
+class EmergencyAssignRequest(BaseModel):
+    doctor_id: str
+
+
 class EmergencyResolveRequest(BaseModel):
     triage_notes: str = Field(..., min_length=5)
 
@@ -59,5 +63,8 @@ class EmergencyIncidentPublic(BaseModel):
     triggered_at: datetime.datetime
     accepted_at: datetime.datetime | None = None
     resolved_at: datetime.datetime | None = None
+    last_escalated_at: datetime.datetime | None = None
+    acknowledged_at: datetime.datetime | None = None
+    acknowledged_by_id: str | None = None
     response_time_seconds: float | None = None
     notification_logs: list[NotificationLogPublic] = []

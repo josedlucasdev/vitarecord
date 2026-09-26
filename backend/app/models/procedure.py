@@ -2,12 +2,13 @@
 
 from decimal import Decimal
 from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 
+from app.core.tenant import TenantScoped
 from app.models.base import Base, TimestampMixin, generate_uuid
 
 
-class MedicalProcedure(Base, TimestampMixin):
+class MedicalProcedure(Base, TimestampMixin, TenantScoped):
     """Catalogo de procedimientos clinicos (ecografias, biopsias, colposcopias, etc.)
     
     Si doctor_id es NULL: Es un procedimiento institucional regulado por la clinica (medicos contratados).
@@ -29,7 +30,11 @@ class MedicalProcedure(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Relaciones
-    clinic: Mapped["Clinic"] = relationship("Clinic", backref="medical_procedures")
+    clinic: Mapped["Clinic"] = relationship(
+        "Clinic",
+        backref=backref("medical_procedures", cascade="all, delete-orphan", passive_deletes=True),
+        passive_deletes=True,
+    )
     doctor: Mapped["User | None"] = relationship("User", foreign_keys=[doctor_id], backref="custom_procedures")
 
 

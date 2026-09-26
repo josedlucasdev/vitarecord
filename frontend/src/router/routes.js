@@ -235,6 +235,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'patient/consents',
+        name: 'patient-consents',
+        component: () => import('pages/patient/PatientConsents.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'doctor/profile',
         name: 'doctor-profile',
         component: () => import('pages/doctor/DoctorProfile.vue'),

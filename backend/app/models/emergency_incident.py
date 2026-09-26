@@ -2,10 +2,11 @@ import datetime
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship as sa_relationship
 
+from app.core.tenant import TenantScoped
 from app.models.base import Base, TimestampMixin, generate_uuid
 
 
-class EmergencyIncident(Base, TimestampMixin):
+class EmergencyIncident(Base, TimestampMixin, TenantScoped):
     """Incidente de urgencia médica remota con trazabilidad de escalamiento (plan/plan.md 2.B.7)."""
 
     __tablename__ = "emergency_incidents"
@@ -16,7 +17,8 @@ class EmergencyIncident(Base, TimestampMixin):
     dependent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("patient_dependents.id", ondelete="SET NULL"), nullable=True)
     assigned_doctor_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
-    # Estados: TRIGGERED, DISPATCHED, ACCEPTED, ESCALATED_MODERATOR, ESCALATED_BACKUP, RESOLVED, CANCELLED
+    # Estados: TRIGGERED, DISPATCHED, ESCALATED_DOCTOR_<n>, ACCEPTED, ESCALATED_MODERATOR,
+    # ESCALATED_BACKUP, RESOLVED, CANCELLED
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="TRIGGERED", index=True)
     escalation_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
@@ -31,6 +33,15 @@ class EmergencyIncident(Base, TimestampMixin):
     triggered_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     accepted_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
     resolved_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Orquestador automatico de escalamiento (plan 2.B.7): momento en que se
+    # entro al nivel actual; los SLA (15 s entrega, 60 s aceptacion, 2 min
+    # moderador) se miden desde aqui.
+    last_escalated_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    # Reconocimiento del moderador/SuperAdmin de turno (detiene el escalamiento
+    # hacia la linea de respaldo de la clinica).
+    acknowledged_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
+    acknowledged_by_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # Relaciones
     clinic: Mapped["Clinic"] = sa_relationship("Clinic", backref="emergency_incidents")

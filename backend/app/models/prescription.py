@@ -3,10 +3,11 @@ from typing import Any
 from sqlalchemy import JSON, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.tenant import TenantScoped
 from app.models.base import Base, TimestampMixin, generate_uuid
 
 
-class Prescription(Base, TimestampMixin):
+class Prescription(Base, TimestampMixin, TenantScoped):
     """Receta medica con token criptografico SHA-256 y codigo QR verificable en farmacias (plan/plan.md 2.B.8)."""
 
     __tablename__ = "prescriptions"

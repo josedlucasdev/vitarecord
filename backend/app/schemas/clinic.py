@@ -31,9 +31,14 @@ class ClinicPublic(BaseModel):
     phone: str | None = None
     address: str | None = None
     is_active: bool
+    require_mfa_for_receptionists: bool = False
     created_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ClinicSecurityPolicyUpdate(BaseModel):
+    require_mfa_for_receptionists: bool
 
 
 class ClinicDoctorPublic(BaseModel):

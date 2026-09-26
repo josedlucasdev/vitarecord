@@ -17,6 +17,7 @@ from app.core.database import get_db
 from app.core.security import create_password_reset_token
 from app.models.affiliation import DoctorClinicAffiliation, PatientClinicAffiliation
 from app.models.clinic import Clinic
+from app.models.procedure import AppointmentProcedure, MedicalProcedure
 from app.models.schedule import DoctorWeeklySchedule
 from app.models.user import DoctorScheduleLock, User
 from app.repositories.clinic_repository import ClinicRepository
@@ -25,6 +26,7 @@ from app.schemas.clinic import (
     ClinicCreateRequest,
     ClinicDoctorPublic,
     ClinicPublic,
+    ClinicSecurityPolicyUpdate,
     ClinicUpdateRequest,
     DoctorSearchResult,
 )
@@ -162,6 +164,31 @@ async def update_clinic(
     return clinic
 
 
+@router.put("/{clinic_id}/security-policy", response_model=ClinicPublic)
+async def update_clinic_security_policy(
+    clinic_id: str,
+    payload: ClinicSecurityPolicyUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Politica de seguridad de la sede (plan 2.B.9): exigir MFA a recepcionistas.
+
+    Permitido al SUPERADMIN o al CLINIC_ADMIN de esa misma clinica.
+    """
+    is_own_admin = current_user.role == "CLINIC_ADMIN" and current_user.clinic_id == clinic_id
+    if current_user.role != "SUPERADMIN" and not is_own_admin:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "No puede modificar la politica de seguridad de esta clinica.")
+
+    clinic = await ClinicRepository(db).get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    clinic.require_mfa_for_receptionists = payload.require_mfa_for_receptionists
+    await db.commit()
+    await db.refresh(clinic)
+    return clinic
+
+
 @router.patch("/{clinic_id}/toggle-active", response_model=ClinicPublic)
 async def toggle_clinic_active(
     clinic_id: str,
@@ -241,7 +268,10 @@ async def delete_clinic(
     repo = ClinicRepository(db)
     clinic = await repo.get_by_id(clinic_id)
     if not clinic:
+        clinic = await repo.get_by_slug(clinic_id)
+    if not clinic:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+    clinic_id = clinic.id
 
     from sqlalchemy import delete, update
     from app.models.appointment import Appointment
@@ -321,6 +351,7 @@ async def delete_clinic(
     # 2. Cascada de eliminación de registros clínicos y citas
     all_appt_ids = (await db.scalars(select(Appointment.id).where(Appointment.clinic_id == clinic_id))).all()
     if all_appt_ids:
+        await db.execute(delete(AppointmentProcedure).where(AppointmentProcedure.appointment_id.in_(all_appt_ids)))
         await db.execute(delete(Prescription).where(Prescription.appointment_id.in_(all_appt_ids)))
         await db.execute(delete(MedicalRecord).where(MedicalRecord.appointment_id.in_(all_appt_ids)))
         await db.execute(delete(PaymentRecord).where(PaymentRecord.appointment_id.in_(all_appt_ids)))
@@ -330,6 +361,13 @@ async def delete_clinic(
     await db.execute(delete(PaymentRecord).where(PaymentRecord.clinic_id == clinic_id))
     await db.execute(delete(MedicalAttachment).where(MedicalAttachment.clinic_id == clinic_id))
     await db.execute(delete(Appointment).where(Appointment.clinic_id == clinic_id))
+
+    # 2.1 Catálogo de procedimientos médicos de la clínica
+    proc_ids = (await db.scalars(select(MedicalProcedure.id).where(MedicalProcedure.clinic_id == clinic_id))).all()
+    if proc_ids:
+        await db.execute(delete(AppointmentProcedure).where(AppointmentProcedure.procedure_id.in_(proc_ids)))
+        await db.execute(delete(MedicalProcedure).where(MedicalProcedure.id.in_(proc_ids)))
+    await db.execute(delete(MedicalProcedure).where(MedicalProcedure.clinic_id == clinic_id))
 
     # 3. Salas y cerraduras
     room_ids = (await db.scalars(select(ClinicRoom.id).where(ClinicRoom.clinic_id == clinic_id))).all()

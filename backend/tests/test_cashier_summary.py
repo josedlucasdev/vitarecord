@@ -79,7 +79,8 @@ async def test_manual_payment_collection_and_daily_cashier_summary(client: Async
     assert summary["paid_count"] >= 1
 
     # Verificar que el arqueo de HOY también refleja el cobro recibido hoy
-    today_real = datetime.date.today().isoformat()
+    from app.core.timezones import today_in
+    today_real = today_in("America/Caracas").isoformat()
     today_resp = await client.get(
         f"/api/v1/clinics/{clinic_id}/cashier/daily-summary?date={today_real}",
         headers=rec_headers,

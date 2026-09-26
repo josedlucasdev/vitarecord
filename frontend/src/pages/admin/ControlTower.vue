@@ -177,9 +177,37 @@
               dense
               unelevated
               @click="escalateIncident(props.row.id)"
-              :disable="props.row.escalation_level >= 4 || props.row.status === 'RESOLVED'"
+              :disable="props.row.status === 'RESOLVED' || props.row.status === 'ACCEPTED'"
             >
               <q-tooltip>Escalar al siguiente nivel en la cadena multicanal</q-tooltip>
+            </q-btn>
+
+            <!-- Reconocer (SLA de 2 min del moderador de turno) -->
+            <q-btn
+              v-if="canMonitor && !props.row.acknowledged_at && ['ESCALATED_MODERATOR', 'ESCALATED_BACKUP'].includes(props.row.status)"
+              icon="notifications_active"
+              label="Reconocer"
+              size="sm"
+              color="negative"
+              dense
+              unelevated
+              @click="acknowledgeIncident(props.row.id)"
+            >
+              <q-tooltip>Confirmar que la Torre está atendiendo el incidente (detiene la llamada a la línea de respaldo)</q-tooltip>
+            </q-btn>
+
+            <!-- Asignación manual de médico -->
+            <q-btn
+              v-if="canMonitor && props.row.status !== 'ACCEPTED' && props.row.status !== 'RESOLVED'"
+              icon="person_add"
+              label="Asignar"
+              size="sm"
+              color="teal"
+              dense
+              unelevated
+              @click="openAssignDialog(props.row)"
+            >
+              <q-tooltip>Asignar manualmente un médico disponible</q-tooltip>
             </q-btn>
 
             <!-- Botón Médico: Tomar Caso -->
@@ -259,6 +287,43 @@
       </q-card>
     </q-dialog>
 
+    <!-- Diálogo de Asignación Manual de Médico -->
+    <q-dialog v-model="assignDialog.show">
+      <q-card style="width: 460px; max-width: 95vw;">
+        <q-card-section class="bg-teal-8 text-white row items-center">
+          <q-icon name="person_add" size="sm" class="q-mr-sm" />
+          <div class="text-h6">Asignar médico de guardia</div>
+          <q-space />
+          <q-btn icon="close" flat round dense v-close-popup />
+        </q-card-section>
+        <q-card-section>
+          <q-select
+            v-model="assignDialog.doctorId"
+            :options="assignDialog.options"
+            option-value="id"
+            option-label="label"
+            emit-value
+            map-options
+            outlined
+            dense
+            :loading="assignDialog.loading"
+            label="Médico verificado"
+            hint="Primero se muestran los médicos con guardia activa"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn flat label="Cancelar" color="grey-7" v-close-popup />
+          <q-btn
+            unelevated
+            color="teal"
+            label="Asignar y llamar"
+            :disable="!assignDialog.doctorId"
+            @click="submitAssign"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
+
     <!-- Diálogo de Línea de Tiempo y Auditoría -->
     <q-dialog v-model="auditDialog.show">
       <q-card style="width: 600px; max-width: 95vw;">
@@ -296,12 +361,16 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { api } from 'src/boot/axios'
-import { useAcl } from 'src/composables/useAcl'
+import { getAuthToken, useAcl } from 'src/composables/useAcl'
 import { useQuasar } from 'quasar'
 import EmergencySosModal from 'src/components/EmergencySosModal.vue'
 
 const $q = useQuasar()
-const { can } = useAcl()
+const { can, hasRole } = useAcl()
+// El canal en vivo solo difunde a staff global; los admins de sede usan sondeo.
+const canUseLiveChannel = computed(() => hasRole('SUPERADMIN', 'MODERATOR', 'COMPLIANCE_REVIEWER'))
+let pollTimer = null
+let unmounted = false
 
 const canMonitor = computed(() => can('emergency:monitor'))
 const canRespond = computed(() => can('emergency:respond'))
@@ -317,6 +386,14 @@ const resolveDialog = reactive({
   show: false,
   incidentId: null,
   triageNotes: ''
+})
+
+const assignDialog = reactive({
+  show: false,
+  incidentId: null,
+  doctorId: null,
+  options: [],
+  loading: false
 })
 
 const auditDialog = reactive({
@@ -389,6 +466,70 @@ async function escalateIncident (incidentId) {
   }
 }
 
+async function acknowledgeIncident (incidentId) {
+  try {
+    await api.post(`/emergencies/${incidentId}/acknowledge`)
+    $q.notify({ type: 'positive', message: 'Incidente reconocido por la Torre de Control.' })
+    await loadActiveIncidents()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'No se pudo reconocer: ' + (err.response?.data?.detail || err.message) })
+  }
+}
+
+async function openAssignDialog (incident) {
+  assignDialog.incidentId = incident.id
+  assignDialog.doctorId = null
+  assignDialog.show = true
+  assignDialog.loading = true
+  try {
+    const { data } = await api.get('/doctors')
+    assignDialog.options = [...data]
+      .sort((a, b) => Number(!!b.is_available_for_emergencies) - Number(!!a.is_available_for_emergencies))
+      .map(d => ({
+        id: d.id,
+        label: `${d.full_name || d.email}${d.is_available_for_emergencies ? ' · de guardia' : ''}`
+      }))
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'No se pudo cargar la lista de médicos: ' + (err.response?.data?.detail || err.message) })
+  } finally {
+    assignDialog.loading = false
+  }
+}
+
+async function submitAssign () {
+  try {
+    await api.post(`/emergencies/${assignDialog.incidentId}/assign`, { doctor_id: assignDialog.doctorId })
+    assignDialog.show = false
+    $q.notify({ type: 'positive', message: 'Médico asignado y notificado (push, WhatsApp y llamada).' })
+    await loadActiveIncidents()
+  } catch (err) {
+    $q.notify({ type: 'negative', message: 'No se pudo asignar: ' + (err.response?.data?.detail || err.message) })
+  }
+}
+
+// Alerta sonora prioritaria para eventos críticos (plan 2.B.7).
+function playAlarm () {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext
+    if (!AudioCtx) return
+    const ctx = new AudioCtx()
+    ;[0, 0.35, 0.7].forEach(offset => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'square'
+      osc.frequency.value = 880
+      gain.gain.value = 0.15
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start(ctx.currentTime + offset)
+      osc.stop(ctx.currentTime + offset + 0.2)
+    })
+    setTimeout(() => ctx.close(), 1500)
+  } catch (e) {
+    console.warn('No se pudo reproducir la alarma', e)
+  }
+}
+
 async function acceptIncident (incidentId) {
   try {
     await api.post(`/emergencies/${incidentId}/accept`)
@@ -439,7 +580,9 @@ function initWebSocket () {
       wsHost = process.env.API_URL.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
     }
   }
-  const wsUrl = `${protocol}//${wsHost}/api/v1/emergencies/ws/control-tower`
+  const token = getAuthToken()
+  if (!token) return
+  const wsUrl = `${protocol}//${wsHost}/api/v1/emergencies/ws/control-tower?token=${encodeURIComponent(token)}`
 
   try {
     ws = new WebSocket(wsUrl)
@@ -449,6 +592,9 @@ function initWebSocket () {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data)
+        if (['INCIDENT_CREATED', 'INCIDENT_ESCALATED'].includes(msg.event)) {
+          playAlarm()
+        }
         $q.notify({
           type: 'info',
           icon: 'radar',
@@ -462,7 +608,7 @@ function initWebSocket () {
     }
     ws.onclose = () => {
       wsConnected.value = false
-      setTimeout(initWebSocket, 5000)
+      if (!unmounted) setTimeout(initWebSocket, 5000)
     }
     ws.onerror = () => {
       wsConnected.value = false
@@ -474,10 +620,17 @@ function initWebSocket () {
 
 onMounted(() => {
   loadActiveIncidents()
-  initWebSocket()
+  if (canUseLiveChannel.value) {
+    initWebSocket()
+  } else {
+    // Admin de sede: sondeo cada 10 s del endpoint filtrado por su clínica.
+    pollTimer = setInterval(loadActiveIncidents, 10000)
+  }
 })
 
 onUnmounted(() => {
+  unmounted = true
+  if (pollTimer) clearInterval(pollTimer)
   if (ws) {
     ws.close()
   }

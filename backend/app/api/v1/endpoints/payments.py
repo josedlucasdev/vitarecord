@@ -43,8 +43,13 @@ async def get_daily_cashier_summary(
 ):
     """Calcula el cuadre diario de caja por sede, totalizando los cobros e ignorando citas canceladas/exentas."""
     service = PaymentService(db)
-    date_to_query = target_date or datetime.date.today()
-    return await service.get_daily_summary(clinic_id, date_to_query)
+    if target_date is None:
+        from app.core.timezones import today_in
+        from app.models.clinic import Clinic
+
+        clinic = await db.get(Clinic, clinic_id)
+        target_date = today_in(clinic.timezone if clinic else None)
+    return await service.get_daily_summary(clinic_id, target_date)
 
 
 @router.get(

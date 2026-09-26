@@ -1,6 +1,6 @@
 """Clinica, salas fisicas y su fila mutex (plan/plan.md seccion 2.B.1 y 2.B.4)."""
 
-from sqlalchemy import Boolean, ForeignKey, JSON, String
+from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.tenant import TenantScopedMixin
@@ -20,6 +20,13 @@ class Clinic(Base, TimestampMixin):
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Politica por clinica: exigir MFA tambien a recepcionistas (plan 2.B.9).
+    require_mfa_for_receptionists: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Cadena de escalamiento de urgencias (plan 2.B.7): cuantos medicos de
+    # guardia se intentan antes de escalar al moderador (minimo 2,
+    # recomendado 3) y linea telefonica de respaldo de la sede.
+    emergency_doctor_attempts: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
+    emergency_backup_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class ClinicRoom(Base, TimestampMixin, TenantScopedMixin):

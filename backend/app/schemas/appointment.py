@@ -79,6 +79,16 @@ class AppointmentCancelRequest(BaseModel):
     cancellation_reason: str = Field(..., min_length=3, max_length=255)
 
 
+class AppointmentRescheduleRequest(BaseModel):
+    new_start_time: datetime.datetime
+    new_end_time: datetime.datetime | None = None
+    reason: str | None = Field(None, max_length=255)
+
+
+class AppointmentNoShowRequest(BaseModel):
+    reason: str | None = Field(None, max_length=255)
+
+
 class AppointmentPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

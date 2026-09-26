@@ -6,7 +6,7 @@ from app.models.base import Base, TimestampMixin, generate_uuid
 
 
 class PatientConsentGrant(Base, TimestampMixin):
-    """Consentimiento informado y delegación de acceso a historial médico (plan/plan.md 2.B.5)."""
+    """Consentimiento informado y delegación de acceso a historial médico (plan/plan.md Principio 3, 2.B.3 y 2.B.11)."""
 
     __tablename__ = "patient_consent_grants"
 
@@ -19,6 +19,7 @@ class PatientConsentGrant(Base, TimestampMixin):
     granted_at: Mapped[datetime.datetime] = mapped_column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     granted_until: Mapped[datetime.datetime] = mapped_column(DateTime, nullable=False)
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    revoked_at: Mapped[datetime.datetime | None] = mapped_column(DateTime, nullable=True)
 
     patient: Mapped["User"] = relationship("User", foreign_keys=[patient_id], backref="consents_given")
     clinic: Mapped["Clinic"] = relationship("Clinic", backref="consents_received")

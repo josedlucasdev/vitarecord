@@ -81,5 +81,10 @@ class PaymentService:
     async def get_daily_summary(
         self, clinic_id: str, target_date: datetime.date
     ) -> CashierDailySummary:
-        summary_dict = await self.payments.get_daily_summary(clinic_id, target_date)
+        from app.models.clinic import Clinic
+
+        clinic = await self.db.get(Clinic, clinic_id)
+        summary_dict = await self.payments.get_daily_summary(
+            clinic_id, target_date, clinic.timezone if clinic else None
+        )
         return CashierDailySummary(**summary_dict)

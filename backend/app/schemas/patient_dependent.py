@@ -16,6 +16,7 @@ class PatientDependentCreate(BaseModel):
     chronic_conditions: str | None = None
 
     # Contacto adicional y observaciones
+    email: str | None = None
     phone: str | None = None
     notes: str | None = None
 
@@ -32,6 +33,7 @@ class PatientDependentUpdate(BaseModel):
     allergies: str | None = None
     chronic_conditions: str | None = None
 
+    email: str | None = None
     phone: str | None = None
     notes: str | None = None
 
@@ -48,6 +50,8 @@ class PatientDependentPublic(BaseModel):
     gender: str | None = None
     emancipation_status: str
     is_emancipated: bool = False
+    emancipated_at: datetime.datetime | None = None
+    linked_user_id: str | None = None
 
     # Datos clínicos basales
     blood_type: str | None = None
@@ -56,6 +60,7 @@ class PatientDependentPublic(BaseModel):
     chronic_conditions: str | None = None
 
     # Contacto, observaciones y foto
+    email: str | None = None
     phone: str | None = None
     notes: str | None = None
     profile_picture_url: str | None = None

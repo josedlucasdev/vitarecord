@@ -48,6 +48,12 @@ api.interceptors.response.use(
   error => {
     const isLoginEndpoint = error.config?.url?.includes('/auth/login')
 
+    // MFA obligatorio por rol (plan 2.B.9): avisar al layout para abrir el asistente.
+    const detail = error.response?.data?.detail
+    if (error.response?.status === 403 && typeof detail === 'string' && detail.startsWith('MFA_SETUP_REQUIRED')) {
+      window.dispatchEvent(new CustomEvent('vitarecord:mfa-setup-required'))
+    }
+
     if (error.response?.status === 401 && !isLoginEndpoint) {
       clearAuthToken()
 

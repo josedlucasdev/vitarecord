@@ -8,10 +8,17 @@ on:
       - 'backend/**'
       - 'docker-compose.yml'
       - '.github/workflows/deploy-backend.yml'
+      - '.github/workflows/ci.yml'
   workflow_dispatch:
 
 jobs:
+  ci:
+    name: Pruebas previas al despliegue
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   deploy:
+    needs: ci
     name: 🚀 Deploy Docker Backend to VPS
     runs-on: ubuntu-latest
     steps:

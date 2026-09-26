@@ -5,13 +5,14 @@ from httpx import AsyncClient
 
 @pytest.mark.anyio
 async def test_superadmin_can_create_and_list_clinics(client: AsyncClient):
-    # 1. Login como SuperAdmin
-    admin_login = await client.post(
-        "/api/v1/auth/login",
-        data={"username": "admin@vitarecord.com", "password": "Password123!"},
-        headers={"content-type": "application/x-www-form-urlencoded"},
+    from app.core.security import create_access_token
+
+    # 1. Token de SuperAdmin
+    admin_token = create_access_token(
+        "u1111111-1111-1111-1111-111111111111",
+        role="SUPERADMIN",
+        email="admin@vitarecord.com",
     )
-    admin_token = admin_login.json()["access_token"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
     # 2. Listar clinicas
@@ -76,18 +77,18 @@ async def test_non_superadmin_cannot_create_clinics(client: AsyncClient):
 async def test_clinic_lifecycle_edit_toggle_delete(client: AsyncClient):
     from datetime import datetime, timedelta, timezone
     from app.core.database import AsyncSessionLocal
-    from app.core.security import hash_password
+    from app.core.security import create_access_token, hash_password
     from app.models.appointment import Appointment
     from app.models.clinic import Clinic, ClinicRoom, RoomScheduleLock
+    from app.models.procedure import AppointmentProcedure, MedicalProcedure
     from app.models.user import User
 
-    # 1. Login como SuperAdmin
-    admin_login = await client.post(
-        "/api/v1/auth/login",
-        data={"username": "admin@vitarecord.com", "password": "Password123!"},
-        headers={"content-type": "application/x-www-form-urlencoded"},
+    # 1. Token de SuperAdmin
+    admin_token = create_access_token(
+        "u1111111-1111-1111-1111-111111111111",
+        role="SUPERADMIN",
+        email="admin@vitarecord.com",
     )
-    admin_token = admin_login.json()["access_token"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
     # 2. Crear clínica con teléfono y dirección
@@ -182,6 +183,24 @@ async def test_clinic_lifecycle_edit_toggle_delete(client: AsyncClient):
             reason="Consulta General",
         )
         db.add(appt)
+        await db.flush()
+
+        proc = MedicalProcedure(
+            clinic_id=clinic_id,
+            name="Ecografía Pélvica",
+            price=50.00,
+            duration_minutes=20,
+        )
+        db.add(proc)
+        await db.flush()
+
+        appt_proc = AppointmentProcedure(
+            appointment_id=appt.id,
+            procedure_id=proc.id,
+            name=proc.name,
+            price=proc.price,
+        )
+        db.add(appt_proc)
         await db.commit()
         staff_id = staff_user.id
         doc_id = doc_user.id

@@ -1,3 +1,4 @@
+import datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -107,7 +108,10 @@ async def upload_dependent_avatar(
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "La imagen no debe superar los 5 MB de tamaño.")
 
-    ext = allowed_types[content_type]
+    from app.core.image_processing import sanitize_image_exif
+
+    content, content_type = sanitize_image_exif(content, original_content_type=content_type, max_dimension=1024)
+    ext = allowed_types.get(content_type, "png")
     s3_key = storage_service.build_avatar_key("dependents", dependent_id, ext)
 
     # Limpiar extensiones previas en R2
@@ -149,3 +153,66 @@ async def get_dependent_avatar(dependent_id: str):
             return FileResponse(file_path, media_type=media_types.get(file_path.suffix.lower(), "image/jpeg"))
 
     raise HTTPException(status.HTTP_404_NOT_FOUND, "Fotografía no encontrada.")
+
+
+@router.post("/patients/dependents/{dependent_id}/claim", response_model=PatientDependentPublic)
+async def claim_emancipated_dependent(
+    dependent_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Permite a un paciente con cuenta propia vincular su ficha histórica de dependiente emancipada."""
+    service = DependentService(db)
+    return await service.claim_dependent(user_id=current_user.id, dependent_id=dependent_id)
+
+
+@router.post("/patients/me/dependents/{dependent_id}/invite")
+async def invite_emancipated_dependent(
+    dependent_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    email: str | None = None,
+):
+    """Invita al dependiente que cumplió la mayoría de edad a registrar su cuenta propia de paciente."""
+    service = DependentService(db)
+    dep = await service.repo.get_by_id_and_guardian(dependent_id, current_user.id)
+    if not dep:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Familiar dependiente no encontrado.")
+
+    target_email = (email or dep.email or "").strip()
+    if not target_email:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Se requiere un correo electrónico válido para enviar la invitación al dependiente mayor de edad.",
+        )
+
+    # Actualizar correo si fue suministrado en la invitación
+    if email and dep.email != target_email:
+        dep.email = target_email
+
+    if dep.emancipation_status == "MINOR":
+        dep.emancipation_status = "EMANCIPATION_PENDING_CONSENT"
+        dep.emancipated_at = datetime.datetime.utcnow()
+
+    await db.commit()
+
+    # Enviar notificación/email de invitación
+    from app.services.notification_service import NotificationService
+    notif_service = NotificationService(db)
+    await notif_service.send_multichannel_notification(
+        recipient=None,
+        email=target_email,
+        subject="Invitación a crear tu cuenta independiente en VitaRecord",
+        message=(
+            f"Hola {dep.full_name}, has alcanzado la mayoría de edad. Tu responsable legal "
+            f"te ha invitado a activar tu propia cuenta personal de paciente en VitaRecord "
+            f"para gestionar tu expediente clínico de forma confidencial e independiente."
+        ),
+    )
+
+    return {
+        "status": "INVITATION_SENT",
+        "email": target_email,
+        "emancipation_status": dep.emancipation_status,
+        "message": "Invitación enviada exitosamente al dependiente mayor de edad.",
+    }

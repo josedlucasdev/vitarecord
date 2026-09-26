@@ -232,7 +232,9 @@ class AvailabilityService:
             Appointment.start_time >= day_start,
             Appointment.start_time <= day_end,
         )
-        apps_res = await self.db.execute(stmt_apps)
+        # Inter-clinica a proposito (plan 2.B.4 Regla 1): el tiempo del medico es global.
+        from app.core.tenant import cross_tenant
+        apps_res = await self.db.execute(cross_tenant(stmt_apps))
         booked_appointments = list(apps_res.scalars().all())
 
         # 2. Consultorios físicos de la sede: deben estar activos y no en mantenimiento

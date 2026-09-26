@@ -1,10 +1,11 @@
 from sqlalchemy import ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.tenant import TenantScoped
 from app.models.base import Base, TimestampMixin, generate_uuid
 
 
-class MedicalRecord(Base, TimestampMixin):
+class MedicalRecord(Base, TimestampMixin, TenantScoped):
     """Expediente clinico individualizado y cifrado en reposo con Envelope Encryption (plan/plan.md 2.B.8)."""
 
     __tablename__ = "medical_records"

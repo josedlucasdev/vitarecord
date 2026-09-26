@@ -1,9 +1,9 @@
 """Autenticacion: login, refresh (con rotacion y deteccion de reuso), logout
 y perfil propio (plan/plan.md seccion 2.A y 2.B.9).
 
-Pendiente para una iteracion posterior (no incluido aun): recuperacion de
-contraseña por enlace firmado / OTP, gestion de sesiones activas listables
-por el usuario, y setup/activacion de MFA TOTP para roles obligados.
+Incluye recuperacion de contraseña, gestion de sesiones, MFA TOTP (obligatorio
+por rol, ver app.api.deps.get_current_user) y proteccion contra fuerza bruta
+en el login (app.core.login_guard).
 """
 
 import base64
@@ -17,7 +17,8 @@ import pyotp
 import qrcode
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_current_user_allow_mfa_setup
+from app.core import login_guard
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import decode_token, generate_totp_secret, hash_password, is_token_type, verify_password, verify_totp
@@ -157,12 +158,32 @@ async def login(
         except Exception:
             pass
 
+    client_ip = request.client.host if request.client else None
+    captcha_token = None
+    try:
+        form = await request.form()
+        captcha_token = form.get("captcha_token")
+    except Exception:
+        pass
+
+    # Backoff exponencial, bloqueo temporal y CAPTCHA (plan 2.B.9).
+    await login_guard.check_login_allowed(form_data.username, client_ip, captcha_token)
+
     service = AuthService(db)
-    user = await service.authenticate(form_data.username, form_data.password, mfa_code)
+    try:
+        user = await service.authenticate(form_data.username, form_data.password, mfa_code)
+    except HTTPException as exc:
+        # Pedir el codigo MFA (sin haberlo enviado) no es un intento fallido.
+        is_mfa_prompt = str(exc.detail).startswith("MFA_REQUIRED")
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED and not is_mfa_prompt:
+            await login_guard.register_login_failure(form_data.username, client_ip)
+        raise
+    await login_guard.register_login_success(form_data.username)
+
     access_token, refresh_token = await service.issue_token_pair(
         user,
         device_info=request.headers.get("user-agent"),
-        ip_address=request.client.host if request.client else None,
+        ip_address=client_ip,
     )
     await db.commit()
     return TokenPair(access_token=access_token, refresh_token=refresh_token)
@@ -178,7 +199,7 @@ async def login_with_facebook(
     token = payload.access_token.strip()
     picture_url = None
 
-    if token.startswith("dev_fb_"):
+    if settings.ALLOW_DEV_SOCIAL_LOGIN and token.startswith("dev_fb_"):
         # Emulación para pruebas automatizadas y desarrollo local
         fb_id = token.replace("dev_fb_", "")
         email = f"paciente_fb_{fb_id[:8]}@example.com"
@@ -240,7 +261,7 @@ async def login_with_google(
     credential = payload.credential.strip()
     picture_url = None
 
-    if credential.startswith("dev_google_"):
+    if settings.ALLOW_DEV_SOCIAL_LOGIN and credential.startswith("dev_google_"):
         # Emulación para pruebas automatizadas y desarrollo local
         google_sub = credential.replace("dev_google_", "")
         email = f"paciente_google_{google_sub[:8]}@example.com"
@@ -317,7 +338,7 @@ async def logout(payload: RefreshRequest, db: Annotated[AsyncSession, Depends(ge
 
 
 @router.get("/me", response_model=UserPublic)
-async def me(current_user: Annotated[User, Depends(get_current_user)]):
+async def me(current_user: Annotated[User, Depends(get_current_user_allow_mfa_setup)]):
     return current_user
 
 
@@ -363,7 +384,7 @@ async def change_password(
 
 @router.get("/sessions", response_model=list[SessionPublic])
 async def list_sessions(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user_allow_mfa_setup)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Lista las sesiones activas del usuario autenticado."""
@@ -373,7 +394,7 @@ async def list_sessions(
 @router.delete("/sessions/{session_id}", status_code=204)
 async def revoke_session(
     session_id: str,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user_allow_mfa_setup)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Revoca una sesion especifica del usuario."""
@@ -382,7 +403,7 @@ async def revoke_session(
 
 @router.delete("/sessions", status_code=204)
 async def revoke_all_sessions(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user_allow_mfa_setup)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Revoca todas las sesiones activas del usuario."""
@@ -391,7 +412,7 @@ async def revoke_all_sessions(
 
 @router.get("/mfa/status", response_model=MFAStatusResponse, summary="Estado actual de MFA del usuario autenticado")
 async def get_my_mfa_status(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user_allow_mfa_setup)],
 ):
     """Verifica si el usuario autenticado tiene habilitado el segundo factor."""
     return MFAStatusResponse(mfa_enabled=bool(current_user.mfa_enabled and current_user.mfa_secret))
@@ -399,7 +420,7 @@ async def get_my_mfa_status(
 
 @router.post("/mfa/setup", response_model=MFASetupResponse, summary="Genera clave secreta y código QR para Google Authenticator")
 async def setup_mfa(
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user_allow_mfa_setup)],
 ):
     """Genera secreto TOTP Base32 y código QR PNG en base64 para escanear con Google Authenticator."""
     secret = generate_totp_secret()
@@ -424,7 +445,7 @@ async def setup_mfa(
 @router.post("/mfa/enable", summary="Verifica el primer código y activa MFA para el usuario")
 async def enable_mfa(
     payload: MFAEnableRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user_allow_mfa_setup)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Valida el código de 6 dígitos con el secreto generado y activa el segundo factor."""
@@ -451,6 +472,13 @@ async def disable_mfa(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Desactiva el segundo factor solicitando la contraseña del usuario por seguridad."""
+    from app.api.deps import user_requires_mfa
+
+    if user_requires_mfa(current_user):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Su rol exige autenticación de dos factores; no es posible desactivarla.",
+        )
     if not current_user.hashed_password or not verify_password(payload.password, current_user.hashed_password):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "La contraseña ingresada no es correcta.")
 

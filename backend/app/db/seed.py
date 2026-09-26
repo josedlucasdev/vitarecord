@@ -1,12 +1,12 @@
-"""Inicializacion automatica de tablas y usuarios semilla en desarrollo."""
+"""Migraciones (Alembic) y usuarios semilla de desarrollo."""
 
+import asyncio
 import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import AsyncSessionLocal, engine
+from app.core.database import AsyncSessionLocal
 from app.core.security import hash_password
-from app.models.base import Base
 from app.models.clinic import Clinic, ClinicRoom
 from app.models.affiliation import DoctorClinicAffiliation
 from app.models.user import User
@@ -14,132 +14,33 @@ from app.models.user import User
 logger = logging.getLogger("seed")
 
 
+def run_migrations() -> None:
+    """Aplica `alembic upgrade head` con el motor sincrono de migraciones."""
+    from pathlib import Path
+
+    from alembic import command
+    from alembic.config import Config
+
+    backend_root = Path(__file__).resolve().parents[2]
+    cfg = Config(str(backend_root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(backend_root / "alembic"))
+    cfg.attributes["skip_logging_config"] = True
+    command.upgrade(cfg, "head")
+
+
 async def init_db_and_seed() -> None:
-    """Crea las tablas si no existen y puebla datos iniciales de prueba."""
-    async with engine.begin() as conn:
-        # Crea tablas registradas en Base.metadata si aun no existen
-        await conn.run_sync(Base.metadata.create_all)
+    """Aplica migraciones pendientes y puebla datos iniciales de prueba."""
+    # El esquema lo gestiona exclusivamente Alembic (plan 2.A). Antes aqui se
+    # hacia create_all + ALTER TABLE en cada arranque; esas columnas ahora
+    # viven en alembic/versions (0001_baseline y 20260926_01).
+    await asyncio.to_thread(run_migrations)
 
-        # Asegurar columnas en la tabla clinics
-        for col_def in [
-            "ADD COLUMN phone VARCHAR(32) NULL",
-            "ADD COLUMN address VARCHAR(255) NULL",
-            "ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE",
-        ]:
-            try:
-                await conn.exec_driver_sql(f"ALTER TABLE clinics {col_def}")
-            except Exception:
-                pass  # Columna ya existe
+    from app.core.config import settings
 
-        # Asegurar columnas de perfil profesional, especialidades, MFA y datos de paciente en la tabla users
-        for col_def in [
-            "ADD COLUMN specialty VARCHAR(500) NULL",
-            "ADD COLUMN specialties JSON NULL",
-            "ADD COLUMN license_number VARCHAR(100) NULL",
-            "ADD COLUMN biography VARCHAR(1000) NULL",
-            "ADD COLUMN academic_degrees JSON NULL",
-            "ADD COLUMN work_experience JSON NULL",
-            "ADD COLUMN is_public_profile_enabled BOOLEAN NOT NULL DEFAULT TRUE",
-            "ADD COLUMN license_verification_status VARCHAR(32) NOT NULL DEFAULT 'NOT_APPLICABLE'",
-            "ADD COLUMN license_document_url VARCHAR(500) NULL",
-            "ADD COLUMN verified_by_user_id VARCHAR(36) NULL",
-            "ADD COLUMN verified_at DATETIME NULL",
-            "ADD COLUMN preferred_notification_channels JSON NULL",
-            "ADD COLUMN no_show_strikes INT NOT NULL DEFAULT 0",
-            "ADD COLUMN is_restricted_booking BOOLEAN NOT NULL DEFAULT FALSE",
-            "ADD COLUMN mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE",
-            "ADD COLUMN mfa_secret VARCHAR(64) NULL",
-            "ADD COLUMN mfa_recovery_codes_hash VARCHAR(255) NULL",
-            "ADD COLUMN is_available_for_emergencies BOOLEAN NOT NULL DEFAULT FALSE",
-            "ADD COLUMN profile_picture_url VARCHAR(500) NULL",
-            "ADD COLUMN identification_number VARCHAR(32) NULL",
-            "ADD COLUMN birth_date DATETIME NULL",
-            "ADD COLUMN gender VARCHAR(16) NULL",
-            "ADD COLUMN address VARCHAR(255) NULL",
-            "ADD COLUMN city VARCHAR(100) NULL",
-            "ADD COLUMN country VARCHAR(100) NULL DEFAULT 'Venezuela'",
-            "ADD COLUMN blood_type VARCHAR(10) NULL",
-            "ADD COLUMN height_cm FLOAT NULL",
-            "ADD COLUMN allergies VARCHAR(500) NULL",
-            "ADD COLUMN chronic_conditions VARCHAR(500) NULL",
-            "ADD COLUMN emergency_contact_name VARCHAR(255) NULL",
-            "ADD COLUMN emergency_contact_phone VARCHAR(32) NULL",
-            "ADD COLUMN emergency_contact_relationship VARCHAR(100) NULL",
-        ]:
-            try:
-                await conn.exec_driver_sql(f"ALTER TABLE users {col_def}")
-            except Exception:
-                pass  # Columna ya existe
-
-        # Sincronizar specialty antigua a lista JSON de specialties si está vacía
-        try:
-            await conn.exec_driver_sql(
-                "UPDATE users SET specialties = JSON_ARRAY(specialty) WHERE specialty IS NOT NULL AND (specialties IS NULL OR JSON_LENGTH(specialties) = 0)"
-            )
-        except Exception:
-            pass
-
-        # Asegurar columnas de consultorios (salas físicas)
-        for col_def in [
-            "ADD COLUMN specialty VARCHAR(100) NULL",
-            "ADD COLUMN status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE'",
-            "ADD COLUMN operating_hours JSON NULL",
-        ]:
-            try:
-                await conn.exec_driver_sql(f"ALTER TABLE clinic_rooms {col_def}")
-            except Exception:
-                pass  # Columna ya existe
-
-        # Asegurar columnas en tabla appointments
-        for col_def in [
-            "ADD COLUMN intake_data JSON NULL",
-            "ADD COLUMN dependent_id VARCHAR(36) NULL",
-            "ADD COLUMN room_id VARCHAR(36) NULL",
-            "ADD COLUMN cancellation_reason VARCHAR(255) NULL",
-        ]:
-            try:
-                await conn.exec_driver_sql(f"ALTER TABLE appointments {col_def}")
-            except Exception:
-                pass
-
-        # Asegurar columnas clínicas y de contacto en patient_dependents
-        for col_def in [
-            "ADD COLUMN blood_type VARCHAR(10) NULL",
-            "ADD COLUMN height_cm FLOAT NULL",
-            "ADD COLUMN allergies VARCHAR(500) NULL",
-            "ADD COLUMN chronic_conditions VARCHAR(500) NULL",
-            "ADD COLUMN phone VARCHAR(32) NULL",
-            "ADD COLUMN notes VARCHAR(1000) NULL",
-            "ADD COLUMN profile_picture_url VARCHAR(500) NULL",
-        ]:
-            try:
-                await conn.exec_driver_sql(f"ALTER TABLE patient_dependents {col_def}")
-            except Exception:
-                pass  # Columna ya existe
-
-        # Asegurar columnas para el Módulo 6 en notification_logs
-        for col_def in [
-            "ADD COLUMN appointment_id VARCHAR(36) NULL",
-            "ADD COLUMN external_message_id VARCHAR(500) NULL",
-            "ADD COLUMN metadata_payload JSON NULL",
-            "ADD COLUMN is_read BOOLEAN NOT NULL DEFAULT FALSE",
-            "ADD COLUMN read_at DATETIME NULL",
-        ]:
-            try:
-                await conn.exec_driver_sql(f"ALTER TABLE notification_logs {col_def}")
-            except Exception:
-                pass
-
-        # Asegurar columnas de tipo de contrato y honorarios en doctor_clinic_affiliations
-        for col_def in [
-            "ADD COLUMN contract_type VARCHAR(32) NOT NULL DEFAULT 'INDEPENDENT'",
-            "ADD COLUMN consultation_fee DECIMAL(10,2) NOT NULL DEFAULT 30.00",
-            "ADD COLUMN currency VARCHAR(8) NOT NULL DEFAULT 'USD'",
-        ]:
-            try:
-                await conn.exec_driver_sql(f"ALTER TABLE doctor_clinic_affiliations {col_def}")
-            except Exception:
-                pass  # Columna ya existe
+    if settings.ENVIRONMENT == "production":
+        # Nunca sembrar cuentas de demostracion (contraseña conocida) en produccion.
+        logger.info("Produccion: migraciones aplicadas; se omiten los datos semilla de demostracion.")
+        return
 
     async with AsyncSessionLocal() as db:
         # Verificar si ya existe el usuario superadmin

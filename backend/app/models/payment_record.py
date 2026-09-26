@@ -3,10 +3,11 @@ from decimal import Decimal
 from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.tenant import TenantScoped
 from app.models.base import Base, TimestampMixin, generate_uuid
 
 
-class PaymentRecord(Base, TimestampMixin):
+class PaymentRecord(Base, TimestampMixin, TenantScoped):
     """Registro contable manual de cobro vinculado a una cita médica (plan/plan.md 2.B.6)."""
 
     __tablename__ = "payment_records"

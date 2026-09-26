@@ -27,6 +27,9 @@ export const ROLE_PERMISSIONS = {
     'payments:collect',
     'payments:record',
     'payments:view_cashier',
+    'procedures:manage',
+    'procedures:read',
+    'consents:manage',
     'emergency:trigger',
     'emergency:monitor',
     'emergency:respond'
@@ -59,6 +62,9 @@ export const ROLE_PERMISSIONS = {
     'payments:collect',
     'payments:record',
     'payments:view_cashier',
+    'procedures:manage',
+    'procedures:read',
+    'consents:manage',
     'emergency:monitor'
   ],
   RECEPTIONIST: [
@@ -73,7 +79,9 @@ export const ROLE_PERMISSIONS = {
     'appointments:view',
     'payments:collect',
     'payments:record',
-    'payments:view_cashier'
+    'payments:view_cashier',
+    'procedures:read',
+    'consents:manage'
   ],
   DOCTOR: [
     'tenants:read',
@@ -88,6 +96,8 @@ export const ROLE_PERMISSIONS = {
     'clinical_records:read',
     'medical_records:write',
     'clinical_records:write',
+    'procedures:read',
+    'consents:manage',
     'emergency:respond'
   ],
   PATIENT: [
@@ -100,6 +110,8 @@ export const ROLE_PERMISSIONS = {
     'appointments:view',
     'medical_records:read',
     'clinical_records:read',
+    'procedures:read',
+    'consents:manage',
     'emergency:trigger'
   ]
 }
@@ -146,6 +158,10 @@ export function getValidTokenPayload (token = localStorage.getItem('access_token
     clearAuthToken()
     return null
   }
+}
+
+export function getAuthToken () {
+  return localStorage.getItem('access_token')
 }
 
 export function setAuthToken (accessToken, refreshToken) {

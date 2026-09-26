@@ -1,6 +1,8 @@
 import datetime
+
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.patient_consent_grant import PatientConsentGrant
 
@@ -32,25 +34,57 @@ class ConsentRepository:
         await self.db.flush()
         return grant
 
-    async def has_active_consent(self, patient_id: str, clinic_id: str) -> bool:
+    async def get_by_id(self, grant_id: str) -> PatientConsentGrant | None:
+        stmt = (
+            select(PatientConsentGrant)
+            .options(selectinload(PatientConsentGrant.clinic))
+            .where(PatientConsentGrant.id == grant_id)
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def list_for_patient(self, patient_id: str) -> list[PatientConsentGrant]:
+        stmt = (
+            select(PatientConsentGrant)
+            .options(selectinload(PatientConsentGrant.clinic))
+            .where(PatientConsentGrant.patient_id == patient_id)
+            .order_by(PatientConsentGrant.granted_at.desc())
+        )
+        return list((await self.db.execute(stmt)).scalars().all())
+
+    async def list_active_for_clinic(self, clinic_id: str) -> list[PatientConsentGrant]:
         now = datetime.datetime.utcnow()
-        stmt = select(PatientConsentGrant).where(
-            and_(
-                PatientConsentGrant.patient_id == patient_id,
+        stmt = (
+            select(PatientConsentGrant)
+            .options(selectinload(PatientConsentGrant.clinic), selectinload(PatientConsentGrant.patient))
+            .where(
                 PatientConsentGrant.granted_to_clinic_id == clinic_id,
                 PatientConsentGrant.is_revoked.is_(False),
                 PatientConsentGrant.granted_until > now,
             )
+            .order_by(PatientConsentGrant.granted_until.asc())
         )
-        res = await self.db.execute(stmt)
-        return res.scalar_one_or_none() is not None
+        return list((await self.db.execute(stmt)).scalars().all())
 
-    async def revoke(self, grant_id: str) -> bool:
-        stmt = select(PatientConsentGrant).where(PatientConsentGrant.id == grant_id)
-        res = await self.db.execute(stmt)
-        grant = res.scalar_one_or_none()
-        if grant:
-            grant.is_revoked = True
-            await self.db.flush()
-            return True
-        return False
+    async def has_active_consent(
+        self, patient_id: str, clinic_ids: str | list[str] | set[str], scope: str = "READ_MEDICAL_RECORDS"
+    ) -> bool:
+        ids = [clinic_ids] if isinstance(clinic_ids, str) else list(clinic_ids)
+        if not ids:
+            return False
+        now = datetime.datetime.utcnow()
+        stmt = select(PatientConsentGrant.id).where(
+            and_(
+                PatientConsentGrant.patient_id == patient_id,
+                PatientConsentGrant.granted_to_clinic_id.in_(ids),
+                PatientConsentGrant.scope == scope,
+                PatientConsentGrant.is_revoked.is_(False),
+                PatientConsentGrant.granted_until > now,
+            )
+        )
+        return (await self.db.execute(stmt.limit(1))).scalar_one_or_none() is not None
+
+    async def revoke(self, grant: PatientConsentGrant) -> PatientConsentGrant:
+        grant.is_revoked = True
+        grant.revoked_at = datetime.datetime.utcnow()
+        await self.db.flush()
+        return grant

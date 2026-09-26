@@ -22,6 +22,28 @@ class Settings(BaseSettings):
 
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCKOUT_MINUTES: int = 15
+    # Ventana en la que se cuentan intentos fallidos (plan 2.B.9: 5 en 15 min).
+    LOGIN_ATTEMPT_WINDOW_MINUTES: int = 15
+    # Intentos por IP (todas las cuentas) antes de responder 429.
+    LOGIN_MAX_ATTEMPTS_PER_IP: int = 50
+    # Numero de bloqueos consecutivos a partir del cual se exige CAPTCHA.
+    LOGIN_CAPTCHA_AFTER_LOCKOUTS: int = 2
+    # Cloudflare Turnstile (CAPTCHA). Si no se configura, el paso de CAPTCHA
+    # se omite y solo aplica el bloqueo temporal.
+    TURNSTILE_SECRET_KEY: str | None = None
+
+    # MFA obligatorio (plan 2.B.9). Los roles listados no pueden operar sin
+    # MFA activo: solo pueden usar los endpoints de configuracion de MFA.
+    # Por defecto activo; puede desactivarse SOLO en desarrollo/tests.
+    MFA_ENFORCEMENT_ENABLED: bool = True
+    MFA_REQUIRED_ROLES: list[str] = ["SUPERADMIN", "MODERATOR", "COMPLIANCE_REVIEWER", "CLINIC_ADMIN", "DOCTOR"]
+
+    # Rate limiting por tenant (proteccion "noisy neighbor", plan 2.B.1).
+    TENANT_RATE_LIMIT_PER_SECOND: int = 50
+
+    # Emulacion de login social con tokens "dev_fb_*" / "dev_google_*".
+    # SOLO para desarrollo local y tests; nunca debe activarse en produccion.
+    ALLOW_DEV_SOCIAL_LOGIN: bool = False
 
     CORS_ORIGINS: str | list[str] = [
         "http://localhost:9000",
@@ -42,6 +64,16 @@ class Settings(BaseSettings):
                     pass
             return [i.strip() for i in v.split(",") if i.strip()]
         return v
+
+    # Origenes adicionales permitidos por expresion regular (anclada: debe
+    # coincidir con el origen COMPLETO). Cubre subdominios de vitarecord.com,
+    # los despliegues de vista previa de Cloudflare Pages de los proyectos
+    # vitarecord-app / vitarecord-web y localhost en desarrollo.
+    CORS_ORIGIN_REGEX: str = (
+        r"https://([a-z0-9-]+\.)*vitarecord\.com"
+        r"|https://([a-z0-9-]+\.)?vitarecord-(app|web)\.pages\.dev"
+        r"|http://localhost(:\d+)?"
+    )
 
     FRONTEND_URL: str = "https://app.vitarecord.com"
 
@@ -98,13 +130,20 @@ class Settings(BaseSettings):
     WHATSAPP_API_URL: str = "https://graph.facebook.com/v20.0"
     WHATSAPP_PHONE_NUMBER_ID: str = "101526655923922"
     WHATSAPP_BUSINESS_ACCOUNT_ID: str = "110504608346732"
-    WHATSAPP_ACCESS_TOKEN: str = "EAATmvZCRxNm8BSRvVzjhRsLQuMBM7uf8mcMFGW1zuEDlbNLaIZBgT6QTIYuSae4YpuYlo6NEs9NB4z7rYtF8AnfAJJL7ppZC5zBDv2o4qhs9FJe6PbnKZBicGNfK1yV0zhXARQJCorgStSaUsy92S5fqRqN3NTgvVc01tWycOyaWguKQbKAYaRTQhxhXoBP5lSuly0e6CtBRr1ZChvgtyePOSJ1ZAWDhhRGMAlXRVxI2wUZAiS8phohZBkRrZBGT5bW0ThlTgoZB7ZAc3P5T2VXF8EgrojPTlfjYqJD4ygWmwZDZD"
-    WHATSAPP_VERIFY_TOKEN: str = "intimasalud_dev_webhook_verify_token"
+    # Secretos: NUNCA con valores reales en el codigo (plan 2.B.10). Se leen de
+    # variables de entorno / Vault. Los valores "dev_*" activan el modo emulado.
+    WHATSAPP_ACCESS_TOKEN: str = "dev_whatsapp_token"
+    WHATSAPP_VERIFY_TOKEN: str = "dev_webhook_verify_token"
+    # "App secret" de la app de Meta: firma X-Hub-Signature-256 de cada webhook.
+    WHATSAPP_APP_SECRET: str = ""
 
     # Twilio SMS & Voice
     TWILIO_ACCOUNT_SID: str = "dev_twilio_sid"
     TWILIO_AUTH_TOKEN: str = "dev_twilio_token"
     TWILIO_FROM_NUMBER: str = "+15005550006"
+    # URL publica exacta del webhook de Twilio (la firma X-Twilio-Signature se
+    # calcula sobre ella). Si no se define se usa la URL de la peticion.
+    TWILIO_WEBHOOK_URL: str | None = None
 
     # Push FCM (Firebase Cloud Messaging HTTP v1 API)
     FIREBASE_CREDENTIALS_FILE: str | None = "/app/firebase-credentials.json"
@@ -115,22 +154,51 @@ class Settings(BaseSettings):
 
     # Facebook Login
     FACEBOOK_APP_ID: str = "1150121370684613"
-    FACEBOOK_APP_SECRET: str = "d4797ebcd90c781fc0b5c4cc7bec3dc4"
+    FACEBOOK_APP_SECRET: str = ""
 
     # Google Sign-In
     GOOGLE_CLIENT_ID: str = "398180197268-bqtm2q48fp00vra1p5ar9uop02ed0p4u.apps.googleusercontent.com"
+
+    # Orquestador de escalamiento de urgencias (plan 2.B.7)
+    EMERGENCY_DELIVERY_CONFIRM_SECONDS: int = 15
+    EMERGENCY_DOCTOR_ACCEPT_TIMEOUT_SECONDS: int = 60
+    EMERGENCY_MODERATOR_SLA_SECONDS: int = 120
+    EMERGENCY_CHECK_INTERVAL_SECONDS: int = 5
+    # Linea de respaldo global si la clinica no configuro la suya.
+    EMERGENCY_BACKUP_PHONE: str | None = None
+    # Reintentos de llamada a la linea de respaldo antes de dejar solo la alarma.
+    EMERGENCY_BACKUP_MAX_CALLS: int = 3
 
     # Recordatorios automáticos
     REMINDER_CHECK_INTERVAL_SECONDS: int = 60
 
     # Telegram Support Bot
-    TELEGRAM_BOT_TOKEN: str = "8994079460:AAFVfydKdWxdTbXmb2GcSaFYOSXq4ze2MK8"
-    TELEGRAM_ADMIN_CHAT_ID: str = "562067316"
+    TELEGRAM_BOT_TOKEN: str = ""
+    TELEGRAM_ADMIN_CHAT_ID: str = ""
 
     # Firebase Realtime Database (Chat de soporte en tiempo real)
     FIREBASE_DATABASE_URL: str = "https://vita-record-default-rtdb.firebaseio.com"
 
     SENTRY_DSN: str | None = None
+
+    def production_config_errors(self) -> list[str]:
+        """Errores de configuracion que impiden arrancar en produccion."""
+        if self.ENVIRONMENT != "production":
+            return []
+        errors = []
+        if self.JWT_SECRET_KEY == "dev-only-change-me" or len(self.JWT_SECRET_KEY) < 32:
+            errors.append("JWT_SECRET_KEY debe ser un secreto propio de al menos 32 caracteres")
+        if self.ALLOW_DEV_SOCIAL_LOGIN:
+            errors.append("ALLOW_DEV_SOCIAL_LOGIN no puede estar activo en produccion")
+        if not self.MFA_ENFORCEMENT_ENABLED:
+            errors.append("MFA_ENFORCEMENT_ENABLED no puede desactivarse en produccion")
+        if self.WHATSAPP_VERIFY_TOKEN.startswith("dev_"):
+            errors.append("WHATSAPP_VERIFY_TOKEN debe configurarse con un valor propio")
+        if not self.WHATSAPP_APP_SECRET:
+            errors.append("WHATSAPP_APP_SECRET es obligatorio para validar la firma de los webhooks de Meta")
+        if self.VAULT_TOKEN == "devroot_dev_only":
+            errors.append("VAULT_TOKEN no puede ser el token de desarrollo")
+        return errors
 
 
 settings = Settings()

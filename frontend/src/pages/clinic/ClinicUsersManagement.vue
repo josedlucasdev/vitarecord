@@ -31,7 +31,7 @@
           rounded
           class="min-w-[240px] text-xs bg-slate-50"
           label="Sede / Clínica"
-          @update:model-value="fetchUsers"
+          @update:model-value="() => { fetchUsers(); fetchSecurityPolicy() }"
         />
 
         <q-btn
@@ -54,6 +54,28 @@
           @click="openCreateDialog"
         />
       </div>
+    </div>
+
+    <!-- Politica de seguridad de la sede (plan 2.B.9: MFA configurable para recepcionistas) -->
+    <div
+      v-if="user?.role === 'SUPERADMIN' || user?.role === 'CLINIC_ADMIN'"
+      class="p-4 bg-white border border-slate-200 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3"
+    >
+      <div class="flex items-start gap-3">
+        <q-icon name="security" size="22px" class="text-teal-700 mt-0.5" />
+        <div>
+          <div class="text-sm font-semibold text-slate-800">Exigir autenticación de dos factores a recepcionistas</div>
+          <div class="text-xs text-slate-500">
+            Médicos y administradores siempre deben usar MFA. Active esta opción para exigirlo también al personal de recepción de esta sede.
+          </div>
+        </div>
+      </div>
+      <q-toggle
+        v-model="requireReceptionistMfa"
+        color="teal"
+        :disable="savingSecurityPolicy"
+        @update:model-value="saveSecurityPolicy"
+      />
     </div>
 
     <!-- Alert / Information Banner -->
@@ -1304,8 +1326,41 @@ async function submitDoctorContract () {
   }
 }
 
+const requireReceptionistMfa = ref(false)
+const savingSecurityPolicy = ref(false)
+
+async function fetchSecurityPolicy () {
+  const clinicId = activeClinicId.value || user.value?.clinicId || DEFAULT_CLINIC_ID
+  try {
+    const { data } = await api.get(`/clinics/${clinicId}`)
+    requireReceptionistMfa.value = !!data.require_mfa_for_receptionists
+  } catch (err) {
+    console.warn('No se pudo cargar la política de seguridad de la sede:', err)
+  }
+}
+
+async function saveSecurityPolicy (value) {
+  const clinicId = activeClinicId.value || user.value?.clinicId || DEFAULT_CLINIC_ID
+  savingSecurityPolicy.value = true
+  try {
+    await api.put(`/clinics/${clinicId}/security-policy`, { require_mfa_for_receptionists: value })
+    Notify.create({
+      type: 'positive',
+      message: value
+        ? 'Los recepcionistas deberán activar MFA en su próximo acceso.'
+        : 'MFA ahora es opcional para recepcionistas de esta sede.'
+    })
+  } catch (err) {
+    requireReceptionistMfa.value = !value
+    Notify.create({ type: 'negative', message: err.response?.data?.detail || 'No se pudo guardar la política.' })
+  } finally {
+    savingSecurityPolicy.value = false
+  }
+}
+
 onMounted(async () => {
   await fetchClinics()
   await fetchUsers()
+  await fetchSecurityPolicy()
 })
 </script>

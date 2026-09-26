@@ -19,9 +19,16 @@ from app.core.emergency_hub import emergency_hub
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    config_errors = settings.production_config_errors()
+    if config_errors:
+        # Fallar rapido: nunca arrancar produccion con secretos de desarrollo.
+        raise RuntimeError("Configuracion de produccion invalida: " + "; ".join(config_errors))
+
     listener_task = None
     reminder_task = None
+    escalation_task = None
     notif_listener_task = None
+    emancipation_task = None
     try:
         await init_db_and_seed()
         listener_task = asyncio.create_task(emergency_hub.start_redis_listener())
@@ -29,6 +36,10 @@ async def lifespan(app: FastAPI):
         notif_listener_task = asyncio.create_task(notification_hub.start_redis_listener())
         from app.tasks.reminders import start_reminder_scheduler
         reminder_task = asyncio.create_task(start_reminder_scheduler())
+        from app.tasks.emergency_escalation import start_emergency_escalation_scheduler
+        escalation_task = asyncio.create_task(start_emergency_escalation_scheduler())
+        from app.tasks.emancipation import start_emancipation_scheduler
+        emancipation_task = asyncio.create_task(start_emancipation_scheduler())
     except Exception as exc:  # noqa: BLE001
         logging.getLogger("main").warning("No se pudo autosembrar la BD o iniciar tareas en arranque: %s", exc)
     yield
@@ -38,6 +49,10 @@ async def lifespan(app: FastAPI):
         notif_listener_task.cancel()
     if reminder_task:
         reminder_task.cancel()
+    if escalation_task:
+        escalation_task.cancel()
+    if emancipation_task:
+        emancipation_task.cancel()
 
 
 
@@ -47,7 +62,8 @@ app = FastAPI(title="ÍntimaSalud API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
-    allow_origin_regex=r"https?://.*(vitarecord\.com|pages\.dev|localhost).*",
+    # Starlette aplica fullmatch: el origen completo debe coincidir.
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -72,7 +88,17 @@ async def reset_tenant_context_per_request(request: Request, call_next):
     return response
 
 
+from app.core.observability import get_metrics_response, prometheus_metrics_middleware
+
+app.middleware("http")(prometheus_metrics_middleware)
+
+
 app.include_router(api_router, prefix="/api/v1")
+
+
+@app.get("/metrics", tags=["system"], include_in_schema=False)
+async def metrics():
+    return get_metrics_response()
 
 
 @app.get("/health", tags=["system"])

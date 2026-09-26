@@ -64,6 +64,7 @@ class AppointmentService:
         requested_room_id: str | None,
         start_time: datetime.datetime,
         end_time: datetime.datetime,
+        exclude_appointment_id: str | None = None,
     ) -> str:
         """Valida o asigna automáticamente un consultorio compatible y adquiere cerrojo mutex."""
         if requested_room_id:
@@ -104,6 +105,7 @@ class AppointmentService:
                     room_id=cand_room.id,
                     start_time=start_time,
                     end_time=end_time,
+                    exclude_id=exclude_appointment_id,
                 )
                 room_conflicts = [c for c in conflicts if c.room_id == cand_room.id]
                 if not room_conflicts:
@@ -124,6 +126,7 @@ class AppointmentService:
             room_id=selected_room_id,
             start_time=start_time,
             end_time=end_time,
+            exclude_id=exclude_appointment_id,
         )
         if conflicts:
             raise HTTPException(
@@ -153,6 +156,13 @@ class AppointmentService:
         if not patient:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Paciente no encontrado.")
 
+        # Fair use: si el paciente tiene reserva restringida por reincidencia de no-show
+        if current_user.role == "PATIENT" and getattr(patient, "is_restricted_booking", False):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Su cuenta tiene restricciones para agendar citas en línea debido a inasistencias previas (no-show). Por favor contacte a recepción.",
+            )
+
         # 3. Validar médico y su verificación legal
         doctor = await self.users.get_by_id(payload.doctor_id)
         if not doctor or doctor.role != "DOCTOR":
@@ -177,6 +187,24 @@ class AppointmentService:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "La hora de inicio debe ser anterior a la hora de fin.",
+            )
+
+        # 4.b Aislamiento multi-tenant: el personal de sede solo agenda en su clinica.
+        if current_user.role in ("RECEPTIONIST", "CLINIC_ADMIN") and payload.clinic_id != current_user.clinic_id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puede agendar citas en otra clínica.")
+
+        # 4.c El medico debe estar afiliado (ACTIVE) a la clinica donde se agenda.
+        active_affiliation = await self.db.scalar(
+            select(DoctorClinicAffiliation.id).where(
+                DoctorClinicAffiliation.doctor_id == payload.doctor_id,
+                DoctorClinicAffiliation.clinic_id == payload.clinic_id,
+                DoctorClinicAffiliation.status == "ACTIVE",
+            )
+        )
+        if active_affiliation is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "El médico no tiene una afiliación activa con esta clínica.",
             )
 
         # 5. Adquisición atómica de cerrojos mutex y resolución de consultorio físico compatible
@@ -328,10 +356,29 @@ class AppointmentService:
 
         return self._to_public(fresh_app)
 
+    @staticmethod
+    def _assert_can_view(app, current_user: User) -> None:
+        """Control de acceso por propiedad (defensa ademas del filtro de tenant).
+
+        Una cita contiene datos de salud (motivo, intake_data): solo la ven el
+        paciente titular, el medico asignado, el personal de SU clinica y el
+        SUPERADMIN. Se responde 404 para no revelar que el id existe.
+        """
+        role = current_user.role
+        allowed = (
+            role == "SUPERADMIN"
+            or (role == "PATIENT" and app.patient_id == current_user.id)
+            or (role == "DOCTOR" and app.doctor_id == current_user.id)
+            or (role in ("CLINIC_ADMIN", "RECEPTIONIST") and app.clinic_id == current_user.clinic_id)
+        )
+        if not allowed:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+
     async def get_appointment(self, appointment_id: str, current_user: User) -> AppointmentPublic:
         app = await self.appointments.get_by_id(appointment_id)
         if not app:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+        self._assert_can_view(app, current_user)
         return self._to_public(app)
 
     async def accept_appointment(
@@ -342,8 +389,9 @@ class AppointmentService:
         if not app:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
 
-        if current_user.role == "PATIENT" and app.patient_id != current_user.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes aceptar citas de otro paciente.")
+        # Potestad soberana del paciente (plan 2.B.5): solo el titular decide.
+        if current_user.role != "PATIENT" or app.patient_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo el paciente titular puede aceptar esta cita.")
 
         if app.status != "PENDING_PATIENT_ACCEPTANCE":
             raise HTTPException(
@@ -365,8 +413,9 @@ class AppointmentService:
         if not app:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
 
-        if current_user.role == "PATIENT" and app.patient_id != current_user.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes rechazar citas de otro paciente.")
+        # Potestad soberana del paciente (plan 2.B.5): solo el titular decide.
+        if current_user.role != "PATIENT" or app.patient_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo el paciente titular puede rechazar esta cita.")
 
         if app.status != "PENDING_PATIENT_ACCEPTANCE":
             raise HTTPException(
@@ -400,12 +449,25 @@ class AppointmentService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
 
         # Control de permisos de cancelación
-        if current_user.role == "PATIENT" and app.patient_id != current_user.id:
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes cancelar citas de otro paciente.")
+        if current_user.role == "PATIENT":
+            if app.patient_id != current_user.id:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes cancelar citas de otro paciente.")
+            # Regla de cancelación hasta 2 horas antes de la cita (plan 2.B.4)
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            app_start = app.start_time
+            if app_start.tzinfo is None:
+                app_start = app_start.replace(tzinfo=datetime.timezone.utc)
+            if app_start - now_utc < datetime.timedelta(hours=2):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Las citas solo pueden cancelarse con al menos 2 horas de anticipación.",
+                )
         if current_user.role == "DOCTOR" and app.doctor_id != current_user.id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes cancelar citas de otro médico.")
         if current_user.role in ("RECEPTIONIST", "CLINIC_ADMIN") and app.clinic_id != current_user.clinic_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes cancelar citas de otra clínica.")
+        if current_user.role not in ("PATIENT", "DOCTOR", "RECEPTIONIST", "CLINIC_ADMIN", "SUPERADMIN"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado para cancelar citas.")
 
         if app.status in ("CANCELLED_BY_PATIENT", "CANCELLED_BY_DOCTOR", "CANCELLED_BY_CLINIC", "REJECTED_BY_PATIENT", "COMPLETED"):
             raise HTTPException(
@@ -431,6 +493,177 @@ class AppointmentService:
 
         # Invalidar caché en Redis para liberar el turno al instante
         await self._invalidate_redis_slots(app.clinic_id, app.doctor_id, app.start_time)
+
+        fresh = await self.appointments.get_by_id(appointment_id)
+        return self._to_public(fresh)
+
+    async def check_in(self, appointment_id: str, current_user: User) -> AppointmentPublic:
+        """Marca la llegada del paciente a la recepción de la sede (CHECKED_IN)."""
+        app = await self.appointments.get_by_id(appointment_id)
+        if not app:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+
+        if current_user.role in ("RECEPTIONIST", "CLINIC_ADMIN") and app.clinic_id != current_user.clinic_id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes gestionar citas de otra clínica.")
+        if current_user.role == "DOCTOR" and app.doctor_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes gestionar citas de otro médico.")
+        if current_user.role not in ("RECEPTIONIST", "CLINIC_ADMIN", "DOCTOR", "SUPERADMIN"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado para registrar check-in.")
+
+        if app.status not in ("CONFIRMED", "SCHEDULED", "PENDING_PATIENT_ACCEPTANCE"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"No se puede realizar check-in a una cita en estado {app.status}.",
+            )
+
+        await self.appointments.update_status(appointment_id, "CHECKED_IN")
+        await self.db.commit()
+        fresh = await self.appointments.get_by_id(appointment_id)
+        return self._to_public(fresh)
+
+    async def start_consultation(self, appointment_id: str, current_user: User) -> AppointmentPublic:
+        """El médico especialista llama al paciente e inicia la consulta (IN_CONSULTATION)."""
+        app = await self.appointments.get_by_id(appointment_id)
+        if not app:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+
+        if current_user.role == "DOCTOR" and app.doctor_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Solo el médico tratante asignado puede iniciar la consulta.")
+        if current_user.role not in ("DOCTOR", "SUPERADMIN"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado para iniciar la consulta.")
+
+        if app.status not in ("CHECKED_IN", "CONFIRMED", "SCHEDULED"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"No se puede iniciar consulta para una cita en estado {app.status}.",
+            )
+
+        await self.appointments.update_status(appointment_id, "IN_CONSULTATION")
+        await self.db.commit()
+        fresh = await self.appointments.get_by_id(appointment_id)
+        return self._to_public(fresh)
+
+    async def record_no_show(
+        self, appointment_id: str, reason: str | None, current_user: User
+    ) -> AppointmentPublic:
+        """Registra la inasistencia del paciente (NO_SHOW), contabiliza strikes y aplica fair use."""
+        app = await self.appointments.get_by_id(appointment_id)
+        if not app:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+
+        if current_user.role in ("RECEPTIONIST", "CLINIC_ADMIN") and app.clinic_id != current_user.clinic_id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes gestionar citas de otra clínica.")
+        if current_user.role == "DOCTOR" and app.doctor_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes gestionar citas de otro médico.")
+        if current_user.role not in ("RECEPTIONIST", "CLINIC_ADMIN", "DOCTOR", "SUPERADMIN"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado para marcar inasistencia.")
+
+        if app.status in ("COMPLETED", "NO_SHOW", "CANCELLED_BY_PATIENT", "CANCELLED_BY_DOCTOR", "CANCELLED_BY_CLINIC"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"No se puede marcar NO_SHOW para una cita en estado {app.status}.",
+            )
+
+        no_show_reason = reason or "Paciente no se presentó a la consulta programada."
+        await self.appointments.update_status(appointment_id, "NO_SHOW", cancellation_reason=no_show_reason)
+
+        # Regla Fair use (sección 2.B.4): acumular strikes y restringir si >= 2
+        patient = await self.users.get_by_id(app.patient_id)
+        if patient:
+            patient.no_show_strikes = (patient.no_show_strikes or 0) + 1
+            if patient.no_show_strikes >= 2:
+                patient.is_restricted_booking = True
+
+        # Cobro asociado pasa a VOID si aún no estaba pagado
+        pay_record = await self.payments.get_by_appointment_id(appointment_id)
+        if pay_record and pay_record.status == "UNPAID":
+            await self.payments.update_status(pay_record.id, "VOID", notes=f"Inasistencia (NO_SHOW): {no_show_reason}")
+
+        await self.db.commit()
+
+        # Liberar turnos en Redis
+        await self._invalidate_redis_slots(app.clinic_id, app.doctor_id, app.start_time)
+
+        fresh = await self.appointments.get_by_id(appointment_id)
+        return self._to_public(fresh)
+
+    async def reschedule_appointment(
+        self,
+        appointment_id: str,
+        new_start_time: datetime.datetime,
+        new_end_time: datetime.datetime | None,
+        reason: str | None,
+        current_user: User,
+    ) -> AppointmentPublic:
+        """Reprograma una cita existente a un nuevo horario validando disponibilidad sin colisiones."""
+        app = await self.appointments.get_by_id(appointment_id)
+        if not app:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita no encontrada.")
+
+        # Permisos
+        if current_user.role == "PATIENT":
+            if app.patient_id != current_user.id:
+                raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes reprogramar citas de otro paciente.")
+            if getattr(current_user, "is_restricted_booking", False):
+                raise HTTPException(
+                    status.HTTP_403_FORBIDDEN,
+                    "Su cuenta tiene restricciones para agendar o reprogramar citas en línea.",
+                )
+            # Regla de 2 horas antes sobre la cita actual
+            now_utc = datetime.datetime.now(datetime.timezone.utc)
+            app_start = app.start_time
+            if app_start.tzinfo is None:
+                app_start = app_start.replace(tzinfo=datetime.timezone.utc)
+            if app_start - now_utc < datetime.timedelta(hours=2):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Las citas solo pueden reprogramarse con al menos 2 horas de anticipación.",
+                )
+        elif current_user.role in ("RECEPTIONIST", "CLINIC_ADMIN") and app.clinic_id != current_user.clinic_id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes reprogramar citas de otra clínica.")
+        elif current_user.role == "DOCTOR" and app.doctor_id != current_user.id:
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "No puedes reprogramar citas de otro médico.")
+        elif current_user.role not in ("PATIENT", "DOCTOR", "RECEPTIONIST", "CLINIC_ADMIN", "SUPERADMIN"):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Rol no autorizado para reprogramar citas.")
+
+        if app.status in ("COMPLETED", "NO_SHOW", "CANCELLED_BY_PATIENT", "CANCELLED_BY_DOCTOR", "CANCELLED_BY_CLINIC"):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"No se puede reprogramar una cita en estado {app.status}.",
+            )
+
+        duration = (new_end_time - new_start_time) if new_end_time else (app.end_time - app.start_time)
+        if duration <= datetime.timedelta(0):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "La hora de fin debe ser posterior a la de inicio.")
+        calculated_end = new_start_time + duration
+
+        doctor = await self.users.get_by_id(app.doctor_id)
+        if not doctor:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Médico de la cita no encontrado.")
+
+        # Resolver consultorio y adquirir cerrojos excluyendo la cita actual del conflicto
+        new_room_id = await self._resolve_and_lock_room(
+            clinic_id=app.clinic_id,
+            doctor=doctor,
+            requested_room_id=app.room_id,
+            start_time=new_start_time,
+            end_time=calculated_end,
+            exclude_appointment_id=app.id,
+        )
+
+        old_start = app.start_time
+        app.start_time = new_start_time
+        app.end_time = calculated_end
+        app.room_id = new_room_id
+        app.status = "RESCHEDULED"
+        if reason:
+            app.notes = f"{app.notes or ''}\n[Reprogramada]: {reason}".strip()
+
+        await self.db.commit()
+
+        # Invalidar slots en Redis tanto de la fecha antigua como de la nueva
+        await self._invalidate_redis_slots(app.clinic_id, app.doctor_id, old_start)
+        await self._invalidate_redis_slots(app.clinic_id, app.doctor_id, new_start_time)
 
         fresh = await self.appointments.get_by_id(appointment_id)
         return self._to_public(fresh)
@@ -486,6 +719,13 @@ class AppointmentService:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "La hora de inicio debe ser anterior a la hora de fin.",
+            )
+
+        existing_patient = await self.users.get_by_email(payload.email)
+        if existing_patient and getattr(existing_patient, "is_restricted_booking", False):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Su cuenta tiene restricciones para agendar citas en línea debido a inasistencias previas (no-show). Por favor contacte a recepción.",
             )
 
         # 2. Adquisición atómica de cerrojos mutex y resolución de consultorio físico compatible

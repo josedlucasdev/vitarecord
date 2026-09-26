@@ -15,13 +15,16 @@ from sqlalchemy import engine_from_config, pool
 from app.core.config import settings
 from app.models.base import Base
 
-# Importar todos los modulos de modelos para que Base.metadata los conozca.
-from app.models import clinic, user, affiliation, patient_dependent  # noqa: F401
+# Importar TODOS los modelos (app/models/__init__.py) para que Base.metadata
+# este completo: si falta uno, --autogenerate propondria borrar su tabla.
+import app.models  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_SYNC_URL)
 
-if config.config_file_name is not None:
+# Cuando las migraciones se lanzan desde la app (app/db/seed.py) no se toca la
+# configuracion de logging estructurado de la aplicacion.
+if config.config_file_name is not None and not config.attributes.get("skip_logging_config"):
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
@@ -47,7 +50,17 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        # Cerrojo de MySQL: si arrancan varias replicas a la vez, solo una
+        # aplica migraciones; las demas esperan y luego no encuentran nada.
+        connection.exec_driver_sql("SELECT GET_LOCK('appcitas_alembic_upgrade', 120)")
+        # El cerrojo es de sesion; se cierra la transaccion implicita para que
+        # Alembic gestione (y confirme) la suya propia.
+        connection.commit()
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+        )
         with context.begin_transaction():
             context.run_migrations()
 
