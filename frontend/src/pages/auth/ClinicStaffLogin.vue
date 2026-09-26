@@ -98,6 +98,7 @@
               dense
               class="rounded-xl"
               required
+              @focus="checkMfaStatus"
             >
               <template v-slot:prepend>
                 <q-icon name="lock_outline" size="18px" color="cyan-8" />
@@ -175,7 +176,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from 'boot/axios'
 import { setAuthToken, clearAuthToken, useAcl, getValidTokenPayload } from 'src/composables/useAcl'
@@ -194,8 +195,17 @@ function onEmailChange () {
   if (emailDebounceTimer) clearTimeout(emailDebounceTimer)
   emailDebounceTimer = setTimeout(() => {
     checkMfaStatus()
-  }, 500)
+  }, 300)
 }
+
+watch(email, (val) => {
+  const clean = (val || '').trim()
+  if (clean && clean.includes('@') && clean.includes('.')) {
+    checkMfaStatus()
+  } else if (!clean) {
+    showMfaField.value = false
+  }
+})
 
 async function checkMfaStatus () {
   const cleanEmail = (email.value || '').trim().toLowerCase()
@@ -222,6 +232,9 @@ const ALLOWED_STAFF_ROLES = ['CLINIC_ADMIN', 'DOCTOR', 'RECEPTIONIST']
 onMounted(() => {
   if (isLoggedIn.value) {
     router.replace({ name: 'home' })
+  }
+  if (email.value) {
+    checkMfaStatus()
   }
 })
 

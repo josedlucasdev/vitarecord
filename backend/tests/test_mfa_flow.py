@@ -1,6 +1,11 @@
+import uuid
 import pyotp
 import pytest
 from httpx import AsyncClient
+
+from app.core.database import AsyncSessionLocal
+from app.core.security import hash_password
+from app.models.user import User
 
 
 @pytest.mark.anyio
@@ -10,8 +15,8 @@ async def test_mfa_status_public_endpoint(client: AsyncClient):
     assert res_mfa.status_code == 200
     assert res_mfa.json()["mfa_enabled"] is True
 
-    # admin@vitarecord.com NO tiene MFA habilitado
-    res_no_mfa = await client.get("/api/v1/auth/mfa-status?email=admin@vitarecord.com")
+    # paciente@intimasalud.com NO tiene MFA habilitado por defecto
+    res_no_mfa = await client.get("/api/v1/auth/mfa-status?email=paciente@intimasalud.com")
     assert res_no_mfa.status_code == 200
     assert res_no_mfa.json()["mfa_enabled"] is False
 
@@ -43,10 +48,28 @@ async def test_login_with_mfa_in_form_body(client: AsyncClient):
 
 @pytest.mark.anyio
 async def test_mfa_setup_enable_disable_full_lifecycle(client: AsyncClient):
-    # 1. Iniciar sesión con un usuario sin MFA (admin@vitarecord.com)
+    # Crear usuario efímero para no mutar cuentas de seed ni interferir con la sesión de desarrollo
+    unique_suffix = uuid.uuid4().hex[:8]
+    test_email = f"test.mfa.lifecycle.{unique_suffix}@example.com"
+    test_password = "Password123!"
+
+    async with AsyncSessionLocal() as db:
+        user = User(
+            email=test_email,
+            full_name=f"Usuario Test MFA {unique_suffix}",
+            hashed_password=hash_password(test_password),
+            role="PATIENT",
+            status="ACTIVE",
+            mfa_enabled=False,
+            mfa_secret=None,
+        )
+        db.add(user)
+        await db.commit()
+
+    # 1. Iniciar sesión con el usuario efímero sin MFA
     login_res = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@vitarecord.com", "password": "Password123!"},
+        data={"username": test_email, "password": test_password},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert login_res.status_code == 200
@@ -89,13 +112,13 @@ async def test_mfa_setup_enable_disable_full_lifecycle(client: AsyncClient):
     assert status_res_after.json()["mfa_enabled"] is True
 
     # 7. Comprobar que en endpoint público ahora sale mfa_enabled=True
-    pub_res = await client.get("/api/v1/auth/mfa-status?email=admin@vitarecord.com")
+    pub_res = await client.get(f"/api/v1/auth/mfa-status?email={test_email}")
     assert pub_res.json()["mfa_enabled"] is True
 
-    # 8. Intentar login sin código MFA debe fallar
+    # 8. Intentar login sin código MFA debe fallar con 401
     login_no_mfa = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@vitarecord.com", "password": "Password123!"},
+        data={"username": test_email, "password": test_password},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert login_no_mfa.status_code == 401
@@ -105,7 +128,7 @@ async def test_mfa_setup_enable_disable_full_lifecycle(client: AsyncClient):
     new_code = pyotp.TOTP(secret).now()
     login_with_mfa = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@vitarecord.com", "password": "Password123!", "mfa_code": new_code},
+        data={"username": test_email, "password": test_password, "mfa_code": new_code},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert login_with_mfa.status_code == 200
@@ -123,7 +146,7 @@ async def test_mfa_setup_enable_disable_full_lifecycle(client: AsyncClient):
     # 11. Desactivar MFA con contraseña correcta debe tener éxito
     good_disable = await client.post(
         "/api/v1/auth/mfa/disable",
-        json={"password": "Password123!"},
+        json={"password": test_password},
         headers=new_headers,
     )
     assert good_disable.status_code == 200
@@ -131,7 +154,7 @@ async def test_mfa_setup_enable_disable_full_lifecycle(client: AsyncClient):
     # 12. Comprobar que tras desactivar, login sin código vuelve a funcionar directamente
     login_after_disable = await client.post(
         "/api/v1/auth/login",
-        data={"username": "admin@vitarecord.com", "password": "Password123!"},
+        data={"username": test_email, "password": test_password},
         headers={"content-type": "application/x-www-form-urlencoded"},
     )
     assert login_after_disable.status_code == 200

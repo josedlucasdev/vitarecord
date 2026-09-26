@@ -1369,9 +1369,13 @@ function onMfaSetupRequired () {
 }
 
 function onMfaStatusChanged (enabled) {
-  if (enabled && mfaRequiredNotified) {
-    // Recargar para que las vistas que fallaron por la politica se rehidraten.
-    window.location.reload()
+  if (enabled) {
+    showMfaModal.value = false
+    if (mfaRequiredNotified) {
+      setTimeout(() => {
+        window.location.reload()
+      }, 600)
+    }
   }
 }
 

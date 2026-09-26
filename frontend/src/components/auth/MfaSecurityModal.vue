@@ -369,6 +369,9 @@ async function confirmEnableMfa () {
     mfaEnabled.value = true
     settingUp.value = false
     emit('status-changed', true)
+    setTimeout(() => {
+      isOpen.value = false
+    }, 1200)
   } catch (err) {
     enableError.value = err.response?.data?.detail || 'Código de verificación incorrecto o expirado.'
   } finally {

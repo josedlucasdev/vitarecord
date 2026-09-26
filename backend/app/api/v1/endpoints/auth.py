@@ -461,7 +461,11 @@ async def enable_mfa(
 
     current_user.mfa_enabled = True
     current_user.mfa_secret = payload.secret
+    db.add(current_user)
     await db.commit()
+    await db.refresh(current_user)
+    import logging
+    logging.getLogger("auth").info("MFA activado con éxito para usuario %s (%s)", current_user.email, current_user.id)
     return {"message": "Autenticación de segundo factor (Google Authenticator) activada exitosamente."}
 
 
