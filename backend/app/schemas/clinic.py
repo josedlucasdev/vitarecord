@@ -1,6 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, computed_field
 
 
 class ClinicCreateRequest(BaseModel):
@@ -10,6 +10,9 @@ class ClinicCreateRequest(BaseModel):
     country_code: str = "VE"
     phone: str | None = None
     address: str | None = None
+    ai_enabled: bool = False
+    ai_api_url: str | None = None
+    ai_api_key: str | None = None
 
 
 class ClinicUpdateRequest(BaseModel):
@@ -20,6 +23,9 @@ class ClinicUpdateRequest(BaseModel):
     phone: str | None = None
     address: str | None = None
     is_active: bool | None = None
+    ai_enabled: bool | None = None
+    ai_api_url: str | None = None
+    ai_api_key: str | None = None
 
 
 class ClinicPublic(BaseModel):
@@ -32,9 +38,23 @@ class ClinicPublic(BaseModel):
     address: str | None = None
     is_active: bool
     require_mfa_for_receptionists: bool = False
+    ai_enabled: bool = False
+    ai_api_url: str | None = None
+    ai_api_key: str | None = Field(default=None, exclude=True)
     created_at: datetime | None = None
 
+    @computed_field
+    @property
+    def has_ai_key(self) -> bool:
+        return bool(self.ai_api_key and len(self.ai_api_key.strip()) > 0)
+
     model_config = {"from_attributes": True}
+
+
+class ClinicAISettingsUpdate(BaseModel):
+    ai_enabled: bool
+    ai_api_url: str | None = None
+    ai_api_key: str | None = None
 
 
 class ClinicSecurityPolicyUpdate(BaseModel):

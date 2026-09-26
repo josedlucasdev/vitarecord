@@ -10,6 +10,7 @@ Genera documentos PDF clínicos completos, individualizados y paginados:
 
 import datetime
 import io
+import re
 from pathlib import Path
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -27,6 +28,25 @@ from reportlab.platypus import (
 )
 
 from app.services.prescription_pdf_service import get_vitarecord_logo_path
+
+
+def _sanitize_for_reportlab(text: str | None) -> str:
+    """Convierte texto enriquecido HTML a un formato compatible con Paragraph de ReportLab."""
+    if not text:
+        return ""
+    s = text.replace("<p>", "").replace("</p>", "<br/>")
+    s = s.replace("<div>", "").replace("</div>", "<br/>")
+    s = s.replace("<li>", "• ").replace("</li>", "<br/>")
+    s = s.replace("<ul>", "").replace("</ul>", "")
+    s = s.replace("<ol>", "").replace("</ol>", "")
+    s = s.replace("\n", "<br/>")
+    s = re.sub(r"<\s*strong\s*>", "<b>", s, flags=re.IGNORECASE)
+    s = re.sub(r"<\s*/\s*strong\s*>", "</b>", s, flags=re.IGNORECASE)
+    s = re.sub(r"<\s*em\s*>", "<i>", s, flags=re.IGNORECASE)
+    s = re.sub(r"<\s*/\s*em\s*>", "</i>", s, flags=re.IGNORECASE)
+    s = re.sub(r"<(?!\/?(b|i|u|br\b))[^>]*>", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"(<br\s*/?>\s*){3,}", "<br/><br/>", s)
+    return s.strip()
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -370,19 +390,19 @@ def generate_medical_history_pdf(
             content_table_data = [
                 [
                     Paragraph("<b>DIAGNÓSTICO:</b>", label_style),
-                    Paragraph(diag_full, diag_style),
+                    Paragraph(_sanitize_for_reportlab(diag_full), diag_style),
                 ],
                 [
                     Paragraph("<b>ANAMNESIS:</b>", label_style),
-                    Paragraph(anamnesis_text.replace("\n", "<br/>"), body_text_style),
+                    Paragraph(_sanitize_for_reportlab(anamnesis_text), body_text_style),
                 ],
                 [
                     Paragraph("<b>EXAMEN FÍSICO:</b>", label_style),
-                    Paragraph(exam_text.replace("\n", "<br/>"), body_text_style),
+                    Paragraph(_sanitize_for_reportlab(exam_text), body_text_style),
                 ],
                 [
                     Paragraph("<b>PLAN / CONDUCTA:</b>", label_style),
-                    Paragraph(plan_text.replace("\n", "<br/>"), body_text_style),
+                    Paragraph(_sanitize_for_reportlab(plan_text), body_text_style),
                 ],
                 [
                     Paragraph("<b>FARMACOTERAPIA:</b>", label_style),

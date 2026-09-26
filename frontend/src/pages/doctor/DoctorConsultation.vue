@@ -232,7 +232,7 @@
                   <q-icon name="notes" size="16px" class="mr-1 text-teal-600" />
                   Anamnesis y Evolución
                 </span>
-                <p class="text-slate-700 whitespace-pre-line leading-relaxed">{{ appointmentRecord.anamnesis }}</p>
+                <div class="text-slate-700 whitespace-pre-line leading-relaxed text-xs" v-html="appointmentRecord.anamnesis"></div>
               </div>
 
               <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-1">
@@ -240,7 +240,7 @@
                   <q-icon name="assignment" size="16px" class="mr-1 text-teal-600" />
                   Conducta Médica e Indicaciones
                 </span>
-                <p class="text-slate-700 whitespace-pre-line leading-relaxed">{{ appointmentRecord.plan }}</p>
+                <div class="text-slate-700 whitespace-pre-line leading-relaxed text-xs" v-html="appointmentRecord.plan"></div>
               </div>
             </div>
 
@@ -249,7 +249,7 @@
                 <q-icon name="monitor_heart" size="16px" class="mr-1 text-teal-600" />
                 Examen Físico
               </span>
-              <p class="text-slate-700">{{ appointmentRecord.physical_exam }}</p>
+              <div class="text-slate-700 whitespace-pre-line leading-relaxed text-xs" v-html="appointmentRecord.physical_exam"></div>
             </div>
 
             <div v-if="appointmentRecord.prescriptions?.length" class="p-4 bg-teal-50/50 rounded-xl border border-teal-200 space-y-3">
@@ -339,32 +339,27 @@
           </div>
 
           <div class="space-y-4">
-            <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">
-                Motivo de Consulta y Enfermedad Actual (Anamnesis) *
-              </label>
-              <q-input
-                v-model="form.anamnesis"
-                outlined
-                type="textarea"
-                rows="3"
-                placeholder="Describir síntomas principales, tiempo de evolución, antecedentes ginecológicos (menarquía, ciclos, gestas, partos, cesáreas, abortos) y antecedentes personales."
-                required
-              />
-            </div>
+            <ClinicalVoiceEditor
+              v-model="form.anamnesis"
+              label="Motivo de Consulta y Enfermedad Actual (Anamnesis)"
+              :required="true"
+              field-type="anamnesis"
+              :clinic-id="appointment?.clinic_id || ''"
+              :ai-enabled="clinicAiEnabled"
+              placeholder="Describir síntomas principales, tiempo de evolución, antecedentes ginecológicos (menarquía, ciclos, gestas, partos, cesáreas, abortos) y antecedentes personales."
+              min-height="6rem"
+            />
 
-            <div>
-              <label class="block text-xs font-bold text-slate-700 mb-1">
-                Examen Físico y Signos Vitales (Opcional)
-              </label>
-              <q-input
-                v-model="form.physical_exam"
-                outlined
-                type="textarea"
-                rows="2"
-                placeholder="Tensión Arterial, FC, Peso, Talla, examen mamario, abdomen, especuloscopia, tacto bimanual y hallazgos relevantes."
-              />
-            </div>
+            <ClinicalVoiceEditor
+              v-model="form.physical_exam"
+              label="Examen Físico y Signos Vitales (Opcional)"
+              :required="false"
+              field-type="physical_exam"
+              :clinic-id="appointment?.clinic_id || ''"
+              :ai-enabled="clinicAiEnabled"
+              placeholder="Tensión Arterial, FC, Peso, Talla, examen mamario, abdomen, especuloscopia, tacto bimanual y hallazgos relevantes."
+              min-height="5rem"
+            />
           </div>
         </div>
 
@@ -406,33 +401,27 @@
             </div>
           </div>
 
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">
-              Diagnóstico Clínico Detallado *
-            </label>
-            <q-input
-              v-model="form.diagnosis"
-              outlined
-              type="textarea"
-              rows="2"
-              placeholder="Diagnóstico presuntivo o definitivo, estadio, hallazgos de imagen."
-              required
-            />
-          </div>
+          <ClinicalVoiceEditor
+            v-model="form.diagnosis"
+            label="Diagnóstico Clínico Detallado"
+            :required="true"
+            field-type="diagnosis"
+            :clinic-id="appointment?.clinic_id || ''"
+            :ai-enabled="clinicAiEnabled"
+            placeholder="Diagnóstico presuntivo o definitivo, estadio, hallazgos de imagen."
+            min-height="5rem"
+          />
 
-          <div>
-            <label class="block text-xs font-bold text-slate-700 mb-1">
-              Conducta Médica y Plan de Tratamiento *
-            </label>
-            <q-input
-              v-model="form.plan"
-              outlined
-              type="textarea"
-              rows="3"
-              placeholder="Recomendaciones higiénico-dietéticas, solicitud de paraclínicos (ecografía transvaginal, citología, mamografía), fecha de reevaluación."
-              required
-            />
-          </div>
+          <ClinicalVoiceEditor
+            v-model="form.plan"
+            label="Conducta Médica y Plan de Tratamiento"
+            :required="true"
+            field-type="plan"
+            :clinic-id="appointment?.clinic_id || ''"
+            :ai-enabled="clinicAiEnabled"
+            placeholder="Recomendaciones higiénico-dietéticas, solicitud de paraclínicos (ecografía transvaginal, citología, mamografía), fecha de reevaluación."
+            min-height="6rem"
+          />
         </div>
 
         <!-- 4. Procedimientos Médicos Especializados Realizados en Consulta -->
@@ -956,7 +945,7 @@
               <!-- Diagnóstico -->
               <div class="bg-teal-50/40 p-3 rounded-lg border border-teal-100 text-xs">
                 <div class="text-2xs font-bold uppercase text-teal-800">Diagnóstico Principal:</div>
-                <div class="font-bold text-slate-900 mt-0.5">{{ rec.diagnosis }}</div>
+                <div class="font-bold text-slate-900 mt-0.5" v-html="rec.diagnosis"></div>
                 <div v-if="rec.icd10_description" class="text-2xs text-slate-600 mt-0.5">{{ rec.icd10_description }}</div>
               </div>
 
@@ -967,14 +956,14 @@
                     <q-icon name="notes" size="13px" class="mr-1 text-teal-600" />
                     Motivo / Anamnesis:
                   </div>
-                  <div class="text-slate-700 whitespace-pre-line leading-relaxed">{{ rec.anamnesis }}</div>
+                  <div class="text-slate-700 whitespace-pre-line leading-relaxed" v-html="rec.anamnesis"></div>
                 </div>
                 <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100 space-y-1">
                   <div class="font-bold text-slate-500 uppercase text-3xs flex items-center">
                     <q-icon name="assignment" size="13px" class="mr-1 text-teal-600" />
                     Conducta Médica / Plan:
                   </div>
-                  <div class="text-slate-700 whitespace-pre-line leading-relaxed">{{ rec.plan }}</div>
+                  <div class="text-slate-700 whitespace-pre-line leading-relaxed" v-html="rec.plan"></div>
                 </div>
               </div>
 
@@ -984,7 +973,7 @@
                   <q-icon name="monitor_heart" size="13px" class="mr-1 text-teal-600" />
                   Examen Físico y Signos Vitales:
                 </div>
-                <div class="text-slate-700">{{ rec.physical_exam }}</div>
+                <div class="text-slate-700" v-html="rec.physical_exam"></div>
               </div>
 
               <!-- Recetas asociadas y medicamentos prescritos -->
@@ -1134,6 +1123,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from 'boot/axios'
 import { Notify } from 'quasar'
+import ClinicalVoiceEditor from 'src/components/medical/ClinicalVoiceEditor.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -1376,6 +1366,7 @@ async function fetchAppointment () {
       }
       if (match.clinic_id) {
         fetchAvailableProcedures(match.clinic_id, match.doctor_id)
+        fetchClinicAiStatus(match.clinic_id)
       }
     } else {
       Notify.create({ type: 'warning', message: 'No se encontró la cita especificada.' })
@@ -1387,7 +1378,37 @@ async function fetchAppointment () {
   }
 }
 
+const clinicAiEnabled = ref(false)
+
+async function fetchClinicAiStatus (clinicId) {
+  if (!clinicId) return
+  try {
+    const { data } = await api.get(`/clinics/${clinicId}`)
+    clinicAiEnabled.value = !!data.ai_enabled
+  } catch (err) {
+    console.warn('No se pudo verificar estado de IA de la clínica:', err)
+  }
+}
+
+function stripHtml (val) {
+  if (!val) return ''
+  return val.replace(/<[^>]*>/g, '').trim()
+}
+
 async function submitConsultation () {
+  if (!stripHtml(form.value.anamnesis)) {
+    Notify.create({ type: 'warning', message: 'El Motivo de Consulta y Anamnesis es obligatorio.' })
+    return
+  }
+  if (!stripHtml(form.value.diagnosis)) {
+    Notify.create({ type: 'warning', message: 'El Diagnóstico Clínico es obligatorio.' })
+    return
+  }
+  if (!stripHtml(form.value.plan)) {
+    Notify.create({ type: 'warning', message: 'La Conducta Médica y Plan de Tratamiento es obligatorio.' })
+    return
+  }
+
   submitting.value = true
   try {
     const payload = {

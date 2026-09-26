@@ -28,6 +28,11 @@ class Clinic(Base, TimestampMixin):
     emergency_doctor_attempts: Mapped[int] = mapped_column(Integer, default=2, nullable=False)
     emergency_backup_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
+    # Configuración de Inteligencia Artificial (IA) por Clínica (SaaS Tenant)
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ai_api_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    ai_api_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
 
 class ClinicRoom(Base, TimestampMixin, TenantScopedMixin):
     __tablename__ = "clinic_rooms"

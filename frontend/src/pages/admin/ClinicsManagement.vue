@@ -66,6 +66,13 @@
                   >
                     {{ clinic.is_active ? 'Activa' : 'Inactiva / Suspendida' }}
                   </span>
+                  <span
+                    class="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1"
+                    :class="clinic.ai_enabled ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-slate-100 text-slate-500'"
+                  >
+                    <q-icon name="auto_awesome" size="12px" />
+                    {{ clinic.ai_enabled ? 'IA Activa' : 'IA Desactivada' }}
+                  </span>
                 </div>
 
                 <div class="text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
@@ -93,6 +100,18 @@
 
             <!-- Acciones -->
             <div class="flex items-center space-x-2 self-end md:self-center">
+              <!-- Botón Configuración de IA -->
+              <q-btn
+                flat
+                round
+                dense
+                :color="clinic.ai_enabled ? 'purple-8' : 'slate-5'"
+                icon="auto_awesome"
+                @click="openAiModal(clinic)"
+              >
+                <q-tooltip>Configurar Inteligencia Artificial (URL y Token de API)</q-tooltip>
+              </q-btn>
+
               <!-- Botón Editar -->
               <q-btn
                 flat
@@ -381,6 +400,76 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <!-- Modal Configurar Inteligencia Artificial por Clínica -->
+    <q-dialog v-model="showAiDialog">
+      <q-card style="min-width: 480px; max-width: 560px; border-radius: 16px;">
+        <q-card-section class="bg-gradient-to-r from-purple-800 to-indigo-900 text-white p-5 flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <q-icon name="auto_awesome" size="24px" />
+            <div>
+              <h3 class="text-base font-bold leading-tight">Configuración de Inteligencia Artificial</h3>
+              <p class="text-2xs text-purple-200 mt-0.5 m-0">{{ selectedClinicForAi?.name }}</p>
+            </div>
+          </div>
+          <q-btn flat round dense icon="close" text-color="white" v-close-popup />
+        </q-card-section>
+
+        <q-card-section class="p-6">
+          <form class="space-y-4" @submit.prevent="submitAiSettings">
+            <div class="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 leading-relaxed">
+              Permite a los médicos especialistas de esta clínica activar el <strong>dictado por voz</strong> y <strong>mejorar resúmenes clínicos con IA</strong> en la consulta médica (Anamnesis, Examen Físico, Diagnóstico y Tratamiento).
+            </div>
+
+            <q-toggle
+              v-model="aiForm.ai_enabled"
+              label="Habilitar Asistente de IA para esta Clínica"
+              color="purple"
+              class="font-semibold text-slate-800"
+            />
+
+            <div v-if="aiForm.ai_enabled" class="space-y-3 pt-2">
+              <q-input
+                v-model="aiForm.ai_api_url"
+                label="URL del Endpoint de la API *"
+                placeholder="https://api.openai.com/v1/chat/completions"
+                filled
+                hint="Compatible con APIs estilo OpenAI, Ollama o pasarelas REST personalizadas"
+                required
+              />
+
+              <q-input
+                v-model="aiForm.ai_api_key"
+                :label="selectedClinicForAi?.has_ai_key ? 'Token / API Key (Configurado - deja vacío para mantener)' : 'Token / API Key del Proveedor *'"
+                :placeholder="selectedClinicForAi?.has_ai_key ? '••••••••••••••••••••••••' : 'sk-proj-...'"
+                type="password"
+                filled
+                :hint="selectedClinicForAi?.has_ai_key ? 'Ya existe un token guardado. Ingresa uno nuevo solo si deseas reemplazarlo.' : 'Token secreto del proveedor de IA. Se almacena cifrado en reposo.'"
+                :required="!selectedClinicForAi?.has_ai_key"
+              />
+            </div>
+
+            <div v-if="aiError" class="p-3 rounded-lg bg-red-50 text-red-700 text-xs flex items-center">
+              <q-icon name="warning" class="mr-2" size="16px" />
+              <span>{{ aiError }}</span>
+            </div>
+
+            <div class="pt-3 flex justify-end space-x-3">
+              <q-btn flat label="Cancelar" v-close-popup no-caps />
+              <q-btn
+                type="submit"
+                color="purple-8"
+                label="Guardar Configuración de IA"
+                icon="save"
+                no-caps
+                class="font-semibold shadow-xs"
+                :loading="aiSubmitting"
+              />
+            </div>
+          </form>
+        </q-card-section>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
@@ -398,7 +487,59 @@ const showCreateDialog = ref(false)
 const showEditDialog = ref(false)
 const showToggleDialog = ref(false)
 const showDeleteDialog = ref(false)
+const showAiDialog = ref(false)
 const selectedClinic = ref(null)
+const selectedClinicForAi = ref(null)
+
+// Formulario de IA
+const aiForm = reactive({
+  clinic_id: '',
+  ai_enabled: false,
+  ai_api_url: '',
+  ai_api_key: ''
+})
+const aiSubmitting = ref(false)
+const aiError = ref('')
+
+function openAiModal (clinic) {
+  selectedClinicForAi.value = clinic
+  aiForm.clinic_id = clinic.id
+  aiForm.ai_enabled = !!clinic.ai_enabled
+  aiForm.ai_api_url = clinic.ai_api_url || 'https://api.openai.com/v1/chat/completions'
+  aiForm.ai_api_key = '' // Por seguridad no se reenvía la clave en claro
+  aiError.value = ''
+  showAiDialog.value = true
+}
+
+async function submitAiSettings () {
+  aiSubmitting.value = true
+  aiError.value = ''
+  try {
+    const token = localStorage.getItem('access_token')
+    await api.put(
+      `/clinics/${aiForm.clinic_id}/ai-settings`,
+      {
+        ai_enabled: aiForm.ai_enabled,
+        ai_api_url: aiForm.ai_api_url || null,
+        ai_api_key: aiForm.ai_api_key || undefined
+      },
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    )
+    showAiDialog.value = false
+    $q.notify({
+      type: 'positive',
+      message: 'Configuración de Inteligencia Artificial guardada con éxito.',
+      position: 'top'
+    })
+    await loadClinics()
+  } catch (err) {
+    aiError.value = err.response?.data?.detail || 'Error al guardar la configuración de IA.'
+  } finally {
+    aiSubmitting.value = false
+  }
+}
 
 // Formulario de creación
 const formName = ref('')

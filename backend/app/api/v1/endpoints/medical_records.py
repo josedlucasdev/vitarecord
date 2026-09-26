@@ -334,3 +334,125 @@ async def upload_attachment_direct(
     db.add(attachment)
     await db.commit()
     return {"id": attachment.id, "file_name": attachment.file_name, "content_type": attachment.content_type, "file_size": attachment.file_size}
+
+
+class AIAssistRequest(BaseModel):
+    clinic_id: str
+    field_type: str  # anamnesis, physical_exam, diagnosis, plan
+    text: str
+    tone: str | None = "formal_clinical"  # formal_clinical, summary, detailed
+
+
+class AIAssistResponse(BaseModel):
+    enhanced_text: str
+    provider: str
+    tokens_used: int | None = None
+
+
+@router.post(
+    "/ai-assist",
+    response_model=AIAssistResponse,
+    summary="Mejorar y estructurar texto clínico dictado mediante Inteligencia Artificial",
+)
+async def enhance_clinical_text(
+    payload: AIAssistRequest,
+    current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_WRITE))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Procesa el texto dictado o redactado por el médico tratante usando el proveedor de IA configurado para la clínica."""
+    import httpx
+    from fastapi import HTTPException
+    from app.models.clinic import Clinic
+
+    if not payload.text or not payload.text.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "El texto a mejorar no puede estar vacío.")
+
+    clinic = await db.get(Clinic, payload.clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sede clínica no encontrada.")
+
+    if not clinic.ai_enabled:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "El módulo de Inteligencia Artificial no está activo para esta sede. El SuperAdmin debe activarlo en la gestión de clínicas.",
+        )
+
+    api_url = (clinic.ai_api_url or "").strip()
+    api_key = (clinic.ai_api_key or "").strip()
+
+    if not api_url or not api_key:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La clínica tiene la IA activada pero falta configurar la URL de la API o el Token de acceso.",
+        )
+
+    field_descriptions = {
+        "anamnesis": "Motivo de Consulta y Enfermedad Actual (Anamnesis ginecológica y médica integral)",
+        "physical_exam": "Examen Físico y Signos Vitales (Exploración física, constantes vitales y hallazgos)",
+        "diagnosis": "Diagnóstico Clínico Detallado (Diagnóstico presuntivo o de certeza, clasificación y estadio)",
+        "plan": "Conducta Médica y Plan de Tratamiento Terapéutico (Indicaciones, farmacoterapia, estudios paraclínicos y pautas de seguimiento)",
+    }
+    field_desc = field_descriptions.get(payload.field_type, payload.field_type)
+
+    system_prompt = (
+        "Eres un asistente médico experto en redacción clínica profesional y terminología médica precisa. "
+        "Tu tarea es corregir la ortografía, puntuar correctamente, estructurar en párrafos limpios y enriquecer con léxico médico formal "
+        "el siguiente texto dictado por un médico especialista, manteniendo estrictamente todos los hechos clínicos, dosis y datos reales sin inventar información. "
+        "Devuelve únicamente el texto clínico mejorado, sin introducciones ni saludos."
+    )
+    user_prompt = f"Sección clínica: {field_desc}.\nTexto dictado por el médico:\n{payload.text.strip()}"
+
+    # Soporte compatible con OpenAI / Anthropic / Gemini / Ollama / Local REST APIs
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.3,
+        "max_tokens": 1000
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            res = await client.post(api_url, json=body, headers=headers)
+            if res.status_code == 200:
+                data = res.json()
+                enhanced = ""
+                # Formato OpenAI Chat Completions
+                if "choices" in data and len(data["choices"]) > 0:
+                    enhanced = data["choices"][0].get("message", {}).get("content", "").strip()
+                # Formato Gemini REST
+                elif "candidates" in data and len(data["candidates"]) > 0:
+                    enhanced = data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+                # Fallback plano
+                elif "output" in data:
+                    enhanced = str(data["output"]).strip()
+                elif "response" in data:
+                    enhanced = str(data["response"]).strip()
+                else:
+                    enhanced = str(data)
+
+                return AIAssistResponse(
+                    enhanced_text=enhanced or payload.text,
+                    provider="external_ai_gateway",
+                    tokens_used=data.get("usage", {}).get("total_tokens")
+                )
+            else:
+                err_detail = res.text[:300]
+                raise HTTPException(
+                    status.HTTP_502_BAD_GATEWAY,
+                    f"Error del proveedor de IA (HTTP {res.status_code}): {err_detail}",
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Fallo al conectar con el servicio de IA: {str(exc)}",
+        )
+

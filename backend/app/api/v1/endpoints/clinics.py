@@ -23,6 +23,7 @@ from app.models.user import DoctorScheduleLock, User
 from app.repositories.clinic_repository import ClinicRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.clinic import (
+    ClinicAISettingsUpdate,
     ClinicCreateRequest,
     ClinicDoctorPublic,
     ClinicPublic,
@@ -97,6 +98,9 @@ async def create_clinic(
         phone=payload.phone.strip() if payload.phone else None,
         address=payload.address.strip() if payload.address else None,
         is_active=True,
+        ai_enabled=payload.ai_enabled,
+        ai_api_url=payload.ai_api_url.strip() if payload.ai_api_url else None,
+        ai_api_key=payload.ai_api_key.strip() if payload.ai_api_key else None,
     )
     await repo.create(clinic)
     await db.commit()
@@ -158,6 +162,44 @@ async def update_clinic(
         clinic.phone = payload.phone.strip() if payload.phone else None
     if payload.address is not None:
         clinic.address = payload.address.strip() if payload.address else None
+    if payload.ai_enabled is not None:
+        clinic.ai_enabled = payload.ai_enabled
+    if payload.ai_api_url is not None:
+        clinic.ai_api_url = payload.ai_api_url.strip() if payload.ai_api_url else None
+    if payload.ai_api_key is not None:
+        clinic.ai_api_key = payload.ai_api_key.strip() if payload.ai_api_key else None
+
+    await db.commit()
+    await db.refresh(clinic)
+    return clinic
+
+
+@router.put("/{clinic_id}/ai-settings", response_model=ClinicPublic, summary="Configurar proveedor y activación de Inteligencia Artificial para la sede")
+async def update_clinic_ai_settings(
+    clinic_id: str,
+    payload: ClinicAISettingsUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Configura el endpoint, API token y estado de activación del servicio de IA de una clínica.
+    
+    Exclusivo para SUPERADMIN del sistema.
+    """
+    if current_user.role != "SUPERADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Permisos insuficientes. Solo el SUPERADMIN puede configurar las credenciales y activación de IA por clínica.",
+        )
+
+    clinic = await ClinicRepository(db).get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    clinic.ai_enabled = payload.ai_enabled
+    if payload.ai_api_url is not None:
+        clinic.ai_api_url = payload.ai_api_url.strip() if payload.ai_api_url else None
+    if payload.ai_api_key is not None:
+        clinic.ai_api_key = payload.ai_api_key.strip() if payload.ai_api_key else None
 
     await db.commit()
     await db.refresh(clinic)
