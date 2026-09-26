@@ -245,6 +245,13 @@ const routes = [
         name: 'doctor-profile',
         component: () => import('pages/doctor/DoctorProfile.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'settings',
+        alias: ['user/settings', 'configuracion'],
+        name: 'user-settings',
+        component: () => import('pages/settings/UserSettings.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   },

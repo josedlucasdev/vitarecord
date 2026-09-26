@@ -1,5 +1,5 @@
 <template>
-  <q-dialog v-model="isOpen" persistent>
+  <q-dialog v-model="isOpen">
     <q-card class="w-full max-w-md rounded-2xl bg-white shadow-2xl overflow-hidden border border-slate-200">
       <!-- Cabecera del modal -->
       <div class="bg-gradient-to-r from-teal-700 to-teal-800 text-white p-5 flex items-center justify-between">

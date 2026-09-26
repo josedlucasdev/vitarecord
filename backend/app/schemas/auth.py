@@ -27,11 +27,60 @@ class MFAVerifyRequest(BaseModel):
 class UserPublic(BaseModel):
     id: str
     email: EmailStr
+    full_name: str | None = None
+    phone: str | None = None
     role: str
     status: str
     mfa_enabled: bool
+    profile_picture_url: str | None = None
+    recovery_email: str | None = None
+    recovery_phone: str | None = None
+    preferred_notification_channels: list[str] | None = None
+    notification_preferences: dict | None = None
+    clinic_id: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class UserProfileUpdateRequest(BaseModel):
+    full_name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    phone: str | None = None
+    email: EmailStr | None = None
+
+
+class UserRecoveryMethodsResponse(BaseModel):
+    recovery_email: str | None = None
+    recovery_phone: str | None = None
+    has_recovery_codes: bool = False
+    recovery_codes_count: int = 0
+
+
+class UserRecoveryMethodsUpdateRequest(BaseModel):
+    recovery_email: EmailStr | None = None
+    recovery_phone: str | None = None
+
+
+class UserRecoveryCodesGenerateResponse(BaseModel):
+    codes: list[str]
+    message: str
+
+
+class NotificationSettingsResponse(BaseModel):
+    channels: list[str]
+    categories: dict[str, dict[str, bool]]
+
+
+class NotificationSettingsUpdateRequest(BaseModel):
+    channels: list[str] | None = None
+    categories: dict[str, dict[str, bool]] | None = None
+
+
+class UserDeleteAccountRequest(BaseModel):
+    password: str | None = None
+    confirmation_phrase: str | None = None
+    reason: str | None = None
 
 
 class ForgotPasswordRequest(BaseModel):

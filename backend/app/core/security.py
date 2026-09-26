@@ -44,13 +44,22 @@ def _create_token(subject: str, expires_delta: timedelta, token_type: str,
 
 
 def create_access_token(
-    subject: str, clinic_id: str | None = None, role: str | None = None, email: str | None = None
+    subject: str,
+    clinic_id: str | None = None,
+    role: str | None = None,
+    email: str | None = None,
+    full_name: str | None = None,
 ) -> str:
     return _create_token(
         subject,
         timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         token_type="access",
-        extra_claims={"clinic_id": clinic_id, "role": role, "email": email},
+        extra_claims={
+            "clinic_id": clinic_id,
+            "role": role,
+            "email": email,
+            "full_name": full_name,
+        },
     )
 
 

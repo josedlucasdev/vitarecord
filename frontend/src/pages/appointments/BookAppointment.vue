@@ -731,21 +731,21 @@
         </div>
 
         <!-- Total Estimado en Caja -->
-        <div class="p-4 bg-slate-900 text-white rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+        <div class="p-4 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-100/60 border-2 border-teal-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
           <div>
-            <div class="text-2xs uppercase tracking-wider text-slate-400 font-bold flex items-center">
-              <q-icon name="receipt_long" size="14px" class="mr-1 text-emerald-400" />
+            <div class="text-2xs uppercase tracking-wider text-teal-800 font-bold flex items-center">
+              <q-icon name="receipt_long" size="16px" class="mr-1.5 text-teal-700" />
               Monto a Liquidar en Sede
             </div>
-            <div class="text-xs text-slate-300 mt-0.5">
+            <div class="text-xs text-teal-900/80 mt-0.5 font-medium">
               Consulta Médica con el especialista seleccionado
             </div>
           </div>
-          <div class="text-right sm:border-l sm:border-slate-800 sm:pl-4">
-            <div class="text-2xl font-black text-emerald-400">
-              ${{ Number(grandTotal).toFixed(2) }} <span class="text-xs font-normal text-slate-400">USD</span>
+          <div class="text-right sm:border-l sm:border-teal-200/80 sm:pl-5">
+            <div class="text-2xl font-black text-teal-900 tracking-tight">
+              ${{ Number(grandTotal).toFixed(2) }} <span class="text-xs font-semibold text-teal-700">USD</span>
             </div>
-            <div class="text-2xs text-slate-400">Total consulta base</div>
+            <div class="text-2xs text-teal-700 font-medium">Total consulta base</div>
           </div>
         </div>
       </div>

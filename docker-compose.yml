@@ -97,7 +97,7 @@ services:
       # las validaciones de arranque (secretos propios, MFA, firmas de webhooks).
       ENVIRONMENT: ${ENVIRONMENT:-development}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-change-me}
-      MFA_ENFORCEMENT_ENABLED: ${MFA_ENFORCEMENT_ENABLED:-true}
+      MFA_ENFORCEMENT_ENABLED: ${MFA_ENFORCEMENT_ENABLED:-false}
       ALLOW_DEV_SOCIAL_LOGIN: ${ALLOW_DEV_SOCIAL_LOGIN:-false}
       TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-dev_whatsapp_token}

@@ -117,7 +117,7 @@ export const ROLE_PERMISSIONS = {
 }
 
 // Estado reactivo global del token
-const currentToken = ref(localStorage.getItem('access_token'))
+export const currentToken = ref(typeof localStorage !== 'undefined' ? localStorage.getItem('access_token') : null)
 
 // Sincronización reactiva entre pestañas
 if (typeof window !== 'undefined') {
@@ -200,6 +200,7 @@ export function useAcl () {
     return {
       id: payload.sub,
       email: payload.email || (payload.sub?.includes('@') ? payload.sub : ''),
+      fullName: payload.full_name || null,
       role: payload.role || 'PATIENT',
       clinicId: payload.clinic_id || null
     }

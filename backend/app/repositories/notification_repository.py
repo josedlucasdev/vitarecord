@@ -49,7 +49,10 @@ class NotificationRepository:
         stmt = (
             select(NotificationLog)
             .options(selectinload(NotificationLog.recipient))
-            .where(NotificationLog.recipient_id == recipient_id)
+            .where(
+                NotificationLog.recipient_id == recipient_id,
+                NotificationLog.channel == "IN_APP",
+            )
             .order_by(desc(NotificationLog.created_at))
             .limit(limit)
         )
@@ -102,6 +105,7 @@ class NotificationRepository:
             select(func.count(NotificationLog.id))
             .where(
                 NotificationLog.recipient_id == recipient_id,
+                NotificationLog.channel == "IN_APP",
                 NotificationLog.is_read.is_(False),
             )
         )

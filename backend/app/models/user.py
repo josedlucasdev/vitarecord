@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship as sa_relationship
 
 from app.models.base import Base, TimestampMixin, generate_uuid
@@ -48,13 +48,16 @@ class User(Base, TimestampMixin):
     verified_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     preferred_notification_channels: Mapped[list | None] = mapped_column(JSON, default=list)
+    notification_preferences: Mapped[dict | None] = mapped_column(JSON, default=dict)
 
     no_show_strikes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     is_restricted_booking: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     mfa_secret: Mapped[str | None] = mapped_column(String(64))
-    mfa_recovery_codes_hash: Mapped[str | None] = mapped_column(String(255))
+    mfa_recovery_codes_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recovery_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    recovery_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # Solo puede ser true si license_verification_status == VERIFIED;
     # esa regla se aplica en app/services (nunca solo a nivel de columna).

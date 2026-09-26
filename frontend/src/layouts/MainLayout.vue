@@ -120,15 +120,6 @@
             </q-menu>
           </q-btn>
 
-          <!-- Botón de Seguridad y Google Authenticator (MFA) -->
-          <q-btn flat round dense icon="security" @click="showMfaModal = true">
-            <q-tooltip>Seguridad y Segundo Factor (Google Authenticator)</q-tooltip>
-          </q-btn>
-
-          <q-btn flat round dense icon="logout" @click="logout">
-            <q-tooltip>Cerrar Sesión</q-tooltip>
-          </q-btn>
-
         </div>
         <q-btn v-else flat :to="{ name: 'login' }" label="Iniciar sesión" />
       </q-toolbar>
@@ -155,26 +146,35 @@
           </div>
         </div>
 
-        <div v-if="isLoggedIn" class="mt-4 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
-          <div class="text-slate-500 font-medium">Conectado como:</div>
-          <div class="font-bold text-slate-900 truncate">{{ userEmail || 'Usuario' }}</div>
-          <div class="mt-1.5 flex items-center justify-between">
-            <span class="px-2 py-0.5 rounded text-2xs font-semibold bg-blue-100 text-blue-800">
-              {{ userRole }}
-            </span>
-            <q-btn
-              flat
-              dense
-              no-caps
-              size="xs"
-              icon="security"
-              label="MFA"
-              color="teal-8"
-              class="font-bold rounded-md bg-teal-50 px-1.5 border border-teal-200"
-              @click="showMfaModal = true"
+        <div v-if="isLoggedIn" class="mt-4 p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-xs flex items-center gap-3">
+          <!-- Avatar del usuario con fallback a iniciales -->
+          <q-avatar size="38px" class="bg-teal-700 text-white font-bold shrink-0 shadow-sm border border-teal-800/20">
+            <img
+              v-if="userAvatarUrl && !avatarLoadError"
+              :src="userAvatarUrl"
+              alt="Avatar de usuario"
+              @error="avatarLoadError = true"
+            />
+            <span v-else>{{ userInitials }}</span>
+          </q-avatar>
+
+          <!-- Nombre y Rol -->
+          <div class="min-w-0 flex-1 overflow-hidden">
+            <div class="text-2xs text-slate-400 font-medium leading-none mb-1">Conectado como:</div>
+            <div
+              class="font-bold text-slate-900 text-sm leading-tight block truncate max-w-full cursor-default"
+              style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
             >
-              <q-tooltip>Gestionar Verificación en Dos Pasos (Google Authenticator)</q-tooltip>
-            </q-btn>
+              {{ userDisplayName }}
+              <q-tooltip class="bg-slate-900 text-white text-xs shadow-md">
+                {{ userDisplayName }}
+              </q-tooltip>
+            </div>
+            <div class="mt-1 flex items-center">
+              <span class="px-1.5 py-0.5 rounded text-3xs font-semibold bg-blue-100 text-blue-800 uppercase tracking-wider">
+                {{ userRole }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -512,23 +512,25 @@
           </q-item>
         </template>
 
-        <template v-if="['SUPERADMIN', 'MODERATOR'].includes(user?.role)">
+        <!-- Configuración y Cuenta (Disponible para TODOS los usuarios) -->
+        <template v-if="isLoggedIn">
           <q-item-label header class="text-xs font-bold text-slate-400 uppercase tracking-wider q-mt-md">
-            Seguridad y Cuenta
+            Cuenta & Ajustes
           </q-item-label>
 
-          <q-item clickable v-ripple @click="openSessionsModal">
+          <q-item
+            clickable
+            v-ripple
+            :to="{ name: 'user-settings' }"
+            active-class="bg-teal-50 text-teal-700 font-semibold border-r-4 border-teal-600"
+          >
             <q-item-section avatar>
-              <q-icon name="devices" size="20px" />
+              <q-icon name="settings" size="20px" color="teal" />
             </q-item-section>
-            <q-item-section>Sesiones Activas</q-item-section>
-          </q-item>
-
-          <q-item clickable v-ripple :to="forgotPasswordRoute">
-            <q-item-section avatar>
-              <q-icon name="lock_reset" size="20px" />
+            <q-item-section>
+              <q-item-label>Configuración</q-item-label>
+              <q-item-label caption>Perfil, Seguridad y Alertas</q-item-label>
             </q-item-section>
-            <q-item-section>Restablecer Contraseña</q-item-section>
           </q-item>
         </template>
       </q-list>
@@ -934,9 +936,53 @@ function toggleLeftDrawer () {
 
 const { can, hasRole, user, userRole, isLoggedIn, clearAuthToken } = useAcl()
 
+const fetchedFullName = ref(null)
+const fetchedProfilePicture = ref(null)
+const avatarLoadError = ref(false)
+
+const userDisplayName = computed(() => {
+  if (fetchedFullName.value) return fetchedFullName.value
+  if (user.value?.fullName) return user.value.fullName
+  if (user.value?.email) return user.value.email
+  return `${(userRole.value || 'Usuario')}`
+})
+
 const userEmail = computed(() => {
   return user.value?.email || `${(userRole.value || 'usuario').toLowerCase()}@intimasalud.com`
 })
+
+const userAvatarUrl = computed(() => {
+  if (!fetchedProfilePicture.value) return ''
+  const url = fetchedProfilePicture.value
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  const base = api.defaults.baseURL || ''
+  return `${base.replace(/\/api\/v1\/?$/, '')}${url}`
+})
+
+const userInitials = computed(() => {
+  const name = userDisplayName.value || ''
+  if (!name) return 'U'
+  const parts = name.trim().split(/\s+/)
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase()
+  }
+  return name.substring(0, 2).toUpperCase()
+})
+
+async function fetchUserProfileInfo () {
+  try {
+    const { data } = await api.get('/auth/me')
+    if (data?.full_name) {
+      fetchedFullName.value = data.full_name
+    }
+    if (data?.profile_picture_url) {
+      fetchedProfilePicture.value = data.profile_picture_url
+      avatarLoadError.value = false
+    }
+  } catch {
+    // Silencioso: fallback a user.value?.fullName o email
+  }
+}
 
 const forgotPasswordRoute = computed(() => {
   const role = userRole.value
@@ -1181,7 +1227,7 @@ async function fetchInAppNotifications () {
   try {
     const { data } = await api.get('/notifications/my-notifications')
     unreadNotificationsCount.value = data.unread_count || 0
-    inAppNotifications.value = data.notifications || []
+    inAppNotifications.value = (data.notifications || []).filter(n => n.channel === 'IN_APP')
   } catch (err) {
     console.error('Error al cargar notificaciones in-app:', err)
   } finally {
@@ -1275,16 +1321,19 @@ function connectNotificationWebSocket () {
   if (!token) return
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  let host = window.location.host
-  if (process.env.API_URL) {
+  let wsHost = window.location.host
+  // En desarrollo en localhost:9000, si el proxy Vite/Quasar está activo, podemos usar el host actual o backend directo en :8000
+  if (window.location.hostname === 'localhost' && window.location.port === '9000') {
+    wsHost = 'localhost:8000'
+  } else if (process.env.CLIENT_API_URL || process.env.API_URL) {
     try {
-      const parsed = new URL(process.env.API_URL)
-      host = parsed.host
+      const parsed = new URL(process.env.CLIENT_API_URL || process.env.API_URL)
+      wsHost = parsed.host
     } catch {
-      host = process.env.API_URL.replace(/^https?:\/\//, '').replace(/\/.*$/, '')
+      wsHost = (process.env.CLIENT_API_URL || process.env.API_URL).replace(/^https?:\/\//, '').replace(/\/.*$/, '')
     }
   }
-  const wsUrl = `${protocol}//${host}/api/v1/notifications/ws?token=${token}`
+  const wsUrl = `${protocol}//${wsHost}/api/v1/notifications/ws?token=${token}`
 
   try {
     notifSocket = new WebSocket(wsUrl)
@@ -1308,21 +1357,7 @@ function connectNotificationWebSocket () {
             incident_id: payload.data.incident_id,
           })
 
-          Notify.create({
-            type: 'info',
-            icon: 'notifications_active',
-            message: payload.data.subject || 'Aviso en ÍntimaSalud',
-            caption: payload.data.message,
-            position: 'top-right',
-            timeout: 7000,
-            actions: [
-              {
-                label: 'Ver Cita',
-                color: 'white',
-                handler: () => router.push('/appointments/my-list')
-              }
-            ]
-          })
+          // La notificación se registra discretamente en la campanita sin pop-ups intrusivos ni alertas flotantes
 
           // Notificación nativa del sistema / navegador web
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
@@ -1351,37 +1386,15 @@ function connectNotificationWebSocket () {
   }
 }
 
-// Politica de MFA obligatorio (plan 2.B.9): el backend responde 403
-// MFA_SETUP_REQUIRED y boot/axios emite este evento; se abre el asistente.
-let mfaRequiredNotified = false
-function onMfaSetupRequired () {
-  showMfaModal.value = true
-  if (!mfaRequiredNotified) {
-    mfaRequiredNotified = true
-    Notify.create({
-      type: 'warning',
-      icon: 'security',
-      message: 'Tu rol exige autenticación de dos factores. Activa Google Authenticator para continuar.',
-      position: 'top',
-      timeout: 6000
-    })
-  }
-}
-
 function onMfaStatusChanged (enabled) {
   if (enabled) {
     showMfaModal.value = false
-    if (mfaRequiredNotified) {
-      setTimeout(() => {
-        window.location.reload()
-      }, 600)
-    }
   }
 }
 
 onMounted(() => {
-  window.addEventListener('vitarecord:mfa-setup-required', onMfaSetupRequired)
   if (isLoggedIn.value) {
+    fetchUserProfileInfo()
     fetchInAppNotifications()
     connectNotificationWebSocket()
 
@@ -1393,7 +1406,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('vitarecord:mfa-setup-required', onMfaSetupRequired)
   if (notifSocket) {
     notifSocket.close()
     notifSocket = null

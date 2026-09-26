@@ -69,7 +69,11 @@ class AuthService:
     async def issue_token_pair(self, user: User, device_info: str | None = None,
                                 ip_address: str | None = None) -> tuple[str, str]:
         access_token = create_access_token(
-            user.id, clinic_id=user.clinic_id, role=user.role, email=user.email
+            user.id,
+            clinic_id=user.clinic_id,
+            role=user.role,
+            email=user.email,
+            full_name=user.full_name,
         )
         raw_refresh_token = create_refresh_token(user.id)
 

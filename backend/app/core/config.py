@@ -32,10 +32,8 @@ class Settings(BaseSettings):
     # se omite y solo aplica el bloqueo temporal.
     TURNSTILE_SECRET_KEY: str | None = None
 
-    # MFA obligatorio (plan 2.B.9). Los roles listados no pueden operar sin
-    # MFA activo: solo pueden usar los endpoints de configuracion de MFA.
-    # Por defecto activo; puede desactivarse SOLO en desarrollo/tests.
-    MFA_ENFORCEMENT_ENABLED: bool = True
+    # MFA opcional por defecto (puede habilitarse voluntariamente por cualquier usuario desde Ajustes/Seguridad).
+    MFA_ENFORCEMENT_ENABLED: bool = False
     MFA_REQUIRED_ROLES: list[str] = ["SUPERADMIN", "MODERATOR", "COMPLIANCE_REVIEWER", "CLINIC_ADMIN", "DOCTOR"]
 
     # Rate limiting por tenant (proteccion "noisy neighbor", plan 2.B.1).
@@ -190,8 +188,6 @@ class Settings(BaseSettings):
             errors.append("JWT_SECRET_KEY debe ser un secreto propio de al menos 32 caracteres")
         if self.ALLOW_DEV_SOCIAL_LOGIN:
             errors.append("ALLOW_DEV_SOCIAL_LOGIN no puede estar activo en produccion")
-        if not self.MFA_ENFORCEMENT_ENABLED:
-            errors.append("MFA_ENFORCEMENT_ENABLED no puede desactivarse en produccion")
         if self.WHATSAPP_VERIFY_TOKEN.startswith("dev_"):
             errors.append("WHATSAPP_VERIFY_TOKEN debe configurarse con un valor propio")
         if not self.WHATSAPP_APP_SECRET:

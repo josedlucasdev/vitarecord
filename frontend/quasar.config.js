@@ -28,7 +28,8 @@ export default configure(function (/* ctx */) {
       proxy: {
         '/api': {
           target: process.env.API_URL || 'http://backend:8000',
-          changeOrigin: true
+          changeOrigin: true,
+          ws: true
         }
       }
     },

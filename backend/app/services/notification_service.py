@@ -521,7 +521,42 @@ class NotificationService:
         """
         dest_phone = phone or (recipient.phone if recipient else None)
         dest_email = email or (recipient.email if recipient else None)
+        # Verificar preferencias granulares del usuario si están configuradas
+        event_category = "appointments"
+        if metadata_payload and metadata_payload.get("type"):
+            mtype = str(metadata_payload.get("type")).lower()
+            if "emergency" in mtype or "sos" in mtype:
+                event_category = "emergencies"
+            elif "record" in mtype or "clinical" in mtype:
+                event_category = "clinical_records"
+            elif "security" in mtype or "auth" in mtype or "password" in mtype:
+                event_category = "security"
+            elif "announcement" in mtype:
+                event_category = "announcements"
+
+        user_prefs = recipient.notification_preferences if (recipient and recipient.notification_preferences) else {}
+        cat_prefs = user_prefs.get(event_category) if isinstance(user_prefs, dict) else None
+
         channels = self.determine_channels_for_user(recipient)
+
+        # Si el usuario configuró explícitamente sus preferencias para esta categoría, filtrar canales
+        if cat_prefs and isinstance(cat_prefs, dict):
+            filtered_channels = []
+            for ch in channels:
+                ch_key = ch.lower()
+                if ch_key == "push" and not cat_prefs.get("push", True):
+                    continue
+                if ch_key == "email" and not cat_prefs.get("email", True):
+                    continue
+                if ch_key in ("whatsapp", "sms", "voice_call") and not cat_prefs.get("whatsapp", True):
+                    continue
+                filtered_channels.append(ch)
+            channels = filtered_channels
+
+        # Si el usuario desactivó completamente las notificaciones para esta categoría (todos en False),
+        # no se envían alertas externas ni se genera ruido en la campanita
+        if cat_prefs and isinstance(cat_prefs, dict) and not any(cat_prefs.values()):
+            return []
 
         logs_created: list[NotificationLog] = []
         delivery_succeeded = False
