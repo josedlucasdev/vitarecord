@@ -51,15 +51,26 @@
           >
             <div class="flex items-start space-x-4">
               <div
-                class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg"
-                :class="clinic.is_active ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-400'"
+                class="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-lg overflow-hidden shrink-0 border border-slate-200"
+                :class="clinic.logo_url ? 'bg-white' : (clinic.is_active ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-400')"
               >
-                <q-icon name="apartment" size="24px" />
+                <img
+                  v-if="clinic.logo_url"
+                  :src="clinic.logo_url"
+                  alt="Logo"
+                  class="w-full h-full object-cover"
+                />
+                <q-icon v-else name="apartment" size="24px" />
               </div>
 
               <div class="space-y-1">
                 <div class="flex items-center space-x-2">
-                  <h3 class="font-bold text-slate-900 text-base">{{ clinic.name }}</h3>
+                  <router-link
+                    :to="`/admin/clinics/${clinic.id}`"
+                    class="font-bold text-slate-900 text-base hover:text-indigo-600 transition-colors cursor-pointer"
+                  >
+                    {{ clinic.name }}
+                  </router-link>
                   <span
                     class="px-2 py-0.5 rounded-full text-xs font-semibold"
                     :class="clinic.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'"
@@ -72,6 +83,13 @@
                   >
                     <q-icon name="auto_awesome" size="12px" />
                     {{ clinic.ai_enabled ? `IA Activa (${clinic.ai_model || 'gpt-4o-mini'})` : 'IA Desactivada' }}
+                  </span>
+                  <span
+                    v-if="clinic.ai_enabled && clinic.ai_consultation_assistant_enabled"
+                    class="px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1 bg-teal-100 text-teal-800 border border-teal-200"
+                  >
+                    <q-icon name="mic" size="12px" />
+                    Consulta Asistida ON
                   </span>
                 </div>
 
@@ -99,7 +117,21 @@
             </div>
 
             <!-- Acciones -->
-            <div class="flex items-center space-x-2 self-end md:self-center">
+            <div class="flex items-center space-x-2 self-end md:self-center flex-wrap gap-1">
+              <!-- Botón Detalle y Módulos -->
+              <q-btn
+                unelevated
+                color="indigo-7"
+                icon="tune"
+                label="Detalle y Módulos"
+                no-caps
+                size="sm"
+                class="font-bold px-3 py-1 shadow-xs rounded-xl"
+                :to="`/admin/clinics/${clinic.id}`"
+              >
+                <q-tooltip>Entrar al detalle de la clínica para gestionar y activar/inactivar módulos del sistema</q-tooltip>
+              </q-btn>
+
               <!-- Botón Configuración de IA -->
               <q-btn
                 flat
@@ -495,6 +527,25 @@
                   </template>
                 </q-select>
               </div>
+              <!-- Toggle específico para Consulta Asistida por AI -->
+              <div class="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-1.5 mt-2">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="pr-2">
+                    <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <q-icon name="mic" size="16px" class="text-purple-700" />
+                      Activar Consulta Asistida por AI (Grabación y Prellenado)
+                    </div>
+                    <div class="text-2xs text-slate-600 mt-0.5 leading-relaxed">
+                      Habilita el botón <strong>"Consulta asistida por AI"</strong> en la consulta médica de los doctores para grabar la conversación médico-paciente, adjuntar exámenes o fotos y prellenar automáticamente la historia clínica.
+                    </div>
+                  </div>
+                  <q-toggle
+                    v-model="aiForm.ai_consultation_assistant_enabled"
+                    color="purple"
+                    dense
+                  />
+                </div>
+              </div>
             </div>
 
             <div v-if="aiError" class="p-3 rounded-lg bg-red-50 text-red-700 text-xs flex items-center">
@@ -545,7 +596,8 @@ const aiForm = reactive({
   ai_enabled: false,
   ai_api_url: '',
   ai_api_key: '',
-  ai_model: 'gpt-4o-mini'
+  ai_model: 'gpt-4o-mini',
+  ai_consultation_assistant_enabled: false
 })
 const aiSubmitting = ref(false)
 const aiError = ref('')
@@ -646,6 +698,7 @@ function openAiModal (clinic) {
   aiForm.ai_api_url = clinic.ai_api_url || 'https://api.openai.com/v1/chat/completions'
   aiForm.ai_api_key = '' // Por seguridad no se reenvía la clave en claro
   aiForm.ai_model = clinic.ai_model || 'gpt-4o-mini'
+  aiForm.ai_consultation_assistant_enabled = !!clinic.ai_consultation_assistant_enabled
   aiError.value = ''
 
   const preset = [
@@ -669,7 +722,8 @@ async function submitAiSettings () {
         ai_enabled: aiForm.ai_enabled,
         ai_api_url: aiForm.ai_api_url || null,
         ai_api_key: aiForm.ai_api_key || undefined,
-        ai_model: aiForm.ai_model || 'gpt-4o-mini'
+        ai_model: aiForm.ai_model || 'gpt-4o-mini',
+        ai_consultation_assistant_enabled: aiForm.ai_enabled ? !!aiForm.ai_consultation_assistant_enabled : false
       },
       {
         headers: { Authorization: `Bearer ${token}` }

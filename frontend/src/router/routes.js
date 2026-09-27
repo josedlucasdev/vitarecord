@@ -157,6 +157,12 @@ const routes = [
         meta: { requiresAuth: true, requiredPermission: 'tenants:provision' }
       },
       {
+        path: 'admin/clinics/:id',
+        name: 'clinic-detail',
+        component: () => import('pages/admin/ClinicDetail.vue'),
+        meta: { requiresAuth: true, requiredPermission: 'tenants:provision' }
+      },
+      {
         path: 'admin/doctor-verification',
         name: 'doctor-verification',
         component: () => import('pages/admin/DoctorVerificationQueue.vue'),

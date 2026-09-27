@@ -11,7 +11,39 @@ class MedicalAttachmentPublic(BaseModel):
     file_name: str
     content_type: str
     file_size: int
+    attachment_type: str = "DOCUMENT"
+    appointment_id: str | None = None
+    medical_record_id: str | None = None
     download_url: str | None = None
+
+
+class AIPrescriptionItem(BaseModel):
+    medication: str
+    dosage: str
+    frequency: str
+    duration: str
+    instructions: str | None = None
+
+
+class AIConsultationAssistRequest(BaseModel):
+    appointment_id: str
+    transcript: str
+    doctor_specialty: str | None = None
+    extra_notes: str | None = None
+
+
+class AIConsultationAssistResponse(BaseModel):
+    anamnesis: str
+    physical_exam: str | None = None
+    diagnosis: str
+    icd10_code: str | None = None
+    icd10_description: str | None = None
+    plan: str
+    prescriptions: list[AIPrescriptionItem] = Field(default_factory=list)
+    clinical_summary: str | None = None
+    provider: str = "ai_gateway"
+    tokens_used: int | None = None
+
 
 
 class MedicalRecordCreate(BaseModel):

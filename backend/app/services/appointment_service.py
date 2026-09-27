@@ -28,6 +28,9 @@ from app.schemas.procedure import (
     AppointmentProcedureCreate,
     AppointmentProcedurePublic,
 )
+from app.schemas.medical_record import MedicalAttachmentPublic
+from app.services.storage_service import storage_service
+
 from app.services.availability_service import is_room_open_at, is_specialty_compatible
 from app.services.email_service import build_branded_email_html, send_email
 
@@ -1157,6 +1160,32 @@ class AppointmentService:
         total_amount = pay.amount if pay else Decimal("30.00")
         base_consultation_fee = max(Decimal("0.00"), total_amount - procs_sum)
 
+        attachments_list = (
+            app.attachments
+            if hasattr(app, "attachments") and app.attachments is not None
+            else []
+        )
+        attachments_pub = []
+        for a in attachments_list:
+            dl_url = None
+            if getattr(a, "s3_key", None):
+                try:
+                    dl_url = storage_service.generate_presigned_download_url(a.s3_key)
+                except Exception:
+                    pass
+            attachments_pub.append(
+                MedicalAttachmentPublic(
+                    id=a.id,
+                    file_name=a.file_name,
+                    content_type=a.content_type,
+                    file_size=a.file_size,
+                    attachment_type=getattr(a, "attachment_type", "DOCUMENT"),
+                    appointment_id=a.appointment_id,
+                    medical_record_id=a.medical_record_id,
+                    download_url=dl_url,
+                )
+            )
+
         return AppointmentPublic(
             id=app.id,
             clinic_id=app.clinic_id,
@@ -1171,19 +1200,25 @@ class AppointmentService:
             cancellation_reason=app.cancellation_reason,
             intake_data=app.intake_data,
             doctor_name=app.doctor.full_name if app.doctor else None,
+            doctor_specialty=app.doctor.specialty if app.doctor else None,
             patient_name=app.patient.full_name if app.patient else None,
             patient_email=app.patient.email if app.patient else None,
             patient_phone=app.patient.phone if app.patient else None,
             dependent_name=app.dependent.full_name if app.dependent else None,
             dependent_relationship=app.dependent.relationship if app.dependent else None,
             clinic_name=app.clinic.name if app.clinic else None,
+            clinic_ai_enabled=bool(app.clinic.ai_enabled) if app.clinic else False,
+            clinic_ai_consultation_enabled=bool(getattr(app.clinic, "ai_consultation_assistant_enabled", False)) if app.clinic else False,
             room_name=app.room.name if app.room else None,
+
             payment_status=pay.status if pay else "UNPAID",
             payment_amount=total_amount,
             payment_method=pay.payment_method if pay else None,
             currency=pay.currency if pay else "USD",
             consultation_fee=base_consultation_fee,
             procedures=procs,
+            attachments=attachments_pub,
             created_at=app.created_at,
         )
+
 

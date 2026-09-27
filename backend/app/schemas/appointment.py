@@ -3,6 +3,8 @@ from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.schemas.procedure import AppointmentProcedurePublic
+from app.schemas.medical_record import MedicalAttachmentPublic
+
 
 
 class PatientIntakeData(BaseModel):
@@ -107,20 +109,26 @@ class AppointmentPublic(BaseModel):
 
     # Campos enriquecidos para la UI
     doctor_name: str | None = None
+    doctor_specialty: str | None = None
     patient_name: str | None = None
     patient_email: str | None = None
     patient_phone: str | None = None
     dependent_name: str | None = None
     dependent_relationship: str | None = None
     clinic_name: str | None = None
+    clinic_ai_enabled: bool = False
+    clinic_ai_consultation_enabled: bool = False
     room_name: str | None = None
+
     payment_status: str | None = None
     payment_amount: Decimal | None = None
     payment_method: str | None = None
     currency: str | None = None
     consultation_fee: Decimal | None = None
     procedures: list["AppointmentProcedurePublic"] = Field(default_factory=list)
+    attachments: list[MedicalAttachmentPublic] = Field(default_factory=list)
 
     created_at: datetime.datetime
+
 
 

@@ -5,16 +5,18 @@ from datetime import datetime, time, timezone
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.deps import get_current_user, require_permission
 from app.core.acl import Permission
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_password_reset_token
+from app.services.storage_service import storage_service
 from app.models.affiliation import DoctorClinicAffiliation, PatientClinicAffiliation
 from app.models.clinic import Clinic
 from app.models.procedure import AppointmentProcedure, MedicalProcedure
@@ -28,6 +30,7 @@ from app.schemas.clinic import (
     ClinicAISettingsUpdate,
     ClinicCreateRequest,
     ClinicDoctorPublic,
+    ClinicModulesUpdateRequest,
     ClinicPublic,
     ClinicSecurityPolicyUpdate,
     ClinicUpdateRequest,
@@ -104,6 +107,8 @@ async def create_clinic(
         ai_api_url=payload.ai_api_url.strip() if payload.ai_api_url else None,
         ai_api_key=payload.ai_api_key.strip() if payload.ai_api_key else None,
         ai_model=payload.ai_model.strip() if payload.ai_model else "gpt-4o-mini",
+        ai_consultation_assistant_enabled=payload.ai_consultation_assistant_enabled,
+        logo_url=payload.logo_url.strip() if payload.logo_url else None,
     )
     await repo.create(clinic)
     await db.commit()
@@ -173,6 +178,21 @@ async def update_clinic(
         clinic.ai_api_key = payload.ai_api_key.strip() if payload.ai_api_key else None
     if payload.ai_model is not None:
         clinic.ai_model = payload.ai_model.strip() if payload.ai_model else None
+    if payload.ai_consultation_assistant_enabled is not None:
+        clinic.ai_consultation_assistant_enabled = payload.ai_consultation_assistant_enabled
+    if payload.require_mfa_for_receptionists is not None:
+        clinic.require_mfa_for_receptionists = payload.require_mfa_for_receptionists
+    if payload.emergency_doctor_attempts is not None:
+        clinic.emergency_doctor_attempts = max(2, min(payload.emergency_doctor_attempts, 5))
+    if payload.emergency_backup_phone is not None:
+        clinic.emergency_backup_phone = payload.emergency_backup_phone.strip() if payload.emergency_backup_phone else None
+    if payload.modules is not None:
+        curr_mod = dict(clinic.modules or {})
+        curr_mod.update(payload.modules)
+        clinic.modules = curr_mod
+        flag_modified(clinic, "modules")
+    if payload.logo_url is not None:
+        clinic.logo_url = payload.logo_url.strip() if payload.logo_url else None
 
     await db.commit()
     await db.refresh(clinic)
@@ -207,7 +227,154 @@ async def update_clinic_ai_settings(
         clinic.ai_api_key = payload.ai_api_key.strip()
     if payload.ai_model is not None:
         clinic.ai_model = payload.ai_model.strip() if payload.ai_model else None
+    clinic.ai_consultation_assistant_enabled = payload.ai_consultation_assistant_enabled
+    curr_mod = dict(clinic.modules or {})
+    curr_mod["ai_assistant"] = clinic.ai_enabled
+    curr_mod["ai_consultation"] = clinic.ai_consultation_assistant_enabled
+    clinic.modules = curr_mod
+    flag_modified(clinic, "modules")
 
+    await db.commit()
+    await db.refresh(clinic)
+    return clinic
+
+
+@router.put("/{clinic_id}/modules", response_model=ClinicPublic, summary="Configurar y activar/inactivar módulos del sistema para la clínica")
+async def update_clinic_modules(
+    clinic_id: str,
+    payload: ClinicModulesUpdateRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Permite al SUPERADMIN activar o inactivar módulos de la clínica (IA, Consulta asistida, Urgencias, Caja, etc.)."""
+    if current_user.role != "SUPERADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Permisos insuficientes. Solo el SUPERADMIN puede configurar los módulos del sistema.",
+        )
+
+    clinic = await ClinicRepository(db).get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    current_modules = dict(clinic.modules or {})
+    if payload.modules:
+        current_modules.update(payload.modules)
+
+    if payload.ai_enabled is not None:
+        clinic.ai_enabled = payload.ai_enabled
+        current_modules["ai_assistant"] = payload.ai_enabled
+        if not payload.ai_enabled:
+            clinic.ai_consultation_assistant_enabled = False
+            current_modules["ai_consultation"] = False
+
+    if payload.ai_consultation_assistant_enabled is not None:
+        clinic.ai_consultation_assistant_enabled = payload.ai_consultation_assistant_enabled
+        current_modules["ai_consultation"] = payload.ai_consultation_assistant_enabled
+
+    if payload.require_mfa_for_receptionists is not None:
+        clinic.require_mfa_for_receptionists = payload.require_mfa_for_receptionists
+        current_modules["require_mfa_for_receptionists"] = payload.require_mfa_for_receptionists
+
+    if payload.emergency_doctor_attempts is not None:
+        clinic.emergency_doctor_attempts = max(2, min(payload.emergency_doctor_attempts, 5))
+    if payload.emergency_backup_phone is not None:
+        clinic.emergency_backup_phone = payload.emergency_backup_phone.strip() if payload.emergency_backup_phone else None
+
+    if payload.ai_api_url is not None:
+        clinic.ai_api_url = payload.ai_api_url.strip() if payload.ai_api_url else None
+    if payload.ai_api_key is not None and payload.ai_api_key.strip():
+        clinic.ai_api_key = payload.ai_api_key.strip()
+    if payload.ai_model is not None:
+        clinic.ai_model = payload.ai_model.strip() if payload.ai_model else None
+
+    clinic.modules = current_modules
+    flag_modified(clinic, "modules")
+    await db.commit()
+    await db.refresh(clinic)
+    return clinic
+
+
+@router.post("/{clinic_id}/logo", response_model=ClinicPublic, summary="Subir logotipo o avatar de la clínica")
+async def upload_clinic_logo(
+    clinic_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+):
+    """Sube y almacena el avatar o logotipo oficial de la clínica. Exclusivo para SUPERADMIN."""
+    if current_user.role != "SUPERADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Permisos insuficientes. Solo el SUPERADMIN puede cambiar el logo de la clínica.",
+        )
+
+    clinic = await ClinicRepository(db).get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    allowed_types = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/jpg": "jpg"}
+    content_type = (file.content_type or "").lower()
+    if content_type not in allowed_types:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Formato de imagen no admitido. Se permite únicamente JPG, PNG o WEBP.",
+        )
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La imagen del logo no debe superar los 5 MB de tamaño.")
+
+    from app.core.image_processing import sanitize_image_exif
+    content, content_type = sanitize_image_exif(content, original_content_type=content_type, max_dimension=1024)
+    ext = allowed_types.get(content_type, "png")
+    s3_key = storage_service.build_avatar_key("clinics", clinic.id, ext)
+
+    for other_ext in ("jpg", "png", "webp", "jpeg"):
+        if other_ext != ext:
+            storage_service.delete_file(storage_service.build_avatar_key("clinics", clinic.id, other_ext))
+
+    storage_service.upload_file(content=content, s3_key=s3_key, content_type=content_type)
+    clinic.logo_url = f"/api/v1/clinics/{clinic.id}/logo"
+    await db.commit()
+    await db.refresh(clinic)
+    return clinic
+
+
+@router.api_route("/{clinic_id}/logo", methods=["GET", "HEAD"], summary="Servir logotipo o avatar de la clínica")
+async def get_clinic_logo(clinic_id: str):
+    """Sirve la imagen del logotipo de la clínica desde el almacenamiento."""
+    for ext in ("webp", "png", "jpg", "jpeg"):
+        s3_key = storage_service.build_avatar_key("clinics", clinic_id, ext)
+        res = storage_service.get_file(s3_key)
+        if res:
+            file_bytes, mime = res
+            return Response(content=file_bytes, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
+
+    raise HTTPException(status.HTTP_404_NOT_FOUND, "Logotipo no encontrado.")
+
+
+@router.delete("/{clinic_id}/logo", response_model=ClinicPublic, summary="Eliminar logotipo de la clínica")
+async def delete_clinic_logo(
+    clinic_id: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Elimina el logotipo de la clínica y restaura el ícono por defecto. Exclusivo para SUPERADMIN."""
+    if current_user.role != "SUPERADMIN":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Permisos insuficientes. Solo el SUPERADMIN puede eliminar el logo de la clínica.",
+        )
+
+    clinic = await ClinicRepository(db).get_by_id(clinic_id)
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Clínica no encontrada")
+
+    for ext in ("webp", "png", "jpg", "jpeg"):
+        storage_service.delete_file(storage_service.build_avatar_key("clinics", clinic.id, ext))
+
+    clinic.logo_url = None
     await db.commit()
     await db.refresh(clinic)
     return clinic

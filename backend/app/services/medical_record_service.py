@@ -183,7 +183,22 @@ class MedicalRecordService:
         appointment.status = "COMPLETED"
         await self.db.flush()
 
-        # 5. Registrar auditoria inmutable action=CREATE
+        # 5. Vincular cualquier anexo (grabaciones de audio y documentos) cargados durante la cita
+        from app.models.medical_attachment import MedicalAttachment
+        stmt_attach = (
+            select(MedicalAttachment)
+            .where(
+                MedicalAttachment.appointment_id == appointment.id,
+                MedicalAttachment.medical_record_id.is_(None),
+            )
+        )
+        pre_attachments = list((await self.db.execute(stmt_attach)).scalars().all())
+        for att in pre_attachments:
+            att.medical_record_id = record.id
+        if pre_attachments:
+            await self.db.flush()
+
+        # 6. Registrar auditoria inmutable action=CREATE
         await self._audit(
             action="CREATE",
             entity_type="medical_record",
@@ -208,8 +223,9 @@ class MedicalRecordService:
             appointment.clinic,
             dependent=appointment.dependent,
             prescriptions=prescriptions,
-            attachments=[],
+            attachments=pre_attachments,
         )
+
 
     async def get_record_by_appointment(
         self,

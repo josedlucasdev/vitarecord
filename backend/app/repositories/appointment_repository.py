@@ -100,7 +100,9 @@ class AppointmentRepository:
                 selectinload(Appointment.dependent),
                 selectinload(Appointment.payment_record),
                 selectinload(Appointment.procedures),
+                selectinload(Appointment.attachments),
             )
+
         )
         res = await self.db.execute(stmt)
         return res.scalar_one_or_none()

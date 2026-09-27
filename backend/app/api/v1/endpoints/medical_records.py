@@ -12,10 +12,14 @@ from app.core.database import get_db
 from app.models.medical_attachment import MedicalAttachment
 from app.models.user import User
 from app.schemas.medical_record import (
+    AIConsultationAssistRequest,
+    AIConsultationAssistResponse,
+    AIPrescriptionItem,
     DoctorAttendedPatientPublic,
     MedicalRecordCreate,
     MedicalRecordPublic,
 )
+
 from app.schemas.prescription import PrescriptionVerificationPublic
 from app.services.medical_record_service import MedicalRecordService
 from app.services.storage_service import storage_service
@@ -455,4 +459,258 @@ async def enhance_clinical_text(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
             f"Fallo al conectar con el servicio de IA: {str(exc)}",
         )
+
+
+@router.post(
+    "/ai-consultation-assist",
+    response_model=AIConsultationAssistResponse,
+    summary="Asistencia inteligente para consulta médica completa (Audio, especialidad y documentos)",
+)
+async def assist_full_consultation(
+    payload: AIConsultationAssistRequest,
+    current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_WRITE))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Analiza la consulta clínica completa (diálogo médico-paciente, especialidad médica y documentos/exámenes).
+
+    Estructura y prellena formalmente los campos de anamnesis, examen físico, diagnóstico, CIE-10, conducta y receta.
+    """
+    import base64
+    import json
+    import re
+    import httpx
+    from fastapi import HTTPException
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    from app.models.appointment import Appointment
+    from app.models.clinic import Clinic
+
+    if not payload.transcript or not payload.transcript.strip():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La transcripción de la consulta no puede estar vacía.")
+
+    stmt = (
+        select(Appointment)
+        .options(
+            selectinload(Appointment.doctor),
+            selectinload(Appointment.patient),
+            selectinload(Appointment.clinic),
+            selectinload(Appointment.dependent),
+            selectinload(Appointment.attachments),
+        )
+        .where(Appointment.id == payload.appointment_id)
+    )
+    appointment = (await db.execute(stmt)).scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cita médica no encontrada.")
+
+    clinic = appointment.clinic
+    if not clinic:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Sede clínica asociada no encontrada.")
+
+    if not clinic.ai_enabled or not getattr(clinic, "ai_consultation_assistant_enabled", False):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "El módulo de Consulta Asistida por IA no está activo para esta sede. El SuperAdmin debe activarlo.",
+        )
+
+    api_url = (clinic.ai_api_url or "").strip()
+    api_key = (clinic.ai_api_key or "").strip()
+    ai_model = (clinic.ai_model or "").strip() or "gpt-4o-mini"
+
+    if not api_url or not api_key:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "La clínica tiene la IA activada pero falta configurar la URL de la API o el Token de acceso.",
+        )
+
+    # 1. Resolver Especialidad Médica y Contexto Clínico
+    doctor_specialty = (
+        payload.doctor_specialty
+        or (appointment.doctor.specialty if appointment.doctor else None)
+        or "Medicina General"
+    )
+
+    if appointment.dependent:
+        patient_desc = f"{appointment.dependent.full_name} (Familiar Dependiente, {appointment.dependent.relationship or 'A cargo'})"
+    else:
+        patient_name = appointment.patient.full_name if appointment.patient else "Paciente"
+        patient_desc = f"{patient_name} (Paciente Titular)"
+
+    intake_parts = []
+    if appointment.intake_data and isinstance(appointment.intake_data, dict):
+        for k, v in appointment.intake_data.items():
+            if v:
+                intake_parts.append(f"{k}: {v}")
+    intake_str = ("Triage basal y antecedentes registrados: " + "; ".join(intake_parts)) if intake_parts else ""
+    reason_str = f"Motivo inicial reportado al agendar: {appointment.reason}" if appointment.reason else ""
+
+    # 2. Procesar documentos y fotos adjuntas en la cita
+    doc_descriptions = []
+    image_parts = []
+    for att in (appointment.attachments or []):
+        if att.attachment_type == "CONSULTATION_AUDIO":
+            continue
+        doc_descriptions.append(f"- Anexo: {att.file_name} ({att.attachment_type})")
+        if att.content_type.startswith("image/") and att.file_size < 4 * 1024 * 1024:
+            file_data = storage_service.get_file(att.s3_key)
+            if file_data:
+                raw_b, ctype = file_data
+                b64 = base64.b64encode(raw_b).decode("utf-8")
+                image_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{ctype};base64,{b64}"}
+                })
+
+    # 3. Construir Prompts Especializados
+    system_prompt = (
+        f"Eres un médico especialista de máximo prestigio y rigor clínico en {doctor_specialty}. "
+        "Estás asistiendo en tiempo real al médico tratante tras haber grabado la consulta médica con el paciente.\n\n"
+        f"Tu objetivo es actuar y redactar pensando exactamente como un médico especialista en {doctor_specialty}, "
+        "estructurando una historia clínica profesional, completa y concisa a partir del diálogo sostenido en la consulta, "
+        "los antecedentes del paciente y los exámenes o fotos presentados.\n\n"
+        "Reglas clínicas fundamentales:\n"
+        "1. Aplica terminología médica formal, precisa y elegante en español.\n"
+        "2. Mantén estricta fidelidad a lo manifestado por médico y paciente: no agregues patologías ni fármacos no mencionados.\n"
+        "3. Si en la conversación se acordó un tratamiento, extrae con exactitud los medicamentos, dosis, frecuencia y duración.\n"
+        "4. Proporciona el código de Clasificación Internacional de Enfermedades (CIE-10 / ICD-10) más certero para el diagnóstico principal.\n\n"
+        "RESPONDE ÚNICAMENTE CON UN OBJETO JSON VÁLIDO (sin texto antes ni después) con la siguiente estructura exacta:\n"
+        "{\n"
+        '  "anamnesis": "Motivo de consulta y enfermedad actual redactada formalmente (cronología, síntomas, antecedentes pertinentes)...",\n'
+        '  "physical_exam": "Constantes vitales, examen físico por sistemas o hallazgos explorados...",\n'
+        '  "diagnosis": "Diagnóstico clínico detallado (presuntivo o definitivo, justificación clínica)...",\n'
+        '  "icd10_code": "Código CIE-10 (ej: N94.4, Z01.4, J00, etc.)",\n'
+        '  "icd10_description": "Descripción oficial del código CIE-10",\n'
+        '  "plan": "Conducta médica integral, recomendaciones terapéuticas, paraclínicos solicitados y pautas de control...",\n'
+        '  "prescriptions": [\n'
+        '     {\n'
+        '       "medication": "Nombre comercial o principio activo",\n'
+        '       "dosage": "Dosis / concentración (ej: 500 mg)",\n'
+        '       "frequency": "Frecuencia (ej: Cada 8 horas)",\n'
+        '       "duration": "Duración (ej: 7 días)",\n'
+        '       "instructions": "Vía de administración y recomendaciones (ej: Vía oral tras alimentos)"\n'
+        '     }\n'
+        '  ],\n'
+        '  "clinical_summary": "Breve resumen ejecutivo de 2 oraciones para orientación rápida del médico"\n'
+        "}"
+    )
+
+    text_user_content = (
+        f"FICHA CLÍNICA DE LA ATENCIÓN:\n"
+        f"- Paciente: {patient_desc}\n"
+        f"- Especialidad Médica: {doctor_specialty}\n"
+        f"{reason_str}\n"
+        f"{intake_str}\n\n"
+        f"DOCUMENTOS Y EXÁMENES SUBIDOS:\n"
+        f"{chr(10).join(doc_descriptions) if doc_descriptions else 'Sin documentos o imágenes anexas.'}\n\n"
+        f"NOTAS ADICIONALES DEL MÉDICO:\n{payload.extra_notes or 'Sin notas adicionales.'}\n\n"
+        f"TRANSCRIPCIÓN COMPLETA DE LA CONSULTA MÉDICO-PACIENTE:\n"
+        f"{payload.transcript.strip()}"
+    )
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    # Intentar primero con imágenes si las hay, o texto directo
+    async def call_ai(include_images: bool):
+        if include_images and image_parts:
+            user_msg = [{"type": "text", "text": text_user_content}] + image_parts[:3]
+        else:
+            user_msg = text_user_content
+
+        body = {
+            "model": ai_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_msg},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 2000,
+        }
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            return await client.post(api_url, json=body, headers=headers)
+
+    try:
+        res = await call_ai(include_images=bool(image_parts))
+        if res.status_code != 200 and image_parts:
+            # Si falló posiblemente por soporte de visión en el modelo, reintentar sólo con texto
+            res = await call_ai(include_images=False)
+
+        if res.status_code != 200:
+            err_detail = res.text[:300]
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                f"Error del proveedor de IA ({res.status_code}): {err_detail}",
+            )
+
+        data = res.json()
+        raw_text = ""
+        if "choices" in data and len(data["choices"]) > 0:
+            raw_text = data["choices"][0].get("message", {}).get("content", "").strip()
+        elif "candidates" in data and len(data["candidates"]) > 0:
+            raw_text = data["candidates"][0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+        elif "output" in data:
+            raw_text = str(data["output"]).strip()
+        elif "response" in data:
+            raw_text = str(data["response"]).strip()
+        else:
+            raw_text = str(data)
+
+        # Limpiar bloques de código markdown ```json ... ``` si existen
+        clean_json_str = raw_text
+        if "```" in clean_json_str:
+            match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", clean_json_str)
+            if match:
+                clean_json_str = match.group(1).strip()
+
+        try:
+            parsed = json.loads(clean_json_str)
+        except Exception:
+            # Si el modelo no devolvió JSON puro, estructuramos fallback con el texto
+            parsed = {
+                "anamnesis": clean_json_str[:1000],
+                "physical_exam": None,
+                "diagnosis": "Diagnóstico en revisión médica",
+                "icd10_code": None,
+                "icd10_description": None,
+                "plan": "Plan terapéutico según criterio del especialista",
+                "prescriptions": [],
+                "clinical_summary": "Resumen procesado por IA",
+            }
+
+        # Parsear prescripciones seguras
+        prescriptions_list = []
+        for p in parsed.get("prescriptions", []):
+            if isinstance(p, dict) and p.get("medication"):
+                prescriptions_list.append(
+                    AIPrescriptionItem(
+                        medication=str(p.get("medication", "")).strip(),
+                        dosage=str(p.get("dosage", "")).strip() or "Dosis estándar",
+                        frequency=str(p.get("frequency", "")).strip() or "Según indicación",
+                        duration=str(p.get("duration", "")).strip() or "Duración clínica",
+                        instructions=str(p.get("instructions", "")).strip() if p.get("instructions") else None,
+                    )
+                )
+
+        return AIConsultationAssistResponse(
+            anamnesis=str(parsed.get("anamnesis", "")).strip() or payload.transcript[:500],
+            physical_exam=str(parsed.get("physical_exam", "")).strip() if parsed.get("physical_exam") else None,
+            diagnosis=str(parsed.get("diagnosis", "")).strip() or "Evaluación clínica completada",
+            icd10_code=str(parsed.get("icd10_code", "")).strip() if parsed.get("icd10_code") else None,
+            icd10_description=str(parsed.get("icd10_description", "")).strip() if parsed.get("icd10_description") else None,
+            plan=str(parsed.get("plan", "")).strip() or "Continuar controles habituales.",
+            prescriptions=prescriptions_list,
+            clinical_summary=str(parsed.get("clinical_summary", "")).strip() if parsed.get("clinical_summary") else None,
+            provider="external_ai_gateway",
+            tokens_used=data.get("usage", {}).get("total_tokens"),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Fallo al procesar consulta con IA: {str(exc)}",
+        )
+
 

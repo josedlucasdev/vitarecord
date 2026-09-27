@@ -14,6 +14,8 @@ class ClinicCreateRequest(BaseModel):
     ai_api_url: str | None = None
     ai_api_key: str | None = None
     ai_model: str | None = "gpt-4o-mini"
+    ai_consultation_assistant_enabled: bool = False
+    logo_url: str | None = None
 
 
 class ClinicUpdateRequest(BaseModel):
@@ -28,6 +30,24 @@ class ClinicUpdateRequest(BaseModel):
     ai_api_url: str | None = None
     ai_api_key: str | None = None
     ai_model: str | None = None
+    ai_consultation_assistant_enabled: bool | None = None
+    require_mfa_for_receptionists: bool | None = None
+    emergency_doctor_attempts: int | None = None
+    emergency_backup_phone: str | None = None
+    modules: dict[str, bool] | None = None
+    logo_url: str | None = None
+
+
+DEFAULT_CLINIC_MODULES: dict[str, bool] = {
+    "ai_assistant": False,
+    "ai_consultation": False,
+    "emergencies": True,
+    "cashier": True,
+    "rooms": True,
+    "prescriptions": True,
+    "patient_portal": True,
+    "require_mfa_for_receptionists": False,
+}
 
 
 class ClinicPublic(BaseModel):
@@ -40,16 +60,32 @@ class ClinicPublic(BaseModel):
     address: str | None = None
     is_active: bool
     require_mfa_for_receptionists: bool = False
+    emergency_doctor_attempts: int = 2
+    emergency_backup_phone: str | None = None
     ai_enabled: bool = False
     ai_api_url: str | None = None
     ai_api_key: str | None = Field(default=None, exclude=True)
     ai_model: str | None = "gpt-4o-mini"
+    ai_consultation_assistant_enabled: bool = False
+    modules: dict[str, bool] | None = None
+    logo_url: str | None = None
     created_at: datetime | None = None
 
     @computed_field
     @property
     def has_ai_key(self) -> bool:
         return bool(self.ai_api_key and len(self.ai_api_key.strip()) > 0)
+
+    @computed_field
+    @property
+    def active_modules(self) -> dict[str, bool]:
+        base = dict(DEFAULT_CLINIC_MODULES)
+        if self.modules and isinstance(self.modules, dict):
+            base.update({k: bool(v) for k, v in self.modules.items()})
+        base["ai_assistant"] = bool(self.ai_enabled)
+        base["ai_consultation"] = bool(self.ai_consultation_assistant_enabled)
+        base["require_mfa_for_receptionists"] = bool(self.require_mfa_for_receptionists)
+        return base
 
     model_config = {"from_attributes": True}
 
@@ -59,6 +95,20 @@ class ClinicAISettingsUpdate(BaseModel):
     ai_api_url: str | None = None
     ai_api_key: str | None = None
     ai_model: str | None = None
+    ai_consultation_assistant_enabled: bool = False
+
+
+class ClinicModulesUpdateRequest(BaseModel):
+    modules: dict[str, bool] | None = None
+    ai_enabled: bool | None = None
+    ai_consultation_assistant_enabled: bool | None = None
+    ai_api_url: str | None = None
+    ai_api_key: str | None = None
+    ai_model: str | None = None
+    require_mfa_for_receptionists: bool | None = None
+    emergency_doctor_attempts: int | None = None
+    emergency_backup_phone: str | None = None
+
 
 
 class ClinicAIModelsQueryRequest(BaseModel):

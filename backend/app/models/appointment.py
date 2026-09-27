@@ -41,3 +41,4 @@ class Appointment(Base, TimestampMixin, TenantScoped):
     payment_record: Mapped["PaymentRecord"] = relationship("PaymentRecord", back_populates="appointment", uselist=False, cascade="all, delete-orphan")
     notification_logs: Mapped[list["NotificationLog"]] = relationship("NotificationLog", back_populates="appointment", cascade="all, delete-orphan")
     procedures: Mapped[list["AppointmentProcedure"]] = relationship("AppointmentProcedure", back_populates="appointment", cascade="all, delete-orphan")
+    attachments: Mapped[list["MedicalAttachment"]] = relationship("MedicalAttachment", back_populates="appointment", cascade="all, delete-orphan")

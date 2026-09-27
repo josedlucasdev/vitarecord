@@ -11,8 +11,11 @@ class MedicalAttachment(Base, TimestampMixin, TenantScoped):
     __tablename__ = "medical_attachments"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    medical_record_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("medical_records.id", ondelete="CASCADE"), nullable=False, index=True
+    medical_record_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("medical_records.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    appointment_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("appointments.id", ondelete="CASCADE"), nullable=True, index=True
     )
     clinic_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("clinics.id", ondelete="RESTRICT"), nullable=False, index=True
@@ -21,5 +24,8 @@ class MedicalAttachment(Base, TimestampMixin, TenantScoped):
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)
     file_size: Mapped[int] = mapped_column(Integer, nullable=False)
     s3_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    attachment_type: Mapped[str] = mapped_column(String(32), default="DOCUMENT", nullable=False, index=True)
 
-    medical_record: Mapped["MedicalRecord"] = relationship("MedicalRecord", back_populates="attachments")
+    medical_record: Mapped["MedicalRecord | None"] = relationship("MedicalRecord", back_populates="attachments")
+    appointment: Mapped["Appointment | None"] = relationship("Appointment", back_populates="attachments")
+

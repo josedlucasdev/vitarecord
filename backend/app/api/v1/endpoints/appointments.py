@@ -1,12 +1,15 @@
 import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_permission
 from app.core.acl import Permission
 from app.core.database import get_db
+from app.core.image_processing import sanitize_and_convert_to_webp
+from app.models.appointment import Appointment
+from app.models.medical_attachment import MedicalAttachment
 from app.models.user import User
 from app.schemas.appointment import (
     AppointmentCancelRequest,
@@ -16,11 +19,14 @@ from app.schemas.appointment import (
     AppointmentRescheduleRequest,
     PublicAppointmentCreate,
 )
+from app.schemas.medical_record import MedicalAttachmentPublic
 from app.schemas.procedure import AppointmentProcedureCreate
 from app.services.appointment_service import AppointmentService
+from app.services.storage_service import storage_service
 
 
 router = APIRouter()
+
 
 
 @router.post(
@@ -209,4 +215,177 @@ async def reschedule_appointment(
         reason=payload.reason,
         current_user=current_user,
     )
+
+
+@router.post(
+    "/{appointment_id}/attachments",
+    response_model=MedicalAttachmentPublic,
+    status_code=status.HTTP_201_CREATED,
+    summary="Subir anexo o audio de consulta a la cita médica",
+)
+async def upload_appointment_attachment(
+    appointment_id: str,
+    file: UploadFile = File(...),
+    attachment_type: Annotated[str, Form()] = "DOCUMENT",
+    db: Annotated[AsyncSession, Depends(get_db)] = None,
+    current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_WRITE))] = None,
+):
+    """Sube un archivo (audio de consulta, estudio de laboratorio, foto o documento) vinculado a la cita."""
+    from sqlalchemy import select
+
+    appt_res = await db.execute(select(Appointment).where(Appointment.id == appointment_id))
+    appointment = appt_res.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita médica no encontrada.")
+
+    # Validar permisos: solo el médico tratante de la cita o personal autorizado
+    if current_user.role == "DOCTOR" and appointment.doctor_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tienes permiso para adjuntar archivos a una cita asignada a otro especialista.",
+        )
+
+    raw_bytes = await file.read()
+    orig_name = file.filename or "archivo.dat"
+    content_type = file.content_type or "application/octet-stream"
+
+    # Procesar según tipo de anexo
+    is_audio = attachment_type == "CONSULTATION_AUDIO" or content_type.startswith("audio/")
+    is_img = not is_audio and (
+        content_type.startswith("image/") or orig_name.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
+    )
+
+    if is_img:
+        try:
+            final_bytes, content_type = sanitize_and_convert_to_webp(raw_bytes)
+            file_name = orig_name.rsplit(".", 1)[0] + ".webp"
+        except Exception:
+            final_bytes = raw_bytes
+            file_name = orig_name
+    elif is_audio:
+        final_bytes = raw_bytes
+        # Normalizar extensión si es audio grabado desde navegador webm/mp4
+        if "webm" in content_type and not orig_name.lower().endswith(".webm"):
+            file_name = f"consulta_audio_{appointment_id[:8]}.webm"
+        elif "mp4" in content_type and not orig_name.lower().endswith((".mp4", ".m4a")):
+            file_name = f"consulta_audio_{appointment_id[:8]}.mp4"
+        else:
+            file_name = orig_name
+    else:
+        final_bytes = raw_bytes
+        file_name = orig_name
+
+    s3_key = storage_service.build_medical_record_attachment_key(
+        appointment.clinic_id, f"appt_{appointment.id}", file_name
+    )
+    storage_service.upload_file(final_bytes, s3_key, content_type=content_type)
+
+    attachment = MedicalAttachment(
+        appointment_id=appointment.id,
+        clinic_id=appointment.clinic_id,
+        file_name=file_name,
+        content_type=content_type,
+        file_size=len(final_bytes),
+        s3_key=s3_key,
+        attachment_type=attachment_type,
+        medical_record_id=None,
+    )
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+
+    dl_url = None
+    try:
+        dl_url = storage_service.generate_presigned_download_url(s3_key)
+    except Exception:
+        pass
+
+    return MedicalAttachmentPublic(
+        id=attachment.id,
+        file_name=attachment.file_name,
+        content_type=attachment.content_type,
+        file_size=attachment.file_size,
+        attachment_type=attachment.attachment_type,
+        appointment_id=attachment.appointment_id,
+        medical_record_id=attachment.medical_record_id,
+        download_url=dl_url,
+    )
+
+
+@router.get(
+    "/{appointment_id}/attachments",
+    response_model=list[MedicalAttachmentPublic],
+    summary="Listar anexos y audios vinculados a la cita médica",
+)
+async def list_appointment_attachments(
+    appointment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_READ))],
+):
+    """Lista todos los archivos adjuntos y grabaciones de audio asociadas a una cita médica."""
+    from sqlalchemy import select
+
+    appt_res = await db.execute(select(Appointment).where(Appointment.id == appointment_id))
+    appointment = appt_res.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cita médica no encontrada.")
+
+    stmt = select(MedicalAttachment).where(MedicalAttachment.appointment_id == appointment_id)
+    attachments = (await db.execute(stmt)).scalars().all()
+
+    result = []
+    for att in attachments:
+        dl_url = None
+        if att.s3_key:
+            try:
+                dl_url = storage_service.generate_presigned_download_url(att.s3_key)
+            except Exception:
+                pass
+        result.append(
+            MedicalAttachmentPublic(
+                id=att.id,
+                file_name=att.file_name,
+                content_type=att.content_type,
+                file_size=att.file_size,
+                attachment_type=att.attachment_type,
+                appointment_id=att.appointment_id,
+                medical_record_id=att.medical_record_id,
+                download_url=dl_url,
+            )
+        )
+    return result
+
+
+@router.delete(
+    "/{appointment_id}/attachments/{attachment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Eliminar un anexo o grabación de audio de la cita",
+)
+async def delete_appointment_attachment(
+    appointment_id: str,
+    attachment_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_permission(Permission.CLINICAL_RECORDS_WRITE))],
+):
+    """Elimina un archivo adjunto tanto de S3 como de la base de datos."""
+    from sqlalchemy import select
+
+    stmt = select(MedicalAttachment).where(
+        MedicalAttachment.id == attachment_id,
+        MedicalAttachment.appointment_id == appointment_id,
+    )
+    attachment = (await db.execute(stmt)).scalar_one_or_none()
+    if not attachment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anexo no encontrado.")
+
+    if attachment.s3_key:
+        try:
+            storage_service.delete_file(attachment.s3_key)
+        except Exception:
+            pass
+
+    await db.delete(attachment)
+    await db.commit()
+    return None
+
 

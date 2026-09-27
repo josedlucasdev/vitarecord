@@ -33,6 +33,10 @@ class Clinic(Base, TimestampMixin):
     ai_api_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ai_api_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     ai_model: Mapped[str | None] = mapped_column(String(100), default="gpt-4o-mini", nullable=True)
+    ai_consultation_assistant_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    modules: Mapped[dict | None] = mapped_column(JSON, default=dict, nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
 
 
 class ClinicRoom(Base, TimestampMixin, TenantScopedMixin):

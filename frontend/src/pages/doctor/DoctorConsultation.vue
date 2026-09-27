@@ -7,16 +7,34 @@
           <h1 class="text-xl font-bold text-slate-900 leading-tight">Consulta Médica Especializada</h1>
           <p class="text-xs text-slate-500">Expediente Clínico Electrónico cifrado con AES-256-GCM y Receta con QR</p>
         </div>
-        <q-btn
-          flat
-          dense
-          color="slate-600"
-          icon="arrow_back"
-          label="Volver a Citas"
-          no-caps
-          to="/appointments/my-list"
-          class="self-start md:self-auto text-xs"
-        />
+        <div class="flex items-center gap-2 self-start md:self-auto flex-wrap">
+          <q-btn
+            v-if="appointment && appointment.status !== 'COMPLETED' && clinicAiEnabled && clinicAiConsultationEnabled"
+            color="teal-8"
+            icon="auto_awesome"
+            label="Consulta asistida por AI"
+            no-caps
+            class="font-bold text-xs px-3.5 py-1.5 shadow-sm rounded-xl"
+            @click="openAiConsultationModal"
+          >
+            <q-badge floating color="amber-8" text-color="white" class="font-bold text-3xs">
+              IA
+            </q-badge>
+            <q-tooltip>Grabar diálogo médico-paciente completo y prellenar la consulta con IA</q-tooltip>
+          </q-btn>
+
+          <q-btn
+            flat
+            dense
+            color="slate-600"
+            icon="arrow_back"
+            label="Volver a Citas"
+            no-caps
+            to="/appointments/my-list"
+            class="text-xs"
+          />
+        </div>
+
       </div>
 
       <!-- Spinner de Carga de la Cita -->
@@ -320,11 +338,153 @@
                 </div>
               </div>
             </div>
+
+            <!-- Grabación de la Consulta en Cita Completada -->
+            <div v-if="completedAudioAttachment" class="p-4 bg-teal-50/60 rounded-xl border border-teal-200 space-y-2">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-800">
+                <span class="flex items-center gap-1.5 text-teal-800">
+                  <q-icon name="mic" size="18px" color="teal" />
+                  Grabación de Audio de la Consulta Médica
+                </span>
+                <q-badge color="teal-1" text-color="teal-9" class="font-semibold text-3xs">
+                  Audio Cifrado Vinculado
+                </q-badge>
+              </div>
+              <audio controls :src="completedAudioAttachment.download_url" class="w-full h-10 mt-1 rounded-lg"></audio>
+            </div>
+
+            <!-- Documentos y Exámenes Anexados en Cita Completada -->
+            <div v-if="completedDocumentAttachments.length > 0" class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+              <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <q-icon name="attach_file" size="18px" class="text-teal-600" />
+                Documentos y Exámenes Anexados a esta Consulta ({{ completedDocumentAttachments.length }})
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+                <div
+                  v-for="doc in completedDocumentAttachments"
+                  :key="doc.id"
+                  class="p-2.5 bg-white rounded-lg border border-slate-200 flex items-center justify-between gap-2 text-2xs"
+                >
+                  <div class="flex items-center space-x-2 truncate">
+                    <q-icon :name="doc.content_type?.startsWith('image/') ? 'image' : 'description'" size="16px" color="teal" />
+                    <span class="truncate font-semibold text-slate-800" :title="doc.file_name">{{ doc.file_name }}</span>
+                  </div>
+                  <q-btn
+                    v-if="doc.download_url"
+                    flat
+                    round
+                    dense
+                    icon="open_in_new"
+                    size="xs"
+                    color="teal"
+                    @click="openPreview(doc.download_url)"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Formulario Activo de Consulta (Sólo si la cita no ha sido completada) -->
         <template v-if="appointment.status !== 'COMPLETED'">
+          <!-- Banner de Campos Prellenados por Asistencia de IA -->
+          <div v-if="aiPrefilledBanner" class="p-4 bg-gradient-to-r from-teal-50 via-emerald-50 to-teal-50 border border-teal-300 rounded-2xl shadow-xs space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-2 text-teal-900 font-bold text-xs uppercase tracking-wider">
+                <q-icon name="auto_awesome" size="18px" class="text-teal-600" />
+                <span>Campos Prellenados por Asistencia IA ({{ appointment?.doctor_specialty || 'Especialista' }})</span>
+              </div>
+              <q-btn flat round dense icon="close" size="xs" color="teal-8" @click="aiPrefilledBanner = false" />
+            </div>
+            <p class="text-2xs text-teal-800 leading-relaxed m-0">
+              La historia clínica ha sido redactada analizando el diálogo grabado médico-paciente y los exámenes aportados. <strong>Revise cada campo, ajuste las observaciones según su criterio y confirme la receta antes de dar por terminada la consulta.</strong>
+            </p>
+            <div v-if="aiClinicalSummary" class="p-2 bg-white/80 rounded-lg border border-teal-200 text-2xs text-teal-900">
+              <strong>Razonamiento Clínico IA:</strong> {{ aiClinicalSummary }}
+            </div>
+          </div>
+
+          <!-- Grabación de la Consulta en Progreso (Audio Reproducible) -->
+          <div v-if="audioAttachment" class="bg-white p-4 rounded-2xl border border-teal-200 shadow-xs space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <q-icon name="graphic_eq" size="18px" color="teal" />
+                Grabación de la Consulta Médica (Reproducible)
+              </div>
+              <div class="flex items-center gap-1">
+                <q-badge color="teal-1" text-color="teal-9" class="font-bold text-3xs">
+                  Audio Vinculado
+                </q-badge>
+                <q-btn
+                  flat
+                  round
+                  dense
+                  icon="delete"
+                  size="xs"
+                  color="negative"
+                  @click="deleteConsultationAttachment(audioAttachment.id)"
+                >
+                  <q-tooltip>Eliminar grabación</q-tooltip>
+                </q-btn>
+              </div>
+            </div>
+            <audio controls :src="audioAttachment.download_url" class="w-full h-10 rounded-lg"></audio>
+          </div>
+
+          <!-- Documentos y Exámenes Aportados por el Paciente -->
+          <div v-if="documentAttachments.length > 0" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <q-icon name="attach_file" size="18px" color="teal" />
+                Documentos y Exámenes Anexados a esta Cita ({{ documentAttachments.length }})
+              </span>
+              <q-btn
+                v-if="clinicAiEnabled && clinicAiConsultationEnabled"
+                flat
+                dense
+                color="teal-8"
+                icon="add_a_photo"
+                label="Añadir más"
+                no-caps
+                class="text-2xs font-bold"
+                @click="openAiConsultationModal"
+              />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1">
+              <div
+                v-for="doc in documentAttachments"
+                :key="doc.id"
+                class="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between gap-2 text-2xs"
+              >
+                <div class="flex items-center space-x-2 truncate">
+                  <q-icon :name="doc.content_type?.startsWith('image/') ? 'image' : 'description'" size="16px" color="teal" />
+                  <span class="truncate font-semibold text-slate-800" :title="doc.file_name">{{ doc.file_name }}</span>
+                </div>
+                <div class="flex items-center">
+                  <q-btn
+                    v-if="doc.download_url"
+                    flat
+                    round
+                    dense
+                    icon="visibility"
+                    size="xs"
+                    color="teal"
+                    @click="openPreview(doc.download_url)"
+                  />
+                  <q-btn
+                    flat
+                    round
+                    dense
+                    icon="delete"
+                    size="xs"
+                    color="negative"
+                    @click="deleteConsultationAttachment(doc.id)"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- 2. Historia Clínica Estructurada (Anamnesis y Examen Físico) -->
           <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 space-y-5">
             <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
@@ -1115,15 +1275,26 @@
         </q-card-section>
       </q-card>
     </q-dialog>
+
+    <!-- Modal de Asistencia por IA en Consulta Completa -->
+    <AiConsultationAssistantModal
+      v-model="showAiModal"
+      :appointment-id="appointmentId"
+      :doctor-specialty="appointment?.doctor_specialty || ''"
+      :clinic-id="appointment?.clinic_id || ''"
+      @apply-prefill="handleAiPrefill"
+      @audio-uploaded="fetchAppointmentAttachments"
+    />
   </q-page>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from 'boot/axios'
 import { Notify } from 'quasar'
 import ClinicalVoiceEditor from 'src/components/medical/ClinicalVoiceEditor.vue'
+import AiConsultationAssistantModal from 'src/components/medical/AiConsultationAssistantModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -1134,6 +1305,100 @@ const loadingAppointment = ref(true)
 const submitting = ref(false)
 const showSuccessModal = ref(false)
 const createdRecord = ref(null)
+
+// Estados de Asistencia por IA y Grabación de Consulta
+const showAiModal = ref(false)
+const appointmentAttachments = ref([])
+const loadingAttachments = ref(false)
+const aiPrefilledBanner = ref(false)
+const aiClinicalSummary = ref('')
+
+const audioAttachment = computed(() => {
+  return appointmentAttachments.value.find(
+    a => a.attachment_type === 'CONSULTATION_AUDIO' || a.content_type?.startsWith('audio/')
+  )
+})
+
+const documentAttachments = computed(() => {
+  return appointmentAttachments.value.filter(
+    a => a.attachment_type !== 'CONSULTATION_AUDIO' && !a.content_type?.startsWith('audio/')
+  )
+})
+
+const completedAudioAttachment = computed(() => {
+  if (!appointmentRecord.value?.attachments) return null
+  return appointmentRecord.value.attachments.find(
+    a => a.attachment_type === 'CONSULTATION_AUDIO' || a.content_type?.startsWith('audio/')
+  )
+})
+
+const completedDocumentAttachments = computed(() => {
+  if (!appointmentRecord.value?.attachments) return []
+  return appointmentRecord.value.attachments.filter(
+    a => a.attachment_type !== 'CONSULTATION_AUDIO' && !a.content_type?.startsWith('audio/')
+  )
+})
+
+function openAiConsultationModal () {
+  if (!clinicAiEnabled.value || !clinicAiConsultationEnabled.value) {
+    Notify.create({
+      type: 'warning',
+      message: 'El módulo de Consulta Asistida por IA no está activo en esta sede. Solicite al SuperAdmin activarlo en la gestión de clínicas.'
+    })
+    return
+  }
+  showAiModal.value = true
+}
+
+function handleAiPrefill (aiData) {
+  if (!aiData) return
+  if (aiData.anamnesis) form.value.anamnesis = aiData.anamnesis
+  if (aiData.physical_exam) form.value.physical_exam = aiData.physical_exam
+  if (aiData.diagnosis) form.value.diagnosis = aiData.diagnosis
+  if (aiData.plan) form.value.plan = aiData.plan
+  if (aiData.icd10_code) form.value.icd10_code = aiData.icd10_code
+  if (aiData.icd10_description) form.value.icd10_description = aiData.icd10_description
+  if (aiData.prescriptions && Array.isArray(aiData.prescriptions) && aiData.prescriptions.length > 0) {
+    prescriptionItems.value = aiData.prescriptions.map(p => ({
+      medication: p.medication || '',
+      dosage: p.dosage || '',
+      frequency: p.frequency || '',
+      duration: p.duration || '',
+      instructions: p.instructions || ''
+    }))
+    includePrescription.value = true
+  }
+  aiClinicalSummary.value = aiData.clinical_summary || ''
+  aiPrefilledBanner.value = true
+  fetchAppointmentAttachments()
+}
+
+async function fetchAppointmentAttachments () {
+  if (!appointmentId.value) return
+  loadingAttachments.value = true
+  try {
+    const { data } = await api.get(`/appointments/${appointmentId.value}/attachments`)
+    appointmentAttachments.value = Array.isArray(data) ? data : []
+  } catch (err) {
+    console.warn('Error al cargar anexos de la cita:', err)
+  } finally {
+    loadingAttachments.value = false
+  }
+}
+
+async function deleteConsultationAttachment (attId) {
+  try {
+    await api.delete(`/appointments/${appointmentId.value}/attachments/${attId}`)
+    appointmentAttachments.value = appointmentAttachments.value.filter(a => a.id !== attId)
+    Notify.create({ type: 'info', message: 'Anexo eliminado.' })
+  } catch (err) {
+    Notify.create({ type: 'negative', message: 'No se pudo eliminar el anexo.' })
+  }
+}
+
+function openPreview (url) {
+  if (url) window.open(url, '_blank')
+}
 
 // Procedimientos y servicios en consulta
 const showAddProcModal = ref(false)
@@ -1358,6 +1623,8 @@ async function fetchAppointment () {
     }
     if (match) {
       appointment.value = match
+      clinicAiEnabled.value = !!match.clinic_ai_enabled
+      clinicAiConsultationEnabled.value = !!match.clinic_ai_consultation_enabled
       if (match.patient_id) {
         fetchPatientHistory(match.patient_id, match.dependent_id)
       }
@@ -1368,7 +1635,10 @@ async function fetchAppointment () {
         fetchAvailableProcedures(match.clinic_id, match.doctor_id)
         fetchClinicAiStatus(match.clinic_id)
       }
+      fetchAppointmentAttachments()
     } else {
+
+
       Notify.create({ type: 'warning', message: 'No se encontró la cita especificada.' })
     }
   } catch (err) {
@@ -1379,12 +1649,14 @@ async function fetchAppointment () {
 }
 
 const clinicAiEnabled = ref(false)
+const clinicAiConsultationEnabled = ref(false)
 
 async function fetchClinicAiStatus (clinicId) {
   if (!clinicId) return
   try {
     const { data } = await api.get(`/clinics/${clinicId}`)
     clinicAiEnabled.value = !!data.ai_enabled
+    clinicAiConsultationEnabled.value = !!data.ai_consultation_assistant_enabled
   } catch (err) {
     console.warn('No se pudo verificar estado de IA de la clínica:', err)
   }
